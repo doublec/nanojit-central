@@ -85,6 +85,24 @@ namespace nanojit
 		uint32_t		lowwatermark;					/* we pre-allocate entries from 0 upto this index-1; so dynamic entries are added above this index */
 	};
 
+	#define FUNCTIONID(name) CI_avmplus_##name
+
+	#define INTERP_FOPCODE_LIST_BEGIN											enum FunctionID {
+	#define INTERP_FOPCODE_LIST_ENTRY_PRIM(nm)									
+	#define INTERP_FOPCODE_LIST_ENTRY_FUNCPRIM(addr,argtypes,cse,fold,abi,ret,args,nm)	FUNCTIONID(nm),
+	#define INTERP_FOPCODE_LIST_ENTRY_SUPER(nm,off)								
+	#define INTERP_FOPCODE_LIST_ENTRY_EXTERN(nm,off)							
+	#define INTERP_FOPCODE_LIST_ENTRY_LITC(nm,i)								
+	#define INTERP_FOPCODE_LIST_END												CI_Max } ;
+	#include "vm_fops.h"
+	#undef INTERP_FOPCODE_LIST_BEGIN
+	#undef INTERP_FOPCODE_LIST_ENTRY_PRIM
+	#undef INTERP_FOPCODE_LIST_ENTRY_FUNCPRIM
+	#undef INTERP_FOPCODE_LIST_ENTRY_SUPER
+	#undef INTERP_FOPCODE_LIST_ENTRY_EXTERN
+	#undef INTERP_FOPCODE_LIST_ENTRY_LITC
+	#undef INTERP_FOPCODE_LIST_END 
+
 	#ifdef AVMPLUS_WIN32
 		#define AVMPLUS_ALIGN16(type) __declspec(align(16)) type
 	#else
@@ -130,6 +148,10 @@ namespace nanojit
 	typedef avmplus::List<NIns*, avmplus::LIST_NonGCObjects> NInsList;
 	typedef avmplus::SortedMap<LIns*,NIns*,avmplus::LIST_NonGCObjects> InsMap;
 	typedef avmplus::SortedMap<NIns*,LIns*,avmplus::LIST_NonGCObjects> NInsMap;
+
+#ifdef VTUNE
+	class avmplus::CodegenLIR;
+#endif
 
     class LabelState MMGC_SUBCLASS_DECL
     {
@@ -178,6 +200,10 @@ namespace nanojit
 			StringList* _outputCache;
 			#endif
 
+			#ifdef VTUNE
+			avmplus::CodegenLIR *cgen;
+			#endif
+
 			Assembler(Fragmento* frago);
             ~Assembler() {}
 
@@ -204,6 +230,12 @@ namespace nanojit
 			
 			Stats		_stats;		
             int hasLoop;
+
+			const CallInfo* callInfoFor(uint32_t fid);
+			const CallInfo* callInfoFor(LInsp call)
+			{
+				return callInfoFor(call->fid());
+			}
 
 		private:
 			
@@ -273,7 +305,7 @@ namespace nanojit
 			Reservation _resvTable[ NJ_MAX_STACK_ENTRY ]; // table where we house stack and register information
 			uint32_t	_resvFree;
 			bool		_inExit, vpad2[3];
-            avmplus::List<LIns*, avmplus::LIST_GCObjects> pending_lives;
+            avmplus::List<LIns*, avmplus::LIST_NonGCObjects> pending_lives;
 
 			void		asm_cmp(LIns *cond);
 #ifndef NJ_SOFTFLOAT
@@ -312,7 +344,6 @@ namespace nanojit
             void        handleLoopCarriedExprs();
 
 			// platform specific implementation (see NativeXXX.cpp file)
-			void		nInit(uint32_t flags);
 			void		nInit(AvmCore *);
 			Register	nRegisterAllocFromSet(int32_t set);
 			void		nRegisterResetAll(RegAlloc& a);
@@ -344,6 +375,7 @@ namespace nanojit
 			void* _endJit1Addr;
 			void* _endJit2Addr;
 	#endif // AVMPLUS_PORTING_API
+			avmplus::Config &config;
 	};
 
 	inline int32_t disp(Reservation* r) 

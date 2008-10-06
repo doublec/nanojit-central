@@ -358,3 +358,33 @@ int histValue(void** id, char* file, int line, int64_t value, int nbins, ...)
 
     return 0;
 }
+
+#if defined(_MSC_VER) && defined(_M_IX86)
+inline uint64_t _rdtsc() 
+{
+	// read the cpu cycle counter.  1 tick = 1 cycle on IA32
+	_asm rdtsc;
+}
+#define have_rdtsc
+#elif defined(__GNUC__) && (__i386__ || __x86_64__)
+inline uint64_t _rdtsc() 
+{
+   uint32_t lo, hi;
+   __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
+   return (uint64_t(hi) << 32) | lo;
+}
+#define have_rdtsc
+#endif
+
+#ifdef have_rdtsc
+void* _tprof_before_id=0;
+uint64_t _tprof_before;
+int64_t _tprof_time() 
+{
+    uint64_t now = _rdtsc();
+    uint64_t v = _tprof_before ? now-_tprof_before : 0;
+    _tprof_before = now;
+    return v/2600; // v = microseconds on a 2.6ghz cpu
+}
+#endif
+

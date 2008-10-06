@@ -43,7 +43,7 @@
 #include <CoreServices/CoreServices.h>
 #endif
 
-#if defined AVMPLUS_UNIX
+#if defined AVMPLUS_UNIX 
 #include <sys/mman.h>
 #include <errno.h>
 #endif
@@ -92,11 +92,8 @@ namespace nanojit
 
 	void Assembler::nInit(AvmCore* core)
 	{
+		(void) core;
         OSDep::getDate();
-#ifdef NANOJIT_AMD64
-        avmplus::AvmCore::cmov_available =
-        avmplus::AvmCore::sse2_available = true;
-#endif
 	}
 
 	NIns* Assembler::genPrologue()
@@ -136,25 +133,10 @@ namespace nanojit
 	}
 
     void Assembler::asm_align_code() {
-        static char nop[][9] = {
-                {0x90},
-                {0x66,0x90},
-                {0x0f,0x1f,0x00},
-                {0x0f,0x1f,0x40,0x00},
-                {0x0f,0x1f,0x44,0x00,0x00},
-                {0x66,0x0f,0x1f,0x44,0x00,0x00},
-                {0x0f,0x1f,0x80,0x00,0x00,0x00,0x00},
-                {0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00},
-                {0x66,0x0f,0x1f,0x84,0x00,0x00,0x00,0x00,0x00},
-        };
-        unsigned n;
-        while((n = uintptr_t(_nIns) & 15) != 0) {
-            if (n > 9)
-                n = 9;
-            underrunProtect(n);
-            _nIns -= n;
-            memcpy(_nIns, nop[n-1], n);
-            asm_output1("nop%d", n);
+        // todo: the intel optimization guide suggests canonical nop 
+        // instructions for sizes from 1..9; use them!
+        while(uintptr_t(_nIns) & 15) {
+            NOP();
         }
     }
 
@@ -228,7 +210,8 @@ namespace nanojit
 #if defined NANOJIT_IA32
 	void Assembler::asm_call(LInsp ins)
 	{
-        const CallInfo* call = ins->callInfo();
+        uint32_t fid = ins->fid();
+        const CallInfo* call = callInfoFor(fid);
 		// must be signed, not unsigned
 		uint32_t iargs = call->count_iargs();
 		int32_t fargs = call->count_args() - iargs - call->isIndirect();
@@ -323,7 +306,8 @@ namespace nanojit
 	void Assembler::asm_call(LInsp ins)
 	{
 		Register fpu_reg = XMM0;
-        const CallInfo* call = ins->callInfo();
+        uint32_t fid = ins->fid();
+        const CallInfo* call = callInfoFor(fid);
 		int n = 0;
 
 		CALL(call);
@@ -352,7 +336,7 @@ namespace nanojit
 		#if defined WIN32 || defined WIN64
 			DWORD dwIgnore;
 			VirtualProtect(&page->code, count*NJ_PAGE_SIZE, PAGE_EXECUTE_READWRITE, &dwIgnore);
-		#elif defined AVMPLUS_UNIX
+		#elif defined AVMPLUS_UNIX 
 			intptr_t addr = (intptr_t)&page->code;
 			addr &= ~((uintptr_t)NJ_PAGE_SIZE - 1);
 			#if defined SOLARIS
@@ -365,6 +349,8 @@ namespace nanojit
             }
 		#endif
 			(void)enable;
+			(void)page;
+			(void)count;
 	}
 			
 	Register Assembler::nRegisterAllocFromSet(int set)
@@ -402,7 +388,7 @@ namespace nanojit
 		a.used = 0;
 		a.free = SavedRegs | ScratchRegs;
 #if defined NANOJIT_IA32
-        if (!avmplus::AvmCore::use_sse2())
+        if (!config.sse2)
             a.free &= ~XmmRegs;
 #endif
 		debug_only( a.managed = a.free; )
@@ -732,7 +718,7 @@ namespace nanojit
 			// the side exit, copying a non-double.
 			// c) maybe its a double just being stored.  oh well.
 
-			if (avmplus::AvmCore::use_sse2()) {
+			if (config.sse2) {
                 Register rv = findRegFor(value, XmmRegs);
 		Register rb;
 		if (base->isop(LIR_alloc)) {
@@ -771,7 +757,7 @@ namespace nanojit
 		Register rv;
 		int pop = !rA || rA->reg==UnknownReg;
 		if (pop) {
-		    rv = findRegFor(value, avmplus::AvmCore::use_sse2() ? XmmRegs : FpRegs);
+		    rv = findRegFor(value, config.sse2 ? XmmRegs : FpRegs);
 		} else {
 		    rv = rA->reg;
 		}
@@ -827,7 +813,7 @@ namespace nanojit
         // that isn't live in an FPU reg.  Either way, don't
         // put it in an FPU reg just to load & store it.
 #if defined NANOJIT_IA32
-        if (avmplus::AvmCore::use_sse2())
+        if (config.sse2)
         {
 #endif
             // use SSE to load+store 64bits
@@ -944,7 +930,7 @@ namespace nanojit
 	bool Assembler::asm_qlo(LInsp ins, LInsp q)
 	{
 #if defined NANOJIT_IA32
-		if (!avmplus::AvmCore::use_sse2())
+		if (!config.sse2)
 		{
 			return false;
 		}
@@ -970,7 +956,7 @@ namespace nanojit
 	void Assembler::asm_fneg(LInsp ins)
 	{
 #if defined NANOJIT_IA32
-		if (avmplus::AvmCore::use_sse2())
+		if (config.sse2)
 		{
 #endif
 			LIns *lhs = ins->oprnd1();
@@ -1128,7 +1114,7 @@ namespace nanojit
 	{
 		LOpcode op = ins->opcode();
 #if defined NANOJIT_IA32
-		if (avmplus::AvmCore::use_sse2()) 
+		if (config.sse2)
 		{
 #endif
 			LIns *lhs = ins->oprnd1();
@@ -1354,7 +1340,7 @@ namespace nanojit
     NIns * Assembler::asm_jmpcc(bool branchOnFalse, LIns *cond, NIns *targ)
     {
         LOpcode c = cond->opcode();
-        if (avmplus::AvmCore::use_sse2() && c != LIR_feq) {
+        if (config.sse2 && c != LIR_feq) {
             LIns *lhs = cond->oprnd1();
             LIns *rhs = cond->oprnd2();
             if (c == LIR_flt) {
@@ -1391,7 +1377,7 @@ namespace nanojit
     void Assembler::asm_setcc(Register r, LIns *cond)
     {
         LOpcode c = cond->opcode();
-        if (avmplus::AvmCore::use_sse2() && c != LIR_feq) {
+        if (config.sse2 && c != LIR_feq) {
     		MOVZX8(r,r);
             LIns *lhs = cond->oprnd1();
             LIns *rhs = cond->oprnd2();
@@ -1447,7 +1433,7 @@ namespace nanojit
         }
 
 #if defined NANOJIT_IA32
-        if (avmplus::AvmCore::use_sse2())
+        if (config.sse2)
         {
 #endif
             // UNORDERED:    ZF,PF,CF <- 111;

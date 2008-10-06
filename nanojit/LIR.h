@@ -56,6 +56,7 @@ namespace nanojit
 	
 	enum LOpcode
 #if defined(_MSC_VER) && _MSC_VER >= 1400
+#pragma warning(disable:4480) // nonstandard extension used: specifying underlying type for enum
           : unsigned
 #endif
 	{
@@ -180,6 +181,7 @@ namespace nanojit
         LIR_qior    = 44 | LIR64
 	};
 
+	// should these be more enum entries that alias existing ones?
 	#if defined NANOJIT_64BIT
 	#define LIR_ldp     LIR_ldq
 	#define LIR_stp     LIR_stq
@@ -203,7 +205,6 @@ namespace nanojit
 	}
 
     struct SideExit;
-    struct Page;
 
     enum AbiKind {
         ABI_FASTCALL,
@@ -355,15 +356,6 @@ namespace nanojit
             sti_type sti;
 		};
 
-		enum {
-			callInfoWords =
-#ifdef NANOJIT_64BIT
-			    2
-#else
-			    1
-#endif
-		};
-
 		uint32_t reference(LIns*) const;
 		LIns* deref(int32_t off) const;
 
@@ -401,7 +393,7 @@ namespace nanojit
 		inline LIns* arg(uint32_t i) {
 			uint32_t c = argc();
 			NanoAssert(i < c);
-			uint8_t* offs = (uint8_t*) (this-callInfoWords-argwords(c));
+			uint8_t* offs = (uint8_t*) (this-argwords(c));
 			return deref(offs[i]);
 		}
 
@@ -508,16 +500,14 @@ namespace nanojit
 
         SideExit *exit();
 
-		inline uint32_t argc() const {
+		inline uint32_t argc() {
 			NanoAssert(isCall());
 			return c.imm8b;
 		}
-		inline size_t callInsWords() const {
-			return argwords(argc()) + callInfoWords + 1;
-		}
-		inline const CallInfo *callInfo() const {
-			return *(const CallInfo **) (this - callInfoWords);
-		}
+        inline uint8_t  fid() const {
+			NanoAssert(isCall());
+			return c.imm8a;
+        }
 	};
 	typedef LIns*		LInsp;
 
@@ -535,13 +525,12 @@ namespace nanojit
 	class LirFilter;
 
 	// make it a GCObject so we can explicitly delete it early
-	class LirWriter : public GCObject
+	class LirWriter : public GCFinalizedObject
 	{
 	public:
 		LirWriter *out;
         const CallInfo *_functions;
 
-		virtual ~LirWriter() {}
 		LirWriter(LirWriter* out) 
 			: out(out), _functions(out?out->_functions : 0) {}
 
@@ -581,8 +570,8 @@ namespace nanojit
 			return isS8(d) ? out->insStorei(value, base, d)
 				: out->insStore(value, base, insImm(d));
 		}
-		virtual LInsp insCall(const CallInfo *call, LInsp args[]) {
-			return out->insCall(call, args);
+		virtual LInsp insCall(uint32_t fid, LInsp args[]) {
+			return out->insCall(fid, args);
 		}
 		virtual LInsp insAlloc(int32_t size) {
 			return out->insAlloc(size);
@@ -592,13 +581,9 @@ namespace nanojit
 	    LIns*		insLoadi(LIns *base, int disp);
 	    LIns*		insLoad(LOpcode op, LIns *base, int disp);
 	    LIns*		store(LIns* value, LIns* base, int32_t d);
-		// Inserts a conditional to execute and branches to execute if
-		// the condition is true and false respectively.
 	    LIns*		ins_choose(LIns* cond, LIns* iftrue, LIns* iffalse);
 	    // Inserts an integer comparison to 0
 	    LIns*		ins_eq0(LIns* oprnd1);
-		// Inserts a binary operation where the second operand is an
-		// integer immediate.
         LIns*       ins2i(LOpcode op, LIns *oprnd1, int32_t);
 		LIns*		qjoin(LInsp lo, LInsp hi);
 		LIns*		insImmPtr(const void *ptr);
@@ -611,10 +596,10 @@ namespace nanojit
 	/**
 	 * map address ranges to meaningful names.
 	 */
-    class LabelMap MMGC_SUBCLASS_DECL
+    class LabelMap : public GCFinalizedObject
     {
 		LabelMap* parent;
-		class Entry MMGC_SUBCLASS_DECL
+		class Entry : public GCFinalizedObject
 		{
 		public:
 			Entry(int) : name(0), size(0), align(0) {}
@@ -638,25 +623,21 @@ namespace nanojit
 		void promoteAll(const void *newbase);
     };
 
-	class LirNameMap MMGC_SUBCLASS_DECL
+	class LirNameMap : public GCFinalizedObject
 	{
-		template <class Key>
-		class CountMap : public avmplus::SortedMap<Key, int, avmplus::LIST_NonGCObjects> {
+		class CountMap: public avmplus::SortedMap<int, int, avmplus::LIST_NonGCObjects> {
 		public:
-			CountMap(GC*gc) : avmplus::SortedMap<Key, int, avmplus::LIST_NonGCObjects>(gc) {}
-			int add(Key k) {
+			CountMap(GC*gc) : avmplus::SortedMap<int, int, avmplus::LIST_NonGCObjects>(gc) {};
+			int add(int i) {
 				int c = 1;
-				if (containsKey(k)) {
-					c = 1+get(k);
+				if (containsKey(i)) {
+					c = 1+get(i);
 				}
-				put(k,c);
+				put(i,c);
 				return c;
 			}
-		};
-		CountMap<int> lircounts;
-		CountMap<const CallInfo *> funccounts;
-
-		class Entry MMGC_SUBCLASS_DECL 
+		} lircounts, funccounts;
+		class Entry : public GCFinalizedObject
 		{
 		public:
 			Entry(int) : name(0) {}
@@ -670,7 +651,9 @@ namespace nanojit
 		void formatImm(int32_t c, char *buf);
 	public:
 
-		LirNameMap(GC *gc, const CallInfo *_functions, LabelMap *r) 
+		LirNameMap(GC *gc,
+		const CallInfo *_functions,
+		LabelMap *r) 
 			: lircounts(gc),
 			funccounts(gc),
 			names(gc),
@@ -694,12 +677,12 @@ namespace nanojit
 		DWB(LirNameMap*) names;
     public:
 		VerboseWriter(GC *gc, LirWriter *out, LirNameMap* names) 
-			: LirWriter(out), code(gc), names(names) 
+			: LirWriter(out), code(gc), names(names)
 		{}
 
 		LInsp add(LInsp i) {
-			if (i)
-				code.add(i);
+            if (i)
+                code.add(i);
 			return i;
 		}
 
@@ -729,7 +712,6 @@ namespace nanojit
 			return add_flush(out->insBranch(v, condition, to));
 		}
 
-
 		LIns* ins0(LOpcode v) {
             if (v == LIR_label || v == LIR_start) {
                 flush();
@@ -738,13 +720,13 @@ namespace nanojit
 		}
 
 		LIns* ins1(LOpcode v, LInsp a) {
-			return isRet(v) ? add_flush(out->ins1(v, a)) : add(out->ins1(v, a));
+            return isRet(v) ? add_flush(out->ins1(v, a)) : add(out->ins1(v, a));
 		}
 		LIns* ins2(LOpcode v, LInsp a, LInsp b) {
 			return v == LIR_2 ? out->ins2(v,a,b) : add(out->ins2(v, a, b));
 		}
-		LIns* insCall(const CallInfo *call, LInsp args[]) {
-			return add_flush(out->insCall(call, args));
+		LIns* insCall(uint32_t fid, LInsp args[]) {
+			return add_flush(out->insCall(fid, args));
 		}
 		LIns* insParam(int32_t i, int32_t kind) {
 			return add(out->insParam(i, kind));
@@ -763,6 +745,65 @@ namespace nanojit
         }
     };
 
+	class BBNode : public GCObject
+	{
+	public:
+	
+		enum BBKind
+		{
+			UNKNOWN = 0,
+			FALL_THRU,
+			ENDS_WITH_CALL,
+			ENDS_WITH_RET
+		};
+	
+		uint32_t num;	// unique id 
+		BBList	pred;	// list of predecssors
+		BBList	succ;	// list of successors
+		LInsp	start;
+		LInsp	end;
+		BBKind  kind;
+
+		BBNode(GC* gc, uint32_t id) : pred(gc),succ(gc) { num=id; } 
+	};
+	
+	class BlockLocator : public LirWriter
+	{
+		LirWriter*	_out;
+		GC*			_gc;
+		BBNode*		_current;	// bb we are currently building
+		BBNode*		_previous;	// bb we last built in linear fashion
+		LInsp		_priorIns;	// last instruction seen
+		BBList		_tbd;		// bb's where succ is unknown (last instruction is a forward jump)
+		BBMap		_bbs;		// LInsp to bb 
+		uint32_t	_gid;		// unique id gen for bb's
+			
+	public:
+		BlockLocator(GC* gc, LirWriter* out);
+
+		BBNode*	entry()			{ return _bbs.get(0); }
+		void	fin();
+		void	print(char* name);
+	
+		// interface to LirWriter
+		LInsp ins1(LOpcode v, LIns* a);
+		LInsp ins2(LOpcode v, LIns* a, LIns* b);
+		LInsp insLoad(LOpcode op, LIns* base, LIns* d);
+		LInsp insStore(LIns* value, LIns* base, LIns* disp);
+		LInsp insStorei(LIns* value, LIns* base, int32_t d);
+		LInsp insCall(uint32_t fid, LInsp args[]);
+		LInsp insGuard(LOpcode v, LIns *c, SideExit *x);
+		LInsp ins0(LOpcode v);
+		LInsp insBranch(LOpcode v, LInsp condition, LInsp to);
+
+	protected:
+		BBNode* bbFor(LInsp n);
+		void	ensureCurrent(LInsp n);
+		void	blockEnd(LInsp at);
+		LInsp	update(LInsp i);
+		void	link(BBNode* from, BBNode* to);
+	};
+	
 #endif
 
 	class ExprFilter: public LirWriter
@@ -776,7 +817,7 @@ namespace nanojit
 	};
 
 	// @todo, this could be replaced by a generic HashMap or HashSet, if we had one
-	class LInsHashSet
+	class LInsHashSet: public GCFinalizedObject
 	{
 		// must be a power of 2. 
 		// don't start too small, or we'll waste time growing and rehashing.
@@ -799,7 +840,7 @@ namespace nanojit
 		LInsp find64(uint64_t a, uint32_t &i);
 		LInsp find1(LOpcode v, LInsp a, uint32_t &i);
 		LInsp find2(LOpcode v, LInsp a, LInsp b, uint32_t &i);
-		LInsp findcall(const CallInfo *call, uint32_t argc, LInsp args[], uint32_t &i);
+		LInsp findcall(uint32_t fid, uint32_t argc, LInsp args[], uint32_t &i);
 		LInsp add(LInsp i, uint32_t k);
 		void replace(LInsp i);
         void clear();
@@ -808,7 +849,7 @@ namespace nanojit
 		static uint32_t FASTCALL hashimmq(uint64_t);
 		static uint32_t FASTCALL hash1(LOpcode v, LInsp);
 		static uint32_t FASTCALL hash2(LOpcode v, LInsp, LInsp);
-		static uint32_t FASTCALL hashcall(const CallInfo *call, uint32_t argc, LInsp args[]);
+		static uint32_t FASTCALL hashcall(uint32_t fid, uint32_t argc, LInsp args[]);
 	};
 
 	class CseFilter: public LirWriter
@@ -821,21 +862,19 @@ namespace nanojit
 		LIns* ins1(LOpcode v, LInsp);
 		LIns* ins2(LOpcode v, LInsp, LInsp);
 		LIns* insLoad(LOpcode v, LInsp b, LInsp d);
-		LIns* insCall(const CallInfo *call, LInsp args[]);
+		LIns* insCall(uint32_t fid, LInsp args[]);
 		LIns* insGuard(LOpcode op, LInsp cond, SideExit *x);
 	};
 
 	class LirBuffer : public GCFinalizedObject
 	{
 		public:
-			DWB(Fragmento*)		_frago;
 			LirBuffer(Fragmento* frago, const CallInfo* functions);
-			virtual ~LirBuffer();
+			~LirBuffer();
 			void        clear();
 			LInsp		next();
 			bool		outOmem() { return _noMem != 0; }
 			
-			debug_only (void validate() const;)
 			verbose_only(DWB(LirNameMap*) names;)
 			
 			int32_t insCount();
@@ -845,7 +884,6 @@ namespace nanojit
 			struct 
 			{
 				uint32_t lir;	// # instructions
-				uint32_t pages;	// pages consumed
 			}
 			_stats;
 
@@ -853,6 +891,7 @@ namespace nanojit
             AbiKind abi;
             LInsp state,param1,sp,rp;
             LInsp savedParams[NumSavedRegs];
+			DWB(Fragmento*)	_frago;
 			
 		protected:
 			friend class LirBufWriter;
@@ -861,7 +900,7 @@ namespace nanojit
 			bool		addPage();
 			Page*		pageAlloc();
 
-			Page*		_start;		// first page
+			PageList	_pages;
 			LInsp		_unused;	// next unused instruction slot
 			int			_noMem;		// set if ran out of memory when writing to buffer
 	};	
@@ -876,6 +915,7 @@ namespace nanojit
 				: LirWriter(0), _buf(buf) {
 				_functions = buf->_functions;
 			}
+			~LirBufWriter() {}
 
 			// LirWriter interface
 			LInsp   insLoad(LOpcode op, LInsp base, LInsp off);
@@ -887,10 +927,10 @@ namespace nanojit
 			LInsp	insParam(int32_t i, int32_t kind);
 			LInsp	insImm(int32_t imm);
 			LInsp	insImmq(uint64_t imm);
-		    LInsp	insCall(const CallInfo *call, LInsp args[]);
+		    LInsp	insCall(uint32_t fid, LInsp args[]);
 			LInsp	insGuard(LOpcode op, LInsp cond, SideExit *x);
 			LInsp	insBranch(LOpcode v, LInsp condition, LInsp to);
-			LInsp   insAlloc(int32_t size);
+            LInsp   insAlloc(int32_t size);
 
 			// buffer mgmt
 			LInsp	skip(size_t);
@@ -901,7 +941,7 @@ namespace nanojit
 			LInsp	ensureReferenceable(LInsp i, int32_t addedDistance);
 			bool	ensureRoom(uint32_t count);
 			bool	can8bReach(LInsp from, LInsp to) { return isU8(from-to-1); }
-			bool	can24bReach(LInsp from, LInsp to){ return isS24(from-to); }
+			bool	can24bReach(LInsp from, LInsp to){ return isS24(from-to); }		
 			bool	canReference(LInsp from, LInsp to) {
 				return isU8(from-to-1);
 			}
@@ -912,7 +952,7 @@ namespace nanojit
 	public:
 		LirFilter *in;
 		LirFilter(LirFilter *in) : in(in) {}
-		virtual ~LirFilter() {}
+        virtual ~LirFilter(){}
 
 		virtual LInsp read() {
 			return in->read();
@@ -930,7 +970,6 @@ namespace nanojit
 	public:
 		LirReader(LirBuffer* buf) : LirFilter(0), _i(buf->next()-1) { }
 		LirReader(LInsp i) : LirFilter(0), _i(i) { }
-		virtual ~LirReader() {}
 
 		// LirReader i/f
 		LInsp read(); // advance to the prior instruction
@@ -958,7 +997,6 @@ namespace nanojit
 		int getTop(LInsp br);
 	public:
 		StackFilter(LirFilter *in, GC *gc, LirBuffer *lirbuf, LInsp sp); 
-		virtual ~StackFilter() {}
 		LInsp read();
 	};
 
@@ -986,7 +1024,7 @@ namespace nanojit
         LInsp insLoad(LOpcode, LInsp base, LInsp disp);
         LInsp insStore(LInsp v, LInsp b, LInsp d);
         LInsp insStorei(LInsp v, LInsp b, int32_t d);
-        LInsp insCall(const CallInfo *call, LInsp args[]);
+        LInsp insCall(uint32_t fid, LInsp args[]);
     };
 }
 #endif // __nanojit_LIR__

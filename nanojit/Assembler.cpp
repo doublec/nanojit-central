@@ -49,9 +49,19 @@
 extern "C" void __clear_cache(char *BEG, char *END);
 #endif
 
+#ifdef PERFM
+#include "../vprof/vprof.h"
+#endif /* PERFM */
+
+#ifdef VTUNE
+#include "../codegen/CodegenLIR.h"
+#define vtune_only(...) __VA_ARGS__
+#else
+#define vtune_only(...)
+#endif
+
 namespace nanojit
 {
-
 
 	class DeadCodeFilter: public LirFilter
 	{
@@ -61,6 +71,7 @@ namespace nanojit
 	    {
             LOpcode op = ins->opcode();
             if (ins->isStore() ||
+				vtune_only( op == LIR_line || op == LIR_file || )
                 op == LIR_loop ||
                 op == LIR_label ||
                 op == LIR_live ||
@@ -70,13 +81,13 @@ namespace nanojit
 	        return ins->resv() == 0;
 	    }
 
-	public:		
+	public:
 		DeadCodeFilter(LirFilter *in, const CallInfo *f) : LirFilter(in), functions(f) {}
 		LInsp read() {
 			for (;;) {
 				LInsp i = in->read();
 				if (!i || i->isGuard() || i->isBranch()
-					|| i->isCall() && !i->isCse(functions)
+					|| i->isCall() && !functions[i->fid()]._cse
 					|| !ignoreInstruction(i))
 					return i;
 			}
@@ -148,11 +159,12 @@ namespace nanojit
 	 */
     Assembler::Assembler(Fragmento* frago)
         : hasLoop(0)
-		, _frago(frago)
+        , _frago(frago)
         , _gc(frago->core()->gc)
         , _labels(_gc)
         , _patches(_gc)
         , pending_lives(_gc)
+		, config(frago->core()->config)
 	{
         AvmCore *core = frago->core();
 		nInit(core);
@@ -215,8 +227,6 @@ namespace nanojit
 		// nothing free, steal one 
 		// LSRA says pick the one with the furthest use
 		LIns* vic = findVictim(regs,allow);
-		NanoAssert(vic != NULL);
-
 	    Reservation* resv = getresv(vic);
 
 		// restore vic
@@ -286,6 +296,13 @@ namespace nanojit
 		Page* page = _frago->pageAlloc();
 		if (page)
 		{
+			#ifdef VTUNE
+			if (_nIns && _nExitIns) {
+				//cgen->jitAddRecord((uintptr_t)list->code, 0, 0, true); // add placeholder record for top of page
+				cgen->jitCodePosUpdate((uintptr_t)list->code);
+				cgen->jitPushInfo(); // new page requires new entry
+			}
+			#endif
 			page->next = list;
 			list = page;
 			nMarkExecute(page);
@@ -394,6 +411,12 @@ namespace nanojit
 	}
 	#endif
 
+	const CallInfo* Assembler::callInfoFor(uint32_t fid)
+	{	
+		NanoAssert(fid < CI_Max);
+		return &_thisfrag->lirbuf->_functions[fid];
+	}
+
 	#ifdef _DEBUG
 	
 	void Assembler::resourceConsistencyCheck()
@@ -501,25 +524,18 @@ namespace nanojit
 		else
 		{
 			Register rb = UnknownReg;
-            resvb = getresv(ib);
-            if (resvb && (rb = resvb->reg) != UnknownReg) {
-                if (allow & rmask(rb)) {
-                    // ib already assigned to an allowable reg, keep that one
-                    allow &= ~rmask(rb);
-                } else {
-                    // ib assigned to unusable reg, pick a different one below.
-                    rb = UnknownReg;
-                }
-            }
-            Register ra = findRegFor(ia, allow);
-            resva = getresv(ia);
-            NanoAssert(error() || (resva != 0 && ra != UnknownReg));
-            if (rb == UnknownReg)
-            {
-                allow &= ~rmask(ra);
-                findRegFor(ib, allow);
-                resvb = getresv(ib);
-            }
+			resvb = getresv(ib);
+			if (resvb && (rb = resvb->reg) != UnknownReg)
+				allow &= ~rmask(rb);
+			Register ra = findRegFor(ia, allow);
+			resva = getresv(ia);
+			NanoAssert(error() || (resva != 0 && ra != UnknownReg));
+			if (rb == UnknownReg || !(rmask(rb) & allow))
+			{
+				allow &= ~rmask(ra);
+				findRegFor(ib, allow);
+				resvb = getresv(ib);
+			}
 		}
 	}
 
@@ -843,10 +859,10 @@ namespace nanojit
 
 		// set up backwards pipeline: assembler -> StackFilter -> LirReader
 		LirReader bufreader(frag->lastIns);
-		GC *gc = core->gc;
-		StackFilter storefilter1(&bufreader, gc, frag->lirbuf, frag->lirbuf->sp);
-		StackFilter storefilter2(&storefilter1, gc, frag->lirbuf, frag->lirbuf->rp);
-		DeadCodeFilter deadfilter(&storefilter2, frag->lirbuf->_functions);
+		//GC *gc = core->gc;
+		//StackFilter storefilter1(&bufreader, gc, frag->lirbuf, frag->lirbuf->sp);
+		//StackFilter storefilter2(&storefilter1, gc, frag->lirbuf, frag->lirbuf->rp);
+		DeadCodeFilter deadfilter(&bufreader, frag->lirbuf->_functions);
 		LirFilter* rdr = &deadfilter;
 		verbose_only(
 			VerboseBlockReader vbr(rdr, this, frag->lirbuf->names);
@@ -858,8 +874,8 @@ namespace nanojit
 		verbose_only(_frago->_stats.compiles++; )
 		verbose_only(_frago->_stats.totalCompiles++; )
 		_latestGuard = 0;
-		_inExit = false;	
-        gen(rdr, loopJumps);
+		_inExit = false;		
+		gen(rdr, loopJumps);
 		frag->fragEntry = _nIns;
 		frag->outbound = core->config.tree_opt? _latestGuard : 0;
 		//fprintf(stderr, "assemble frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
@@ -911,10 +927,10 @@ namespace nanojit
 
             frag->fragEntry = patchEntry;
 			NIns* code = _nIns;
-#ifdef PERFM
-			_nvprof("code", codeBytes());  // requires that all pages are released between begin/endAssembly()otherwise we double count
-#endif
-			// let the fragment manage the pages if we're using trees and there are branches
+
+            PERFM_NVPROF("code", codeBytes()); // requires that all pages are released between begin/endAssembly()otherwise we double count
+
+            // let the fragment manage the pages if we're using trees and there are branches
 			Page* manage = (_frago->core()->config.tree_opt) ? handoverPages() : 0;			
 			frag->setCode(code, manage); // root of tree should manage all pages
 			//fprintf(stderr, "endAssembly frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
@@ -1037,7 +1053,7 @@ namespace nanojit
 	void Assembler::gen(LirFilter* reader,  NInsList& loopJumps)
 	{
 		// trace must start with LIR_x or LIR_loop
-		NanoAssert(reader->pos()->isop(LIR_x) || reader->pos()->isop(LIR_loop));
+		//NanoAssert(reader->pos()->isop(LIR_x) || reader->pos()->isop(LIR_loop));
 		 
 		for (LInsp ins = reader->read(); ins != 0 && !error(); ins = reader->read())
 		{
@@ -1573,7 +1589,6 @@ namespace nanojit
                         NanoAssert(label->addr == 0 && label->regs.isValid());
                         //evictRegs(~_allocator.free);
                         intersectRegisterState(label->regs);
-                        //asm_align_code();
                         label->addr = _nIns;
                         verbose_only(
                             verbose_outputf("Loop %s", _thisfrag->lirbuf->names->formatRef(ins));
@@ -1723,8 +1738,34 @@ namespace nanojit
 					evictScratchRegs();
 
 					asm_call(ins);
+					break;
 				}
+
+				#ifdef VTUNE
+				case LIR_file:
+				{
+					// we traverse backwards so we are now hitting the file
+					// that is associated with a bunch of LIR_lines we already have seen
+					uintptr_t currentFile = ins->oprnd1()->constval();
+					cgen->jitFilenameUpdate(currentFile);
+					break;
+				}
+				case LIR_line:
+				{
+					// add a new table entry, we don't yet knwo which file it belongs
+					// to so we need to add it to the update table too
+					// note the alloc, actual act is delayed; see above
+					uint32_t currentLine = (uint32_t) ins->oprnd1()->constval();
+					cgen->jitLineNumUpdate(currentLine);
+					cgen->jitAddRecord((uintptr_t)_nIns, 0, currentLine, true);
+					break;
+				}
+				#endif // VTUNE
 			}
+
+			vtune_only(
+				cgen->jitCodePosUpdate((uintptr_t)_nIns);
+			)
 
 			// check that all is well (don't check in exit paths since its more complicated)
 			debug_only( pageValidate(); )
