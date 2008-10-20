@@ -120,8 +120,7 @@ namespace nanojit
 #endif
 		}
 
-		verbose_only( verbose_outputf("        %p:",_nIns); )
-		verbose_only( verbose_output("        patch entry:"); )
+		verbose_only( outputAddr=true; asm_output("[patch entry]"); )
         NIns *patchEntry = _nIns;
 		MR(FP, SP); // Establish our own FP.
         PUSHr(FP); // Save caller's FP.
@@ -250,9 +249,6 @@ namespace nanojit
 
         bool indirect = false;
         if (ins->isop(LIR_call) || ins->isop(LIR_fcall)) {
-            verbose_only(if (_verbose)
-                outputf("        %p:", _nIns);
-            )
     		CALL(call);
         }
         else {
@@ -508,10 +504,8 @@ namespace nanojit
 	void Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
 	{
         if (i->isop(LIR_alloc)) {
+			verbose_only( if (_verbose) { outputForEOL("  <= remat %s size %d", _thisfrag->lirbuf->names->formatRef(i), i->size()); } )
             LEA(r, disp(resv), FP);
-            verbose_only(if (_verbose) {
-                outputf("        remat %s size %d", _thisfrag->lirbuf->names->formatRef(i), i->size());
-            })
         }
         else if (i->isconst()) {
             if (!resv->arIndex) {
@@ -521,10 +515,8 @@ namespace nanojit
         }
         else {
             int d = findMemFor(i);
+			verbose_only( if (_verbose) { outputForEOL("  <= restore %s", _thisfrag->lirbuf->names->formatRef(i)); } )
 			asm_load(d,r);
-			verbose_only(if (_verbose) {
-				outputf("        restore %s", _thisfrag->lirbuf->names->formatRef(i));
-			})
         }
 	}
 

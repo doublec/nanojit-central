@@ -724,7 +724,7 @@ namespace nanojit
 			return v == LIR_2 ? out->ins2(v,a,b) : add(out->ins2(v, a, b));
 		}
 		LIns* insCall(uint32_t fid, LInsp args[]) {
-			return add_flush(out->insCall(fid, args));
+			return add(out->insCall(fid, args));
 		}
 		LIns* insParam(int32_t i, int32_t kind) {
 			return add(out->insParam(i, kind));

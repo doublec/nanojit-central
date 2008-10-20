@@ -746,7 +746,7 @@ namespace nanojit
   int offset = (c->_address) - ((int)_nIns); \
   IMM32( (uint32_t)offset );	\
   *(--_nIns) = 0xE8;		\
-  verbose_only(asm_output1("call %s",(c->_name));) \
+  verbose_only(outputAddr=true; asm_output1("call %s",(c->_name));) \
   debug_only(if ((c->_argtypes&3)==ARGSIZE_F) fpu_push();)\
 } while (0)
 
@@ -755,7 +755,7 @@ namespace nanojit
   count_calli();\
   underrunProtect(2);\
   ALU(0xff, 2, (r));\
-  verbose_only(asm_output1("call %s",gpn(r));) \
+  verbose_only(outputAddr=true; asm_output1("call %s",gpn(r));) \
   debug_only(if ((c->_argtypes&3)==ARGSIZE_F) fpu_push();)\
 } while (0)
 
