@@ -160,23 +160,23 @@ namespace nanojit
 		LIR_quad    = LIR_int | LIR64, // quad constant value
 		LIR_ldq		= LIR_ld    | LIR64, // quad load
 		LIR_ldqc    = LIR_ldc   | LIR64,
-        LIR_qiand   = 24 | LIR64,
-        LIR_qiadd   = 25 | LIR64,
-        LIR_qilsh   = LIR_lsh | LIR64,
+        LIR_qiand   = 24 | LIR64,		// int64 and
+        LIR_qiadd   = 25 | LIR64,		// int64 add
+        LIR_qilsh   = LIR_lsh | LIR64,	// int64 left shift
 
-		LIR_fcall   = LIR_call  | LIR64, // subroutine call returning quad
-		LIR_fcalli  = LIR_calli | LIR64,
+		LIR_fcall   = LIR_call  | LIR64, // direct call returning double
+		LIR_fcalli  = LIR_calli | LIR64, // indirect call returning double
 		LIR_fneg	= LIR_neg  | LIR64, // floating-point numeric negation
 		LIR_fadd	= LIR_add  | LIR64, // floating-point addition
 		LIR_fsub	= LIR_sub  | LIR64, // floating-point subtraction
 		LIR_fmul	= LIR_mul  | LIR64, // floating-point multiplication
 		LIR_fdiv	= 40        | LIR64, // floating-point division
-		LIR_qcmov	= LIR_cmov | LIR64, 
+		LIR_qcmov	= LIR_cmov | LIR64,  // 64bit conditional mov
 
 		LIR_qjoin	= 41 | LIR64,
-		LIR_i2f		= 42 | LIR64, // convert an integer to a float
-		LIR_u2f		= 43 | LIR64, // convert an unsigned integer to a float
-        LIR_qior    = 44 | LIR64
+		LIR_i2f		= 42 | LIR64, // int32 to double
+		LIR_u2f		= 43 | LIR64, // uint32 to double
+        LIR_qior    = 44 | LIR64  // int64 or
 	};
 
 	// should these be more enum entries that alias existing ones?

@@ -1311,7 +1311,7 @@ namespace nanojit
                         intersectRegisterState(label->regs);
                         label->addr = _nIns;
                     }
-					verbose_only( if (_verbose) { outputAddr=true; asm_output1("[%s]", _thisfrag->lirbuf->names->formatRef(ins)); } )
+					verbose_only( if (_verbose) { outputAddr=true; asm_output("[%s]", _thisfrag->lirbuf->names->formatRef(ins)); } )
 					break;
 				}
 

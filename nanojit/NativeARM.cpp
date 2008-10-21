@@ -991,7 +991,7 @@ Assembler::asm_load64(LInsp ins)
 void
 Assembler::asm_store64(LInsp value, int dr, LInsp base)
 {
-    //asm_output1("<<< store64 (dr: %d)", dr);
+    //asm_output("<<< store64 (dr: %d)", dr);
 
 #ifdef NJ_ARM_VFP
     Reservation *valResv = getresv(value);
@@ -1309,7 +1309,7 @@ Assembler::BL_far(NIns* addr)
 
     //fprintf (stderr, "BL_far sequence @ 0x%08x\n", _nIns);
 
-    asm_output1("bl %p (32-bit)", addr);
+    asm_output("bl %p (32-bit)", addr);
 }
 
 void
@@ -1329,7 +1329,7 @@ Assembler::BL(NIns* addr)
     if (isS24(offs)) {
         // already did underrunProtect above
         *(--_nIns) = (NIns)( COND_AL | (0xB<<24) | (((offs)>>2) & 0xFFFFFF) );
-        asm_output1("bl %p", addr);
+        asm_output("bl %p", addr);
     } else {
         BL_far(addr);
     }
@@ -1341,7 +1341,7 @@ Assembler::CALL(const CallInfo *ci)
     intptr_t addr = ci->_address;
 
     BL((NIns*)addr);
-    asm_output1("   (call %s)", ci->_name);
+    asm_output("   (call %s)", ci->_name);
 }
 
 void
@@ -1363,7 +1363,7 @@ Assembler::LD32_nochk(Register r, int32_t imm)
 
     NanoAssert(isS12(offset) && (offset < 0));
 
-    asm_output2("  (%d(PC) = 0x%x)", offset, imm);
+    asm_output("  (%d(PC) = 0x%x)", offset, imm);
 
     LDR_nochk(r,PC,offset);
 }
@@ -1411,7 +1411,7 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
         *(--_nIns) = (NIns)( ((_c)<<28) | (0x51<<20) | (PC<<16) | (PC<<12) | 0x0 );
     }
 
-    asm_output2("%s %p", _c == AL ? "jmp" : "b(cnd)", (void*)(_t));
+    asm_output("%s %p", _c == AL ? "jmp" : "b(cnd)", (void*)(_t));
 }
 
 void
@@ -1443,7 +1443,7 @@ Assembler::asm_add_imm(Register rd, Register rn, int32_t imm)
             *(--_nIns) = (NIns)( COND_AL | OP_IMM | OP_STAT | (1<<23) | (rn<<16) | (rd<<12) | (rot << 8) | immval );
         else
             *(--_nIns) = (NIns)( COND_AL | OP_IMM | OP_STAT | (1<<22) | (rn<<16) | (rd<<12) | (rot << 8) | immval );
-        asm_output3("add %s,%s,%d",gpn(rd),gpn(rn),imm);
+        asm_output("add %s,%s,%d",gpn(rd),gpn(rn),imm);
     } else {
         // add scratch to rn, after loading the value into scratch.
 
@@ -1451,7 +1451,7 @@ Assembler::asm_add_imm(Register rd, Register rn, int32_t imm)
         NanoAssert(rn != Scratch);
 
         *(--_nIns) = (NIns)( COND_AL | OP_STAT | (1<<23) | (rn<<16) | (rd<<12) | (Scratch));
-        asm_output3("add %s,%s,%s",gpn(rd),gpn(rn),gpn(Scratch));
+        asm_output("add %s,%s,%s",gpn(rd),gpn(rn),gpn(Scratch));
 
         LD32_nochk(Scratch, imm);
     }
