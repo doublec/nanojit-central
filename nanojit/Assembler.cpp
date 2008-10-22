@@ -65,8 +65,6 @@ namespace nanojit
 
 	class DeadCodeFilter: public LirFilter
 	{
-		const CallInfo *functions;
-
 	    bool ignoreInstruction(LInsp ins)
 	    {
             LOpcode op = ins->opcode();
@@ -82,12 +80,12 @@ namespace nanojit
 	    }
 
 	public:
-		DeadCodeFilter(LirFilter *in, const CallInfo *f) : LirFilter(in), functions(f) {}
+		DeadCodeFilter(LirFilter *in) : LirFilter(in) {}
 		LInsp read() {
 			for (;;) {
 				LInsp i = in->read();
 				if (!i || i->isGuard() || i->isBranch()
-					|| i->isCall() && !functions[i->fid()]._cse
+					|| i->isCall() && !i->callInfo()->_cse
 					|| !ignoreInstruction(i))
 					return i;
 			}
@@ -407,12 +405,6 @@ namespace nanojit
 		NanoAssertMsg( onPage(_nIns)&& onPage(_nExitIns,true), "Native instruction pointer overstep paging bounds; check overrideProtect for last instruction");
 	}
 	#endif
-
-	const CallInfo* Assembler::callInfoFor(uint32_t fid)
-	{	
-		NanoAssert(fid < CI_Max);
-		return &_thisfrag->lirbuf->_functions[fid];
-	}
 
 	#ifdef _DEBUG
 	
@@ -821,7 +813,7 @@ namespace nanojit
 		//GC *gc = core->gc;
 		//StackFilter storefilter1(&bufreader, gc, frag->lirbuf, frag->lirbuf->sp);
 		//StackFilter storefilter2(&storefilter1, gc, frag->lirbuf, frag->lirbuf->rp);
-		DeadCodeFilter deadfilter(&bufreader, frag->lirbuf->_functions);
+		DeadCodeFilter deadfilter(&bufreader);
 		LirFilter* rdr = &deadfilter;
 		verbose_only(
 			VerboseBlockReader vbr(rdr, this, frag->lirbuf->names);

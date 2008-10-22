@@ -209,8 +209,7 @@ namespace nanojit
 #if defined NANOJIT_IA32
 	void Assembler::asm_call(LInsp ins)
 	{
-        uint32_t fid = ins->fid();
-        const CallInfo* call = callInfoFor(fid);
+        const CallInfo* call = ins->callInfo();
 		// must be signed, not unsigned
 		uint32_t iargs = call->count_iargs();
 		int32_t fargs = call->count_args() - iargs - call->isIndirect();
@@ -302,8 +301,7 @@ namespace nanojit
 	void Assembler::asm_call(LInsp ins)
 	{
 		Register fpu_reg = XMM0;
-        uint32_t fid = ins->fid();
-        const CallInfo* call = callInfoFor(fid);
+        const CallInfo* call = ins->callInfo();
 		int n = 0;
 
 		CALL(call);
