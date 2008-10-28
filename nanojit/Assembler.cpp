@@ -137,7 +137,8 @@ namespace nanojit
 			else {
                 if (flushnext)
                     flush();
-				block.add(i);//flush_add(i);
+				block.add(i);
+                //flush_add(i);
                 if (i->isop(LIR_label))
                     flushnext = true;
 			}
@@ -514,12 +515,19 @@ namespace nanojit
 		{
 			Register rb = UnknownReg;
 			resvb = getresv(ib);
-			if (resvb && (rb = resvb->reg) != UnknownReg)
-				allow &= ~rmask(rb);
+			if (resvb && (rb = resvb->reg) != UnknownReg) {
+				if (allow & rmask(rb)) {
+					// ib already assigned to an allowable reg, don't let ia steal it
+					allow &= ~rmask(rb);
+				} else {
+					// ib assigned to not-allowed register, pick another one below
+					rb = UnknownReg;
+				}
+			}
 			Register ra = findRegFor(ia, allow);
 			resva = getresv(ia);
 			NanoAssert(error() || (resva != 0 && ra != UnknownReg));
-			if (rb == UnknownReg || !(rmask(rb) & allow))
+			if (rb == UnknownReg)
 			{
 				allow &= ~rmask(ra);
 				findRegFor(ib, allow);
@@ -1021,28 +1029,10 @@ namespace nanojit
                     break;
                 }
 
+                case LIR_fret:
                 case LIR_ret:  {
                     countlir_ret();
-                    if (_nIns != _epilogue) {
-                        JMP(_epilogue);
-                    }
-                    assignSavedParams();
-                    findSpecificRegFor(ins->oprnd1(), retRegs[0]);
-                    break;
-                }
-
-                case LIR_fret: {
-                    countlir_ret();
-                    if (_nIns != _epilogue) {
-                        JMP(_epilogue);
-                    }
-                    assignSavedParams();
-#ifdef NANOJIT_IA32
-                    findSpecificRegFor(ins->oprnd1(), FST0);
-#else
-                    NanoAssert(false);
-#endif
-                    fpu_pop();
+                    asm_ret(ins);
                     break;
                 }
 

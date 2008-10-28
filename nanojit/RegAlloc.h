@@ -79,12 +79,12 @@ namespace nanojit
 			debug_only( void		checkCount(); )
 			debug_only( bool		isConsistent(Register r, LIns* v); )
 			debug_only( uint32_t	count; )
-			debug_only( RegisterMask managed; )    // bitfield of 0..NJ_MAX_REGISTERS denoting which are under our management                     
+			debug_only( RegisterMask managed; )    // bitfield denoting which are under our management                     
 
 			// RegisterMask is a 32-bit value, so we can never have more than 32 active.
 			// hardcode 32 here in case we have non-contiguous register numbers
 			LIns*	active[32];  // active[r] = OP that defines r
-			int32_t usepri[NJ_MAX_REGISTERS]; // used priority. lower = more likely to spill.
+			int32_t usepri[32]; // used priority. lower = more likely to spill.
 			RegisterMask	free;
 			RegisterMask	used;
             int32_t         priority;

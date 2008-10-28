@@ -169,8 +169,8 @@ namespace nanojit
 		friend class VerboseBlockReader;
 		public:
 			#ifdef NJ_VERBOSE
-			static char  outline[8192]; 
-			static char  outlineEOL[512];  // string to be added to the end of the line
+			static char  outline[]; 
+			static char  outlineEOL[];  // string to be added to the end of the line
 			static char* outputAlign(char* s, int col); 
 
 			void FASTCALL outputForEOL(const char* format, ...);
@@ -303,7 +303,7 @@ namespace nanojit
 			void		asm_spilli(LInsp i, Reservation *resv, bool pop);
 			void		asm_spill(Register rr, int d, bool pop, bool quad);
 			void		asm_load64(LInsp i);
-			void		asm_pusharg(LInsp p);
+			void		asm_ret(LInsp p);
 			NIns*		asm_adjustBranch(NIns* at, NIns* target);
 			void		asm_quad(LInsp i);
 			void		asm_loop(LInsp i, NInsList& loopJumps);
@@ -378,7 +378,7 @@ namespace nanojit
 
 	inline int32_t disp(Reservation* r) 
 	{
-		return stack_direction((int32_t)STACK_GRANULARITY) * int32_t(r->arIndex) + NJ_STACK_OFFSET; 
+		return stack_direction((int32_t)STACK_GRANULARITY) * int32_t(r->arIndex);
 	}
 }
 #endif // __nanojit_Assembler__
