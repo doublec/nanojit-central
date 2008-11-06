@@ -107,6 +107,8 @@ typedef unsigned long long uint64_t;
 	#define vprof_align8(t) __declspec(align(8)) t
 #elif defined(__GNUC__)
 	#define vprof_align8(t) t __attribute__ ((aligned (8)))
+#elif defined(__SUNPRO_C) || defined(__SUNPRO_CC)
+	#define vprof_align8(t) t __attribute__ ((aligned (8)))
 #endif
 
 #ifdef __cplusplus
