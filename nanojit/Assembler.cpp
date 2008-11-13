@@ -1075,7 +1075,7 @@ namespace nanojit
 					// return result of quad-call in register
 					prepResultReg(ins, rmask(retRegs[1]));
                     // if hi half was used, we must use the call to ensure it happens
-                    findRegFor(ins->oprnd1(), rmask(retRegs[0]));
+                    findSpecificRegFor(ins->oprnd1(), retRegs[0]);
 					break;
 				}
 #endif
@@ -1872,6 +1872,8 @@ namespace nanojit
 		uint32_t argt = _argtypes;
 		for (uint32_t i = 0; i < MAXARGS; ++i) {
 			argt >>= 2;
+            if (!argt)
+                break;
 			argc += (argt & mask) != 0;
 		}
 		return argc;
@@ -1893,6 +1895,8 @@ namespace nanojit
 #endif
             if (a != ARGSIZE_NONE) {
                 sizes[argc++] = a;
+            } else {
+                break;
             }
 		}
         if (isIndirect()) {
