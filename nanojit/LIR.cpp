@@ -695,8 +695,8 @@ namespace nanojit
         return *(const uint64_t*)ptr;
     #else
         union { uint64_t tmp; int32_t dst[2]; } u;
-        u.dst[0] = v[0];
-        u.dst[1] = v[1];
+        u.dst[0] = l->v[0];
+        u.dst[1] = l->v[1];
         return u.tmp;
     #endif
 	}
@@ -710,8 +710,8 @@ namespace nanojit
 		return *(const double*)ptr;
 	#else
 		union { uint32_t dst[2]; double tmpf; } u;
-		u.dst[0] = v[0];
-		u.dst[1] = v[1];
+		u.dst[0] = l->v[0];
+		u.dst[1] = l->v[1];
 		return u.tmpf;
 	#endif
 	}
@@ -1137,7 +1137,7 @@ namespace nanojit
 			*--offs = (uint8_t) l->i.reference(args[i]);
 		NanoAssert((LInsp)offs>=_buf->next());
 		
-#ifdef NANOJIT_64BIT
+#ifndef NANOJIT_64BIT
 		l->i.initOpcode(op==LIR_callh ? LIR_call : op);
 #else
 		l->i.initOpcode(op);
