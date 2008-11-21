@@ -1897,13 +1897,6 @@ namespace nanojit
 		for (uint32_t i = 0; i < MAXARGS; i++) {
 			argt >>= 2;
 			ArgSize a = ArgSize(argt&3);
-#ifdef NJ_SOFTFLOAT
-			if (a == ARGSIZE_F) {
-                sizes[argc++] = ARGSIZE_LO;
-                sizes[argc++] = ARGSIZE_LO;
-                continue;
-            }
-#endif
             if (a != ARGSIZE_NONE) {
                 sizes[argc++] = a;
             } else {

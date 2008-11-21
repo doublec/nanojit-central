@@ -281,8 +281,9 @@ namespace nanojit
 			prefer = rmask(R0);
 		else if (op == LIR_callh)
 			prefer = rmask(R1);
-		else if (op == LIR_param)
-			prefer = rmask(imm2register(argRegs[i->imm8()]));
+        else if (op == LIR_param) {
+            if (i->imm8() < 4)
+    			prefer = rmask(argRegs[i->imm8()]);
 
 		if (_allocator.free & allow & prefer)
 			allow &= prefer;

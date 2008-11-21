@@ -181,6 +181,7 @@ namespace nanojit
 		void nativePageSetup();\
         void underrunProtect(int);\
         void asm_farg(LInsp);\
+        void asm_arg(ArgSize, LIns*, Register);\
 		void asm_pusharg(LInsp);\
         void asm_align_code();
 		

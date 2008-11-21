@@ -268,7 +268,7 @@ namespace nanojit
 		// pre-assign registers to the first N 4B args based on the calling convention
 		uint32_t n = 0;
 
-        ArgSize sizes[2*MAXARGS];
+        ArgSize sizes[MAXARGS];
         uint32_t argc = call->get_sizes(sizes);
         if (indirect) {
             argc--;
@@ -446,7 +446,7 @@ namespace nanojit
         else if (op == LIR_param) {
             uint32_t max_regs = max_abi_regs[_thisfrag->lirbuf->abi];
             if (i->imm8() < max_regs)
-    			prefer &= rmask(Register(i->imm8()));
+    			prefer &= rmask(argRegs[i->imm8()]);
         }
         else if (op == LIR_callh || op == LIR_rsh && i->oprnd1()->opcode()==LIR_callh) {
             prefer &= rmask(retRegs[1]);

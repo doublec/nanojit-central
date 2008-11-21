@@ -1101,30 +1101,7 @@ namespace nanojit
         LOpcode op = (ci->isIndirect() ? k_callimap : k_callmap)[argt & 3];
         NanoAssert(op != LIR_skip); // LIR_skip here is just an error condition
 
-        ArgSize sizes[2*MAXARGS];
-        int32_t argc = ci->get_sizes(sizes);
-
-#ifdef NJ_SOFTFLOAT
-		if (op == LIR_fcall)
-			op = LIR_callh;
-		LInsp args2[MAXARGS*2]; // arm could require 2 args per double
-		int32_t j = 0;
-        int32_t i = 0;
-        while (j < argc) {
-			argt >>= 2;
-			ArgSize a = ArgSize(argt&3);
-			if (a == ARGSIZE_F) {
-				LInsp q = args[i++];
-				args2[j++] = ins1(LIR_qhi, q);
-				args2[j++] = ins1(LIR_qlo, q);
-			} else {
-				args2[j++] = args[i++];
-			}
-		}
-		args = args2;
-        NanoAssert(j == argc);
-#endif
-
+        int32_t argc = ci->count_args();
 		NanoAssert(argc <= (int)MAXARGS);
 		uint32_t words = argwords(argc);
 		int32_t insSz = words + LIR_CALL_SLOTS; // words need for offsets + size of instruction
@@ -1142,12 +1119,17 @@ namespace nanojit
 		for (int32_t i=0; i < argc; i++)
 			*--offs = (uint8_t) l->i.reference(args[i]);
 		NanoAssert((LInsp)offs>=_buf->next());
-		
-#ifndef NANOJIT_64BIT
-		l->i.initOpcode(op==LIR_callh ? LIR_call : op);
-#else
-		l->i.initOpcode(op);
+
+#if defined NJ_SOFTFLOAT
+        if (op == LIR_fcall || op == LIR_callh)
+            op = LIR_call;
+        else if (op == LIR_fcalli)
+            op = LIR_calli;
+#elif !defined NANOJIT_64BIT
+        if (op == LIR_callh)
+            op = LIR_call;
 #endif
+        l->i.initOpcode(op);
 		l->i.c.imm8a = 0;
 		l->i.c.imm8b = argc;
 		_buf->commit(insSz);	

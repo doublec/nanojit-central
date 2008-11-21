@@ -327,7 +327,6 @@ namespace nanojit
 			void		asm_nongp_copy(Register r, Register s);
 			void		asm_bailout(LInsp guard, Register state);
 			void		asm_call(LInsp);
-            void        asm_arg(ArgSize, LInsp, Register);
 			Register	asm_binop_rhs_reg(LInsp ins);
 			NIns*		asm_branch(bool branchOnFalse, LInsp cond, NIns* targ);
             void        assignSavedParams();

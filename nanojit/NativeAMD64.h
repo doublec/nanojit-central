@@ -158,7 +158,9 @@ namespace nanojit
 		int32_t _pageData;					\
 		NIns *_dblNegPtr;					\
 		NIns *_negOnePtr;					\
-        NIns *overrideProtect;              
+        NIns *overrideProtect;              \
+		void asm_arg(ArgSize sz, LInsp p, Register r);\
+		void asm_pusharg(LInsp p);
 	#endif
 		
 	#define swapptrs()  { NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins; }

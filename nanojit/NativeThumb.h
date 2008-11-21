@@ -44,7 +44,6 @@
 namespace nanojit
 {
 	const int NJ_LOG2_PAGE_SIZE	= 12;		// 4K
-	const int NJ_MAX_REGISTERS = 6; // R0-R5
 	const int NJ_MAX_STACK_ENTRY = 256;
 	const int NJ_MAX_PARAMETERS = 1;
 	const int NJ_ALIGN_STACK = 8;
@@ -104,7 +103,6 @@ namespace nanojit
 
 	#define firstreg()		R0
 	#define nextreg(r)		(Register)((int)r+1)
-	#define imm2register(c) (Register)(c-1)
  
 	verbose_only( extern const char* regNames[]; )
 
