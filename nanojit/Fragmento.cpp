@@ -135,7 +135,7 @@ namespace nanojit
 	void Fragmento::pagesGrow(int32_t count)
 	{
 		NanoAssert(!_freePages.size());
-		MMGC_MEM_TYPE("NanojitFragmentoMem"); 
+		MMGC_MEM_TAG("NanojitFragmentoMem"); 
 		Page* memory = 0;
         GC *gc = _core->GetGC();
 		if (_stats.pages < _max_pages)
@@ -153,7 +153,7 @@ namespace nanojit
 			
 			// convert _max_pages to gc page count 
 			int32_t gcpages = (count*NJ_PAGE_SIZE) / _gcHeap->kNativePageSize;
-			MMGC_MEM_TYPE("NanoJitMem"); 
+			MMGC_MEM_TAG("NanoJitMem"); 
 			memory = (Page*)_gcHeap->Alloc(gcpages);
 #ifdef MEMORY_INFO
 			ChangeSizeExplicit("NanoJitMem", 1, _gcHeap->Size(memory));
