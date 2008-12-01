@@ -925,6 +925,7 @@ namespace nanojit
 			patchEntry = genPrologue();
 			verbose_only( outputAddr=true; )
 			verbose_only( asm_output("[prologue]"); )
+            NanoAssert((((int)_nIns) & 7) == 0);
 		}
 		
 		// something bad happened?

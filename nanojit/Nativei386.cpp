@@ -141,7 +141,7 @@ namespace nanojit
     void Assembler::asm_align_code() {
         // todo: the intel optimization guide suggests canonical nop 
         // instructions for sizes from 1..9; use them!
-        while(uintptr_t(_nIns) & 15) {
+        while(uintptr_t(_nIns) & 7) {
             NOP();
         }
     }

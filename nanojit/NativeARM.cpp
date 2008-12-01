@@ -107,6 +107,11 @@ Assembler::genPrologue()
 
     MOV(FP, SP);
     PUSH_mask(savingMask);
+
+    // ARM instructions are four-byte aligned, but we need the start address
+    // of the code to be eight-byte aligned, so add a NOP if necessary.
+    if ((((int)_nIns) & 7) != 0) NOP();
+
     return patchEntry;
 }
 

@@ -514,9 +514,19 @@ enum {
 
 
 //#define RET()   underrunProtect(1); *(--_nIns) = 0xc3;    asm_output("ret")
-//#define NOP()     underrunProtect(1); *(--_nIns) = 0x90;  asm_output("nop")
 //#define INT3()  underrunProtect(1); *(--_nIns) = 0xcc;  asm_output("int3")
 //#define RET() INT3()
+
+// NOP
+#if NJ_ARM_ARCH >= NJ_ARM_V7
+#define NOP() do { \
+        underrunProtect(4); \
+        *(--_nIns) = (NIns)0xE320F000; \
+        asm_output("nop"); \
+    } while (0)
+#else
+#define NOP() MOV(R0,R0)
+#endif
 
 #define BKPT_nochk() do { \
         *(--_nIns) = (NIns)( (0xE<<24) | (0x12<<20) | (0x7<<4) ); \
