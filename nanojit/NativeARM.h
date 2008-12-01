@@ -63,6 +63,12 @@ const int NJ_LOG2_PAGE_SIZE = 12;       // 4K
 // is used, and NJ_SOFTFLOAT is defined.
 //#define NJ_ARM_VFP
 
+#if defined AVMPLUS_ARM_OLDABI || defined _MSC_VER
+#  define NJ_ARM_EABI  0
+#else
+#  define NJ_ARM_EABI  1
+#endif
+
 // Which ARM architecture version should the JIT output code for?
 #define NJ_ARM_V4    1         // v4, no Thumb interworking
 #define NJ_ARM_V4T   2         // v4 with interworking support

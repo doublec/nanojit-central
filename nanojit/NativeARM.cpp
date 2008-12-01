@@ -339,20 +339,41 @@ Assembler::asm_call(LInsp ins)
         NanoAssert(!arg->isQuad() || arg->isop(LIR_qjoin));
         if (arg->isop(LIR_qjoin)) {
             NanoAssert(sz == ARGSIZE_F);
+#if NJ_ARM_EABI
+            // arm eabi puts doubles only in R0:1 or R2:3, and 64bit aligned on the stack.
+            if ((r == R1) || (r == R3)) r = nextreg(r);
             if (r < R3) {
+                // put double in two registers
+                asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
+                asm_regarg(ARGSIZE_LO, arg->oprnd2(), nextreg(r));
+                r = Register(r+2);
+            } else {
+                // put double on stack, 64bit aligned
+                if ((stkd & 7) != 0) stkd += 4;
+                asm_stkarg(arg->oprnd1(), stkd);
+                asm_stkarg(arg->oprnd2(), stkd+4);
+                stkd += 8;
+            }
+#else // !NJ_ARM_EABI
+            // legacy arm abi's don't align doubles
+            if (r < R3) {
+                // put double in next two registers
                 asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
                 asm_regarg(ARGSIZE_LO, arg->oprnd2(), nextreg(r));
                 r = Register(r+2);
             } else if (r < R4) {
+                // put LSW in R4, MSW on stack
                 asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
                 r = nextreg(r);
                 asm_stkarg(arg->oprnd2(), stkd);
                 stkd += 4;
             } else {
+                // put double on stack, 32bit aligned.
                 asm_stkarg(arg->oprnd1(), stkd);
                 asm_stkarg(arg->oprnd2(), stkd+4);
                 stkd += 8;
             }
+#endif // !NJ_ARM_EABI
         }
         else {
             // pre-assign registers R0-R3 for arguments (if they fit)
