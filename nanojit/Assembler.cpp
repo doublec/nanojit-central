@@ -475,7 +475,7 @@ namespace nanojit
 	{	
 		// check registers
 		RegAlloc *regs = &_allocator;
-		uint32_t managed = regs->managed;
+		RegisterMask managed = regs->managed;
 		Register r = FirstReg;
 		while(managed)
 		{

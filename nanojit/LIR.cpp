@@ -435,8 +435,14 @@ namespace nanojit
 	{
 		ensureRoom(LIR_IMM64_SLOTS);
 		LirImm64Ins* l = (LirImm64Ins*)_buf->next();
-		l->v[0] = int32_t(imm);
-		l->v[1] = int32_t(imm>>32);
+		#ifdef AVMPLUS_UNALIGNED_ACCESS
+			// store in natural endian
+			*((uint64_t*)l->v) = imm;
+		#else
+			// store in little endian
+			l->v[0] = int32_t(imm);
+			l->v[1] = int32_t(imm>>32);
+		#endif
 		l->i.initOpcode(LIR_quad);
 		_buf->commit(LIR_IMM64_SLOTS);	
 		_buf->_stats.lir++;
@@ -697,13 +703,19 @@ namespace nanojit
 	{
 		LirImm64Ins* l = (LirImm64Ins*)(this-LIR_IMM64_SLOTS+1);
     #ifdef AVMPLUS_UNALIGNED_ACCESS
+		// read natural endian
         int* ptr = (int*)l->v;
         return *(const uint64_t*)ptr;
     #else
-        union { uint64_t tmp; int32_t dst[2]; } u;
-        u.dst[0] = l->v[0];
-        u.dst[1] = l->v[1];
-        return u.tmp;
+		// convert little endian -> natural endian
+		#ifdef AVMPLUS_BIG_ENDIAN
+			union { uint64_t q; struct { int32_t hi, lo; } w; };
+		#else
+			union { uint64_t q; struct { int32_t lo, hi; } w; };
+		#endif
+        w.lo = l->v[0];
+        w.hi = l->v[1];
+        return q;
     #endif
 	}
 
@@ -711,14 +723,19 @@ namespace nanojit
 	{
 		LirImm64Ins* l = (LirImm64Ins*)(this-LIR_IMM64_SLOTS+1);
 		NanoAssert(isconstq());
-	#ifdef AVMPLUS_UNALIGNED_ACCESS
+	#if defined AVMPLUS_UNALIGNED_ACCESS
         int* ptr = (int*)l->v;
 		return *(const double*)ptr;
 	#else
-		union { uint32_t dst[2]; double tmpf; } u;
-		u.dst[0] = l->v[0];
-		u.dst[1] = l->v[1];
-		return u.tmpf;
+		// convert little endian -> natural endian
+		#ifdef AVMPLUS_BIG_ENDIAN
+			union { double d; struct { int32_t hi, lo; } w; };
+		#else
+			union { double d; struct { int32_t lo, hi; } w; };
+		#endif
+        w.lo = l->v[0];
+        w.hi = l->v[1];
+        return d;
 	#endif
 	}
 
@@ -1759,8 +1776,12 @@ namespace nanojit
 
 			case LIR_quad:
 			{
-				int32_t *p = (int32_t*) (i-2);
-				sprintf(s, "#%X:%X /* %g */", p[1], p[0], i->constvalf());
+				union {
+					double d;
+					uint64_t q;
+				};
+				q = i->constvalq();
+				sprintf(s, "#%X:#%X /* %g */", uint32_t(q>>32), uint32_t(q), d);
 				break;
 			}
 

@@ -287,7 +287,6 @@ namespace nanojit
 			bool		_inExit, vpad2[3];
             InsList     pending_lives;
 
-			void		asm_cmp(LIns *cond);
 #ifndef NJ_SOFTFLOAT
 			void		asm_fcmp(LIns *cond);
             void        asm_setcc(Register res, LIns *cond);
@@ -343,7 +342,7 @@ namespace nanojit
 			
 			// platform specific implementation (see NativeXXX.cpp file)
 			void		nInit(AvmCore *);
-			Register	nRegisterAllocFromSet(int32_t set);
+			Register	nRegisterAllocFromSet(RegisterMask set);
 			void		nRegisterResetAll(RegAlloc& a);
 			void		nMarkExecute(Page* page, int flags);
 			void		nFrameRestore(RegisterMask rmask);

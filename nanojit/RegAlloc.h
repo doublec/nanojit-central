@@ -45,7 +45,7 @@ namespace nanojit
 {
 	inline RegisterMask rmask(Register r)
 	{
-		return 1 << r;
+		return RegisterMask(1) << r;
 	}
 
 	class RegAlloc MMGC_SUBCLASS_DECL
@@ -81,10 +81,9 @@ namespace nanojit
 			debug_only( uint32_t	count; )
 			debug_only( RegisterMask managed; )    // bitfield denoting which are under our management                     
 
-			// RegisterMask is a 32-bit value, so we can never have more than 32 active.
-			// hardcode 32 here in case we have non-contiguous register numbers
-			LIns*	active[32];  // active[r] = OP that defines r
-			int32_t usepri[32]; // used priority. lower = more likely to spill.
+			// active & usepri must hold all possible registers
+			LIns*	active[sizeof(RegisterMask)*8];  // active[r] = OP that defines r
+			int32_t usepri[sizeof(RegisterMask)*8]; // used priority. lower = more likely to spill.
 			RegisterMask	free;
 			RegisterMask	used;
             int32_t         priority;

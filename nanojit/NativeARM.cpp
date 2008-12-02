@@ -925,7 +925,7 @@ void
 Assembler::asm_qjoin(LIns *ins)
 {
     int d = findMemFor(ins);
-    AvmAssert(d);
+    NanoAssert(d);
     LIns* lo = ins->oprnd1();
     LIns* hi = ins->oprnd2();
                             

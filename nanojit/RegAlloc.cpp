@@ -142,6 +142,11 @@ namespace nanojit
 			if (!ins)
 				continue;				
 
+			if (ins->isop(LIR_param) && ins->imm8b()==1 && r == Assembler::savedRegs[ins->imm8()]) {
+				// dont print callee-saved regs that arent used
+				continue;
+			}
+
 			s += strlen(s);
 			const char* rname = ins->isQuad() ? fpn(r) : gpn(r);
 			sprintf(s, " %s(%s)", rname, names->formatRef(ins));

@@ -214,6 +214,7 @@ verbose_only( extern const char *regNames[], *condNames[], *shiftNames[]; )
     void asm_stkarg(LInsp p, int stkd);                                 \
     void asm_cmpi(Register, int32_t imm);                               \
     void asm_ldr_chk(Register d, Register b, int32_t off, bool chk);    \
+    void asm_cmp(LIns *cond);                                           \
     int  max_out_args; /* bytes */                                      \
     int* _nSlot;                                                        \
     int* _nExitSlot;                                                    \
