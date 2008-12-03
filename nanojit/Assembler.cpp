@@ -60,6 +60,11 @@ extern "C" void __clear_cache(char *BEG, char *END);
 #define vtune_only(...)
 #endif
 
+#ifdef _MSC_VER
+	// disable some specific warnings which are normally useful, but pervasive in the code-gen macros
+	#pragma warning(disable:4310) // cast truncates constant value
+#endif
+	
 namespace nanojit
 {
 

@@ -43,12 +43,17 @@
 #include <CoreServices/CoreServices.h>
 #endif
 
+#include "nanojit.h"
 #if defined AVMPLUS_UNIX || defined AVMPLUS_MAC
 #include <sys/mman.h>
 #include <errno.h>
 #include <stdlib.h>
 #endif
-#include "nanojit.h"
+
+#ifdef _MSC_VER
+	// disable some specific warnings which are normally useful, but pervasive in the code-gen macros
+	#pragma warning(disable:4310) // cast truncates constant value
+#endif
 
 namespace nanojit
 {
