@@ -359,6 +359,9 @@ namespace nanojit
 			NanoAssert(addr == (intptr_t)page);
 			#if defined SOLARIS
 			if (mprotect((char *)addr, NJ_PAGE_SIZE, prot) == -1) 
+			#elif defined AVMPLUS_MAC
+			task_t task = mach_task_self();
+			if (vm_protect(task, addr, NJ_PAGE_SIZE, true, prot) == -1)
 			#else
 			if (mprotect((void *)addr, NJ_PAGE_SIZE, prot) == -1) 
 			#endif
