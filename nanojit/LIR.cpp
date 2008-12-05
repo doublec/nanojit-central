@@ -1681,7 +1681,6 @@ namespace nanojit
         Entry *e;
 
         while ((e = names.removeLast()) != NULL) {
-            labels->core->freeString(e->name);
             NJ_DELETE(e);
         }
     }
@@ -1696,9 +1695,7 @@ namespace nanojit
 	}
 	void LirNameMap::addName(LInsp i, const char *name) {
         Stringp new_name = labels->core->newString(name);
-        if (!addName(i, new_name)) {
-            labels->core->freeString(new_name);
-        }
+        addName(i, new_name);
 	}
 
 	void LirNameMap::copyName(LInsp i, const char *s, int suffix) {
@@ -1723,10 +1720,9 @@ namespace nanojit
 	{
 		char buffer[200], *buf=buffer;
 		buf[0]=0;
-		GC *gc = labels->core->gc;
 		if (names.containsKey(ref)) {
-			StringNullTerminatedUTF8 cname(gc, names.get(ref)->name);
-			strcat(buf, cname.c_str());
+			UTF8String* cname8 = names.get(ref)->name->toUTF8String();
+			strcat(buf, cname8->c_str());
 		}
 		else if (ref->isconstq()) {
 #if defined NANOJIT_64BIT
@@ -1757,8 +1753,8 @@ namespace nanojit
                 NanoAssert(size_t(ref->opcode()) < sizeof(lirNames) / sizeof(lirNames[0]));
 				copyName(ref, lirNames[ref->opcode()], lircounts.add(ref->opcode()));
 			}
-			StringNullTerminatedUTF8 cname(gc, names.get(ref)->name);
-			strcat(buf, cname.c_str());
+			UTF8String* cname8 = names.get(ref)->name->toUTF8String();
+			strcat(buf, cname8->c_str());
 		}
 		return labels->dup(buffer);
 	}
@@ -2204,7 +2200,6 @@ namespace nanojit
         Entry *e;
         
         while ((e = names.removeLast()) != NULL) {
-            core->freeString(e->name);
             NJ_DELETE(e);
         } 
     }
@@ -2229,17 +2224,18 @@ namespace nanojit
 		char b[200];
 		int i = names.findNear(p);
 		if (i >= 0) {
+			const char* result = NULL;
 			const void *start = names.keyAt(i);
 			Entry *e = names.at(i);
 			const void *end = (const char*)start + e->size;
-			avmplus::StringNullTerminatedUTF8 cname(core->gc, e->name);
-			const char *name = cname.c_str();
+			UTF8String* cname8 = e->name->toUTF8String();
+			const char *name = cname8->c_str();
 			if (p == start) {
 				if (addrs)
 					sprintf(b,"%p %s",p,name);
 				else
 					strcpy(b, name);
-				return dup(b);
+				result = dup(b);
 			}
 			else if (p > start && p < end) {
 				int32_t d = int32_t(intptr_t(p)-intptr_t(start)) >> e->align;
@@ -2247,16 +2243,19 @@ namespace nanojit
 					sprintf(b, "%p %s+%d", p, name, d);
 				else
 					sprintf(b,"%s+%d", name, d);
-				return dup(b);
+				result = dup(b);
 			}
 			else {
 				if (parent)
-					return parent->format(p);
-
-				sprintf(b, "%p", p);
-				return dup(b);
+					result = parent->format(p);
+				else {
+					sprintf(b, "%p", p);
+					result = dup(b);
+				}
 			}
+			return result;
 		}
+
 		if (parent)
 			return parent->format(p);
 
