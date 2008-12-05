@@ -44,6 +44,7 @@
 #endif
 
 #include "nanojit.h"
+
 #if defined AVMPLUS_UNIX || defined AVMPLUS_MAC
 #include <sys/mman.h>
 #include <errno.h>
@@ -57,7 +58,7 @@
 
 namespace nanojit
 {
-	#ifdef FEATURE_NANOJIT
+	#if defined FEATURE_NANOJIT && (defined NANOJIT_IA32 || defined NANOJIT_AMD64)
 
 	#ifdef NJ_VERBOSE
 		const char *regNames[] = {

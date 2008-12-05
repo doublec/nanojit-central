@@ -41,14 +41,15 @@
 #include <CoreServices/CoreServices.h>
 #endif
 
+#include "nanojit.h"
+
 #if defined AVMPLUS_UNIX || defined AVMPLUS_MAC
 #include <sys/mman.h>
 #include <errno.h>
 #include <stdlib.h>
 #endif
-#include "nanojit.h"
 
-#ifdef FEATURE_NANOJIT
+#if defined FEATURE_NANOJIT && defined NANOJIT_PPC
 
 namespace nanojit
 {
@@ -1013,10 +1014,11 @@ namespace nanojit
 
 	Register Assembler::nRegisterAllocFromSet(RegisterMask set) {
 		Register i;
+		// note, deliberate truncation of 64->32 bits
 		if (set & 0xffffffff) {
-			i = Register(cntzlw(set)); // gp reg
+			i = Register(cntzlw(int(set))); // gp reg
 		} else {
-			i = Register(32+cntzlw(set>>32)); // fp reg
+			i = Register(32+cntzlw(int(set>>32))); // fp reg
 		}
 		_allocator.free &= ~rmask(i);
 		return i;
@@ -1072,4 +1074,4 @@ namespace nanojit
 
 } // namespace nanojit
 
-#endif // FEATURE_NANOJIT
+#endif // FEATURE_NANOJIT && AVMPLUS_PPC

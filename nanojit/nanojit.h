@@ -44,17 +44,17 @@
 
 #ifdef FEATURE_NANOJIT
 
-#ifdef AVMPLUS_IA32
-#define NANOJIT_IA32
-#elif AVMPLUS_ARM
-#define NANOJIT_ARM
-#elif AVMPLUS_PPC
-#define NANOJIT_PPC
-#elif AVMPLUS_AMD64
-#define NANOJIT_AMD64
-#define NANOJIT_64BIT
+#if defined AVMPLUS_IA32
+	#define NANOJIT_IA32
+#elif defined AVMPLUS_ARM
+	#define NANOJIT_ARM
+#elif defined AVMPLUS_PPC
+	#define NANOJIT_PPC
+#elif defined AVMPLUS_AMD64
+	#define NANOJIT_AMD64
+	#define NANOJIT_64BIT
 #else
-#error "unknown nanojit architecture"
+	#error "unknown nanojit architecture"
 #endif
 
 /*
