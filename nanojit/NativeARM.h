@@ -474,7 +474,7 @@ enum {
 // (LDRB actually allows 12-bit offset in ARM mode but constraining to 5-bit gives us advantage for Thumb)
 // @todo, untested!
 #define LDRB(_d,_off,_b) do {                                           \
-        NanoAssert((d)>=0&&(d)<=31);                                    \
+        NanoAssert((_off)>=0&&(_off)<=31);                                    \
         underrunProtect(4);                                             \
         *(--_nIns) = (NIns)( COND_AL | (0x5D<<20) | ((_b)<<16) | ((_d)<<12) |  ((_off)&0xfff)  ); \
         asm_output("ldrb %s, [%s, #0x%X]", gpn(_d),gpn(_b),(_off));          \

@@ -299,6 +299,7 @@ Assembler::asm_call(LInsp ins)
 #if NJ_ARM_ARCH >= NJ_ARM_V5
         if (blx_lr_bug) {
             // workaround for msft device emulator bug (blx lr emulated as no-op)
+	    underrunProtect(8);
             BLX(IP);
             MOV(IP,LR);
         } else {
@@ -1113,7 +1114,7 @@ Assembler::asm_store64(LInsp value, int dr, LInsp base)
     if (value->isconstq()) {
         const int32_t* p = (const int32_t*) (value-2);
 
-        underrunProtect(12);
+        underrunProtect(16);
 
         asm_quad_nochk(rv, p);
     }
@@ -1165,7 +1166,7 @@ Assembler::asm_quad(LInsp ins)
     freeRsrcOf(ins, false);
 
     if (rr == UnknownReg) {
-        underrunProtect(12);
+        underrunProtect(28);
 
         // asm_mmq might spill a reg, so don't call it;
         // instead do the equivalent directly.
@@ -1461,6 +1462,7 @@ bool Assembler::BL_noload(NIns* addr, Register reg)
         NanoAssert(reg != PC);
         if (blx_lr_bug) {
             // workaround for msft device emulator bug (blx lr emulated as no-op)
+	    underrunProtect(8);
             BLX(IP);
             MOV(IP,LR);
             return true;
@@ -1483,6 +1485,18 @@ Assembler::LD32_nochk(Register r, int32_t imm)
     //fprintf (stderr, "wrote slot(2) %p with %08x, jmp @ %p\n", _nSlot, (intptr_t)imm, _nIns-1);
 
     int offset = PC_OFFSET_FROM(_nSlot,_nIns-1);
+
+    if (offset == 0x1000) {
+        // _nSlot and _nIns are in the same page but pc is 8 bytes ahead of _nIns, so
+        // _nSlot may not be in " pc load range" (4k). This problem can only happen for
+        // the last two intructions in the page, the last instruction is never a load pc
+        // so the only remaining case is when _nSlot is page + 0x0 and _nIns is page + 0xff8,
+        // the offset is then 0xff8 + 8 - 0 == 0x1000
+        // _nSlots is simply incremented to come within range and one constant pool space
+        // is wasted.
+        ++_nSlot;
+        offset -= 4;
+    }
 
     NanoAssert(isS12(offset) && (offset < 0));
 
@@ -1550,7 +1564,7 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
         *(--_nIns) = (NIns)( COND_AL | (0x51<<20) | (PC<<16) | (PC<<12) | 0x4 );
         asm_output("b%s %p", _c == AL ? "" : condNames[_c], (void*)(_t));
     } else if (samepage(_nIns-1,_nSlot)) {
-        if(_chk) underrunProtect(4);
+        if(_chk) underrunProtect(8);
         *(++_nSlot) = (NIns)(_t);
         offs = PC_OFFSET_FROM(_nSlot,_nIns-1);
         NanoAssert(offs < 0);
@@ -1588,7 +1602,7 @@ Assembler::asm_add_imm(Register rd, Register rn, int32_t imm, int stat)
 
     rot &= 0xf;
 
-    underrunProtect(4);
+    underrunProtect(4 + LD32_size);
     if (immval < 256) {
         if (pos) {
             ALUi_rot(AL, add, stat, rd, rn, immval, rot);
