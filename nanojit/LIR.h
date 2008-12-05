@@ -783,6 +783,7 @@ namespace nanojit
 	    LIns* ins2(LOpcode v, LIns* a, LIns* b);
 		LIns* insGuard(LOpcode, LIns *cond, SideExit *);
         LIns* insBranch(LOpcode, LIns *cond, LIns *target);
+		LIns* insLoad(LOpcode op, LInsp base, LInsp off);
 	};
 
 	// @todo, this could be replaced by a generic HashMap or HashSet, if we had one

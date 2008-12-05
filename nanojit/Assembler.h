@@ -276,6 +276,9 @@ namespace nanojit
 			Page*		_nativePages;	// list of NJ_PAGE_SIZE pages that have been alloc'd
 			Page*		_nativeExitPages; // list of pages that have been allocated for exit code
 			AssmError	_err;			// 0 = means assemble() appears ok, otherwise it failed
+		#if PEDANTIC
+			NIns*		pedanticTop;
+		#endif
 
 			AR			_activation;
 			RegAlloc	_allocator;
@@ -331,6 +334,7 @@ namespace nanojit
             void        assignSavedParams();
             void        reserveSavedParams();
             void        handleLoopCarriedExprs();
+            void        flush_icache(Page*);
 			
 			// flag values for nMarkExecute
 			enum 

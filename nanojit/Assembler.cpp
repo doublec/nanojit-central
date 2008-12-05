@@ -49,6 +49,12 @@
 extern "C" void __clear_cache(char *BEG, char *END);
 #endif
 
+#if defined AVMPLUS_MAC && defined AVMPLUS_PPC
+// 10.5 only
+//extern "C" void sys_icache_invalidate(const void*, size_t len);
+//extern "C" void sys_dcache_flush(const void*, size_t len);
+#endif
+
 #ifdef PERFM
 #include "../vprof/vprof.h"
 #endif /* PERFM */
@@ -488,7 +494,7 @@ namespace nanojit
 			{
 				if (regs->isFree(r))
 				{
-					NanoAssert(regs->getActive(r)==0);
+					NanoAssertMsgf(regs->getActive(r)==0, "register %s is free but assigned to ins", gpn(r));
 				}
 				else
 				{
@@ -549,12 +555,15 @@ namespace nanojit
 
     Register Assembler::getBaseReg(LIns *i, int &d, RegisterMask allow)
     {
+    #if !PEDANTIC
         if (i->isop(LIR_alloc)) {
             d += findMemFor(i);
             return FP;
-        } else {
-            return findRegFor(i, allow);
         }
+    #else
+        (void) d;
+    #endif
+        return findRegFor(i, allow);
     }
 			
 	Register Assembler::findRegFor(LIns* i, RegisterMask allow)
@@ -867,7 +876,39 @@ namespace nanojit
         }
 		else {
 			_nIns = _startingIns;  // in case of failure reset nIns ready for the next assembly run
+			IF_PEDANTIC( pedanticTop = _nIns;)
 		}
+	}
+
+	void Assembler::flush_icache(Page *pages) {
+#if defined AVMPLUS_IA32 || defined AVMPLUS_AMD64
+		(void) pages;
+#elif defined AVMPLUS_ARM && defined UNDER_CE
+		(void) pages;
+		// just flush all of it
+		FlushInstructionCache(GetCurrentProcess(), NULL, NULL);
+#elif defined AVMPLUS_UNIX
+		Page *p = pages;
+		Page *first = p;
+		while (p) {
+			if (!p->next || p->next != p+1) {
+				__clear_cache((char*)first, (char*)(p+1));
+				first = p->next;
+			}
+			p = p->next;
+		}
+#elif defined AVMPLUS_MAC && defined AVMPLUS_PPC
+		Page *next;
+		for (Page *p = pages; p != 0; p = next) {
+			next = p->next;
+			// 10.5 only
+			//sys_dcache_flush(p, sizeof(Page));
+			//sys_icache_invalidate(p, sizeof(Page));
+
+			// carbon api depreciated, but we need it on 10.4
+			MakeDataExecutable(p, sizeof(Page));
+		}
+#endif
 	}
 
 	void Assembler::endAssembly(Fragment* frag, NInsList& loopJumps)
@@ -917,31 +958,14 @@ namespace nanojit
 		NanoAssert( !_branchStateMap || _branchStateMap->isEmpty());
 		_branchStateMap = 0;
 
-#ifdef AVMPLUS_ARM
-		// If we've modified the code, we need to flush so we don't end up trying 
-		// to execute junk
-# if defined(UNDER_CE)
-		FlushInstructionCache(GetCurrentProcess(), NULL, NULL);
-# elif defined(AVMPLUS_UNIX)
-		for (int i = 0; i < 2; i++) {
-			Page *p = (i == 0) ? _nativePages : _nativeExitPages;
 
-			Page *first = p;
-			while (p) {
-				if (!p->next || p->next != p+1) {
-					__clear_cache((char*)first, (char*)(p+1));
-					first = p->next;
-				}
-				p = p->next;
-			}
-		}
-# endif
-#endif
-
-# ifdef AVMPLUS_PORTING_API
+#ifdef AVMPLUS_PORTING_API
 		NanoJIT_PortAPI_FlushInstructionCache(_nIns, _startingIns);
 		NanoJIT_PortAPI_FlushInstructionCache(_nExitIns, _endJit2Addr);
-# endif
+#else
+		flush_icache(_nativePages);
+		flush_icache(_nativeExitPages);
+#endif
 	}
 	
 	void Assembler::copyRegisters(RegAlloc* copyTo)
@@ -1442,8 +1466,10 @@ namespace nanojit
         LirBuffer *b = _thisfrag->lirbuf;
         for (int i=0, n = NumSavedRegs; i < n; i++) {
             LIns *p = b->savedParams[i];
-            if (p)
-                findSpecificRegFor(p, savedRegs[p->imm8()]);
+            if (p) {
+				Register r = savedRegs[p->imm8()];
+                findSpecificRegFor(p, r);
+			}
         }
     }
 

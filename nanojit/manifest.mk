@@ -41,9 +41,9 @@ ifeq (i686,$(TARGET_CPU))
 nanojit_cpu_cxxsrc := Nativei386.cpp
 endif
 
-#ifeq (powerpc,$(TARGET_CPU))
-#nanojit_cpu_cxxsrc := PpcAssembler.cpp
-#endif
+ifeq (powerpc,$(TARGET_CPU))
+nanojit_cpu_cxxsrc := NativePPC.cpp
+endif
 
 ifeq (arm,$(TARGET_CPU))
 nanojit_cpu_cxxsrc := NativeARM.cpp
