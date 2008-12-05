@@ -502,7 +502,7 @@ Assembler::asm_call(LInsp ins)
                 ALUi(AL, cmn, 1, 0, r, -imm);
             } else {
                 underrunProtect(4 + LD32_size);
-                CMN(r, IP);
+                CMP(r, IP);
                 LD32_nochk(IP, imm);
             }
         } else {
