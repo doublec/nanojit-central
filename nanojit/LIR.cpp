@@ -1721,7 +1721,7 @@ namespace nanojit
 		char buffer[200], *buf=buffer;
 		buf[0]=0;
 		if (names.containsKey(ref)) {
-			UTF8String* cname8 = names.get(ref)->name->toUTF8String();
+			StUTF8String cname8 (names.get(ref)->name);
 			strcat(buf, cname8->c_str());
 		}
 		else if (ref->isconstq()) {
@@ -1753,7 +1753,7 @@ namespace nanojit
                 NanoAssert(size_t(ref->opcode()) < sizeof(lirNames) / sizeof(lirNames[0]));
 				copyName(ref, lirNames[ref->opcode()], lircounts.add(ref->opcode()));
 			}
-			UTF8String* cname8 = names.get(ref)->name->toUTF8String();
+			StUTF8String cname8(names.get(ref)->name);
 			strcat(buf, cname8->c_str());
 		}
 		return labels->dup(buffer);
@@ -2228,7 +2228,7 @@ namespace nanojit
 			const void *start = names.keyAt(i);
 			Entry *e = names.at(i);
 			const void *end = (const char*)start + e->size;
-			UTF8String* cname8 = e->name->toUTF8String();
+			StUTF8String cname8(e->name);
 			const char *name = cname8->c_str();
 			if (p == start) {
 				if (addrs)
