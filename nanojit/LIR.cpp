@@ -1694,7 +1694,7 @@ namespace nanojit
         return false;
 	}
 	void LirNameMap::addName(LInsp i, const char *name) {
-        Stringp new_name = labels->core->newString(name);
+        Stringp new_name = labels->core->newStringLatin1(name);
         addName(i, new_name);
 	}
 
@@ -1706,7 +1706,7 @@ namespace nanojit
 		} else {
 			sprintf(s2,"%s%d", s, suffix);
 		}
-		addName(i, labels->core->newString(s2));
+		addName(i, labels->core->newStringLatin1(s2));
 	}
 
 	void LirNameMap::formatImm(int32_t c, char *buf) {
@@ -2208,7 +2208,7 @@ namespace nanojit
 	{
 		if (!this || names.containsKey(p))
 			return;
-		add(p, size, align, core->newString(name));
+		add(p, size, align, core->newStringLatin1(name));
 	}
 
     void LabelMap::add(const void *p, size_t size, size_t align, Stringp name)
