@@ -1722,7 +1722,7 @@ namespace nanojit
 		buf[0]=0;
 		if (names.containsKey(ref)) {
 			StUTF8String cname8 (names.get(ref)->name);
-			strcat(buf, cname8->c_str());
+			strcat(buf, cname8.c_str());
 		}
 		else if (ref->isconstq()) {
 #if defined NANOJIT_64BIT
@@ -1754,7 +1754,7 @@ namespace nanojit
 				copyName(ref, lirNames[ref->opcode()], lircounts.add(ref->opcode()));
 			}
 			StUTF8String cname8(names.get(ref)->name);
-			strcat(buf, cname8->c_str());
+			strcat(buf, cname8.c_str());
 		}
 		return labels->dup(buffer);
 	}
@@ -2229,7 +2229,7 @@ namespace nanojit
 			Entry *e = names.at(i);
 			const void *end = (const char*)start + e->size;
 			StUTF8String cname8(e->name);
-			const char *name = cname8->c_str();
+			const char *name = cname8.c_str();
 			if (p == start) {
 				if (addrs)
 					sprintf(b,"%p %s",p,name);
