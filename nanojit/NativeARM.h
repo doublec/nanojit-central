@@ -535,7 +535,7 @@ enum {
 #endif
 
 #define BKPT_nochk() do { \
-        *(--_nIns) = (NIns)( (0xE<<24) | (0x12<<20) | (0x7<<4) ); \
+        *(--_nIns) = (NIns)( COND_AL | (0x12<<20) | (0x7<<4) ); \
         asm_output("bkpt");\
     } while (0)
 
@@ -572,15 +572,6 @@ enum {
 #define B_nochk(_t)                           \
     B_cond_chk(AL,_t,0)
 
-// emit a placeholder that will be filled in later by nPatchBranch;
-// emit two breakpoint instructions in case something goes wrong with
-// the patching.
-#define B_long_placeholder()  do {            \
-        underrunProtect(8);                     \
-        BKPT_nochk();                           \
-        BKPT_nochk();                           \
-    } while(0)
-
 #define B(t)    B_cond(AL,t)
 #define BHI(t)  B_cond(HI,t)
 #define BLS(t)  B_cond(LS,t)
@@ -596,6 +587,9 @@ enum {
 #define BVC(t)  B_cond(VC,t)
 
 #define JMP(t) B(t)
+
+// emit a placeholder that will be filled in later by nPatchBranch
+#define B_long_placeholder() B(0)
 
 // MOV(EQ) _r, #1 
 // MOV(NE) _r, #0
