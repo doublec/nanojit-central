@@ -1289,8 +1289,8 @@ Assembler::asm_stkarg(LInsp arg, int stkd)
 void
 Assembler::nativePageReset()
 {
-    _nSlot = 0;
     _nExitSlot = 0;
+    _startingSlot = 0;
 }
 
 void

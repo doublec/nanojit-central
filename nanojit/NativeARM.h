@@ -222,8 +222,8 @@ verbose_only( extern const char *regNames[], *condNames[], *shiftNames[]; )
     void asm_ldr_chk(Register d, Register b, int32_t off, bool chk);    \
     void asm_cmp(LIns *cond);                                           \
     int  max_out_args; /* bytes */                                      \
-    int* _nSlot;                                                        \
-    int* _nExitSlot;                                                    \
+    int *_nSlot, *_startingSlot;                                        \
+    int *_nExitSlot;                                                    \
     bool blx_lr_bug;
 
 //printf("jmp_l_n count=%d, nins=%X, %X = %X\n", (_c), nins, _nIns, ((intptr_t)(nins+(_c))-(intptr_t)_nIns - 4) );
