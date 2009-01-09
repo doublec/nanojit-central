@@ -538,13 +538,14 @@ namespace nanojit
 
 	void Assembler::asm_call(LIns *ins) {
 		const CallInfo* call = ins->callInfo();
+		ArgSize sizes[MAXARGS];
+		uint32_t argc = call->get_sizes(sizes);
 
 		bool indirect;
-		if (ins->isop(LIR_call) || ins->isop(LIR_fcall)) {
+		if (!(indirect = call->isIndirect())) {
 			verbose_only(if (_verbose)
 				outputf("        %p:", _nIns);
 			)
-			indirect = false;
 			br((NIns*)call->_address, 1);
 		} else {
 			// Indirect call: we assign the address arg to R11 since it's not
@@ -553,18 +554,10 @@ namespace nanojit
 			underrunProtect(8); // underrunProtect might clobber CTR
 			BCTRL();
 			MTCTR(R11);
-			indirect = true;
-		}
-
-		ArgSize sizes[MAXARGS];
-		uint32_t argc = call->get_sizes(sizes);
-		if (indirect) {
-			argc--;
-			asm_regarg(ARGSIZE_LO, ins->arg(argc), R11);
+			asm_regarg(ARGSIZE_LO, ins->arg(--argc), R11);
 		}
 
 		int param_size = 0;
-
 		if (call->isInterface()) {
 			// interface thunk calling convention: put iid in R6 (4th param)
 			argc--;
@@ -913,9 +906,9 @@ namespace nanojit
 	RegisterMask Assembler::hint(LIns *i, RegisterMask allow) {
 		LOpcode op = i->opcode();
 		RegisterMask prefer = ~0LL;
-		if (op == LIR_call || op == LIR_calli)
+		if (op == LIR_call)
 			prefer = rmask(R3);
-		else if (op == LIR_fcall || op == LIR_fcalli)
+		else if (op == LIR_fcall)
 			prefer = rmask(F1);
 		else if (op == LIR_param) {
 			if (i->imm8() < 8) {

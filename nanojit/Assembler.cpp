@@ -1404,20 +1404,18 @@ namespace nanojit
 				
 #ifndef NJ_SOFTFLOAT
 				case LIR_fcall:
-				case LIR_fcalli:
 #endif
 #if defined NANOJIT_64BIT
 				case LIR_callh:
 #endif
 				case LIR_call:
-				case LIR_calli:
 				{
                     countlir_call();
                     Register rr = UnknownReg;
 #ifndef NJ_SOFTFLOAT
                     if ((op&LIR64))
                     {
-                        // fcall or fcalli
+                        // fcall
 						Reservation* rR = getresv(ins);
 						rr = asm_prep_fcall(rR, ins);
                     }
@@ -1944,10 +1942,6 @@ namespace nanojit
                 break;
             }
 		}
-        if (isIndirect()) {
-            // add one more arg for indirect call address
-            argc++;
-        }
         return argc;
     }
 

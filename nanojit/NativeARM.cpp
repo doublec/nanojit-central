@@ -228,7 +228,7 @@ Assembler::asm_call(LInsp ins)
 
     CALL(call);
 
-    ArgSize sizes[10];
+    ArgSize sizes[MAXARGS];
     uint32_t argc = call->get_sizes(sizes);
     for(uint32_t i = 0; i < argc; i++) {
         uint32_t j = argc - i - 1;
@@ -273,9 +273,11 @@ Assembler::asm_call(LInsp ins)
 {
     const CallInfo* call = ins->callInfo();
     bool needToLoadAddr = false;
+    ArgSize sizes[MAXARGS];
+    uint32_t argc = call->get_sizes(sizes);
 
-    bool indirect;
-    if (ins->isop(LIR_call)) {
+    bool indirect = call->isIndirect();
+    if (!indirect) {
         verbose_only(if (_verbose)
             outputf("        %p:", _nIns);
         )
@@ -289,7 +291,6 @@ Assembler::asm_call(LInsp ins)
 #else
         BL((NIns*)call->_address);
 #endif
-        indirect = false;
     } else {
         // Indirect call: we assign the address arg to LR since it's not
         // used for regular arguments, and is otherwise scratch since it's
@@ -315,20 +316,11 @@ Assembler::asm_call(LInsp ins)
         MOV(LR,PC);
         MOV(IP,LR);
 #endif
-        indirect = true;
-    }
+        asm_regarg(ARGSIZE_LO, ins->arg(--argc), LR);
 
-    ArgSize sizes[10];
-    uint32_t argc = call->get_sizes(sizes);
-    if (indirect) {
-        argc--;
-        asm_regarg(ARGSIZE_LO, ins->arg(argc), LR);
-    }
-
-    if (call->isInterface()) {
         // interface thunk calling convention: put iid in R3
-        argc--;
-        asm_regarg(ARGSIZE_LO, ins->arg(argc), R3);
+        if (call->isInterface())
+            asm_regarg(ARGSIZE_LO, ins->arg(--argc), R3);
     }
 
     Register r = R0;
@@ -948,7 +940,7 @@ Assembler::hint(LIns* i, RegisterMask allow /* = ~0 */)
 {
     uint32_t op = i->opcode();
     int prefer = ~0;
-    if (op==LIR_call || op==LIR_fcall)
+    if (op==LIR_call)
         prefer = rmask(R0);
     else if (op == LIR_callh)
         prefer = rmask(R1);

@@ -77,7 +77,6 @@ namespace nanojit
         LIR_sti     = 14, // 32-bit store, int8 displacement
         LIR_ret     = 15, // return 32bit value
         LIR_live    = 16, // extend live range of reference
-        LIR_calli   = 17, // indirect call  
         LIR_call    = 18, // subroutine call returning a 32-bit value
             
         // guards
@@ -169,7 +168,6 @@ namespace nanojit
         LIR_qilsh   = LIR_lsh | LIR64,  // int64 left shift, rhs bits 6:63 ignored
 
         LIR_fcall   = LIR_call  | LIR64, // direct call returning double
-        LIR_fcalli  = LIR_calli | LIR64, // indirect call returning double
         LIR_fneg    = LIR_neg   | LIR64, // double negate
         LIR_fadd    = LIR_add   | LIR64, // double add
         LIR_fsub    = LIR_sub   | LIR64, // double subtract
@@ -182,6 +180,64 @@ namespace nanojit
         LIR_u2f     = 43 | LIR64, // uint32 to double
         LIR_qior    = 44 | LIR64  // int64 bitwise or
     };
+
+    // should these be more enum entries that alias existing ones?
+    #if defined NANOJIT_64BIT
+    #define LIR_ldp     LIR_ldq
+    #define LIR_stp     LIR_stq
+    #define LIR_piadd   LIR_qiadd
+    #define LIR_piand   LIR_qiand
+    #define LIR_pilsh   LIR_qilsh
+    #define LIR_pcmov   LIR_qcmov
+    #define LIR_pior    LIR_qior
+    #else
+    #define LIR_ldp     LIR_ld
+    #define LIR_stp     LIR_st
+    #define LIR_piadd   LIR_add
+    #define LIR_piand   LIR_and
+    #define LIR_pilsh   LIR_lsh
+    #define LIR_pcmov   LIR_cmov
+    #define LIR_pior    LIR_or
+    #endif
+
+	/* 
+	 LOpcode encodings (table form, enum above must match!)
+
+			+0			+32			+64			+96
+	 0		start		short
+	 1		nearskip	int			file		quad
+	 2		skip		ldc			line		ldqc
+	 3		neartramp	2
+	 4		tramp		neg						fneg
+	 5					add						fadd
+	 6					sub						fsub
+	 7					mul						fmul
+	 8					callh					fdiv
+	 9		addp		and			     		qjoin
+	 10		param		or						i2f
+	 11		st			xor			stq			u2f
+	 12		ld			not			ldq			qior
+	 13		ialloc		lsh			qalloc		qilsh
+	 14		sti			rsh			stqi
+	 15		ret			ush			fret
+	 16		live		xt
+	 17		calli		xf			fcalli      qcalli
+	 18		call		qlo			fcall
+	 19		loop		qhi
+	 20		x			ldcb
+	 21		j			ov
+	 22		jt			cs
+	 23		jf			eq						qeq
+	 24		label		lt			qiand		qlt
+	 25		ji			gt			qiadd		qgt
+	 26		feq			le			i2q			qle
+	 27		flt			ge			u2q			qge
+	 28		fgt			ult						qult
+	 29		fle			ugt						qugt
+	 30		fge			ule						qule
+	 31		cmov		uge			qcmov		quge
+
+	*/
 
     /*
      * notes about particular instructions
@@ -205,25 +261,6 @@ namespace nanojit
      *
      */
 
-    // should these be more enum entries that alias existing ones?
-    #if defined NANOJIT_64BIT
-    #define LIR_ldp     LIR_ldq
-    #define LIR_stp     LIR_stq
-    #define LIR_piadd   LIR_qiadd
-    #define LIR_piand   LIR_qiand
-    #define LIR_pilsh   LIR_qilsh
-    #define LIR_pcmov   LIR_qcmov
-    #define LIR_pior    LIR_qior
-    #else
-    #define LIR_ldp     LIR_ld
-    #define LIR_stp     LIR_st
-    #define LIR_piadd   LIR_add
-    #define LIR_piand   LIR_and
-    #define LIR_pilsh   LIR_lsh
-    #define LIR_pcmov   LIR_cmov
-    #define LIR_pior    LIR_or
-    #endif
-
     inline uint32_t argwords(uint32_t argc) {
         return (argc+3)>>2;
     }
@@ -246,6 +283,11 @@ namespace nanojit
         _ARGSIZE_MASK_ANY = 3
     };
 
+	enum IndirectCall {
+		CALL_INDIRECT = 0,
+		CALL_IMT = 1
+	};
+
     struct CallInfo
     {
         uintptr_t   _address;
@@ -259,13 +301,13 @@ namespace nanojit
         uint32_t get_sizes(ArgSize*) const;
 
         inline bool isInterface() const {
-            return _address == 2 || _address == 3; /* hack! */
+            return _address == CALL_IMT;
         }
         inline bool isIndirect() const {
             return _address < 256;
         }
         inline uint32_t FASTCALL count_args() const {
-            return _count_args(_ARGSIZE_MASK_ANY) + isIndirect();
+            return _count_args(_ARGSIZE_MASK_ANY);
         }
         inline uint32_t FASTCALL count_iargs() const {
             return _count_args(_ARGSIZE_MASK_INT);
@@ -279,7 +321,7 @@ namespace nanojit
 
     inline bool isCall(LOpcode op) {
         op = LOpcode(op & ~LIR64);
-        return op == LIR_call || op == LIR_calli;
+        return op == LIR_call;
     }
 
     inline bool isStore(LOpcode op) {
