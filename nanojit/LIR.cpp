@@ -1125,7 +1125,10 @@ namespace nanojit
 		uint32_t words = argwords(argc);
 		int32_t insSz = words + LIR_CALL_SLOTS; // words need for offsets + size of instruction
 		ensureRoom(argc+insSz);  // argc=# possible tramps for args
-		LInsp from = _buf->next()+argc+words; // assuming all args need a tramp, offsets are written here
+
+		// from = conservative location of new LIns instruction if all args needed a tramp.
+		// must acount for arg count (argc) and full size of instruction (insSz, not words)
+		LInsp from = _buf->next()+argc+insSz;
 		for (int32_t i=0; i < argc; i++)
 			makeReachable(args[i], from);
 
@@ -1139,7 +1142,7 @@ namespace nanojit
 			*--offs = (uint8_t) l->i.reference(args[i]);
 		NanoAssert((LInsp)offs>=_buf->next());
 
-        LOpcode op = k_callmap[argt & 3];
+        LOpcode op = k_callmap[argt & ARGSIZE_MASK];
         NanoAssert(op != 0); // 0 here is just an error condition
 #if defined NJ_SOFTFLOAT
         if (op == LIR_fcall || op == LIR_callh)

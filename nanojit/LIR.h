@@ -276,11 +276,12 @@ namespace nanojit
 
     enum ArgSize {
         ARGSIZE_NONE = 0,
-        ARGSIZE_F = 1,
-        ARGSIZE_LO = 2,
-        ARGSIZE_Q = 3,
-        _ARGSIZE_MASK_INT = 2, 
-        _ARGSIZE_MASK_ANY = 3
+        ARGSIZE_F = 1,				// double (64bit)
+        ARGSIZE_LO = 2,				// int32_t (any 32bit int/ptr)
+        ARGSIZE_Q = 3,				// uint64_t (any 64bit int/ptr)
+		ARGSIZE_MASK = 7,
+		ARGSIZE_MASK_INT = 2,
+		ARGSIZE_SHIFT = 3,
     };
 
 	enum IndirectCall {
@@ -291,7 +292,7 @@ namespace nanojit
     struct CallInfo
     {
         uintptr_t   _address;
-        uint32_t    _argtypes:18;   // 9 2-bit fields indicating arg type, by ARGSIZE above (including ret type): a1 a2 a3 a4 a5 ret
+        uint32_t    _argtypes:27;   // 9 3-bit fields indicating arg type, by ARGSIZE above (including ret type): a1 a2 a3 a4 a5 ret
         uint8_t     _cse:1;         // true if no side effects
         uint8_t     _fold:1;        // true if no side effects
         AbiKind     _abi:3;
@@ -307,10 +308,10 @@ namespace nanojit
             return _address < 256;
         }
         inline uint32_t FASTCALL count_args() const {
-            return _count_args(_ARGSIZE_MASK_ANY);
+            return _count_args(ARGSIZE_MASK);
         }
         inline uint32_t FASTCALL count_iargs() const {
-            return _count_args(_ARGSIZE_MASK_INT);
+            return _count_args(ARGSIZE_MASK_INT);
         }
         // fargs = args - iargs
     };

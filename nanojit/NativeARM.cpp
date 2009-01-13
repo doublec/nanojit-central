@@ -187,23 +187,23 @@ Assembler::asm_call(LInsp ins)
     uint32_t roffset = 0;
 
     // skip return type
-    ArgSize rsize = (ArgSize)(atypes & 3);
-    atypes >>= 2;
+    ArgSize rsize = (ArgSize)(atypes & ARGSIZE_MASK);
+    atypes >>= ARGSIZE_SHIFT;
 
     // we need to detect if we have arg0 as LO followed by arg1 as F;
     // in that case, we need to skip using r1 -- the F needs to be
     // loaded in r2/r3, at least according to the ARM EABI and gcc 4.2's
     // generated code.
     bool arg0IsInt32FollowedByFloat = false;
-    while ((atypes & 3) != ARGSIZE_NONE) {
-        if (((atypes >> 2) & 3) == ARGSIZE_LO &&
-            ((atypes >> 0) & 3) == ARGSIZE_F &&
-            ((atypes >> 4) & 3) == ARGSIZE_NONE)
+    while ((atypes & ARGSIZE_MASK) != ARGSIZE_NONE) {
+        if (((atypes >> ARGSIZE_SHIFT) & ARGSIZE_MASK) == ARGSIZE_LO &&
+            ((atypes >> 0) & ARGSIZE_MASK) == ARGSIZE_F &&
+            ((atypes >> (2*ARGSIZE_SHIFT)) & ARGSIZE_MASK) == ARGSIZE_NONE)
         {
             arg0IsInt32FollowedByFloat = true;
             break;
         }
-        atypes >>= 2;
+        atypes >>= ARGSIZE_SHIFT;
     }
 
     if (rsize == ARGSIZE_F) {
