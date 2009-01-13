@@ -68,6 +68,8 @@
 	sides of the new/delete pair to forestall future needs.
 */
 #ifdef MMGC_API
+
+    using namespace MMgc;
 	
 	// separate overloads because GCObject and GCFinalizedObjects have different dtors 
 	// (GCFinalizedObject's is virtual, GCObject's is not)
