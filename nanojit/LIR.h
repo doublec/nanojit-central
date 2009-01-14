@@ -1,4 +1,5 @@
-/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: t; tab-width: 4 -*- */
+/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 4 -*- */
+/* vi: set ts=4 sw=4 expandtab: (add to ~/.vimrc: set modeline modelines=5) */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -200,44 +201,44 @@ namespace nanojit
     #define LIR_pior    LIR_or
     #endif
 
-	/* 
-	 LOpcode encodings (table form, enum above must match!)
+    /* 
+     LOpcode encodings (table form, enum above must match!)
 
-			+0			+32			+64			+96
-	 0		start		short
-	 1		nearskip	int			file		quad
-	 2		skip		ldc			line		ldqc
-	 3		neartramp	2
-	 4		tramp		neg						fneg
-	 5					add						fadd
-	 6					sub						fsub
-	 7					mul						fmul
-	 8					callh					fdiv
-	 9		addp		and			     		qjoin
-	 10		param		or						i2f
-	 11		st			xor			stq			u2f
-	 12		ld			not			ldq			qior
-	 13		ialloc		lsh			qalloc		qilsh
-	 14		sti			rsh			stqi
-	 15		ret			ush			fret
-	 16		live		xt
-	 17		calli		xf			fcalli      qcalli
-	 18		call		qlo			fcall
-	 19		loop		qhi
-	 20		x			ldcb
-	 21		j			ov
-	 22		jt			cs
-	 23		jf			eq						qeq
-	 24		label		lt			qiand		qlt
-	 25		ji			gt			qiadd		qgt
-	 26		feq			le			i2q			qle
-	 27		flt			ge			u2q			qge
-	 28		fgt			ult						qult
-	 29		fle			ugt						qugt
-	 30		fge			ule						qule
-	 31		cmov		uge			qcmov		quge
+            +0          +32         +64         +96
+     0      start       short
+     1      nearskip    int         file        quad
+     2      skip        ldc         line        ldqc
+     3      neartramp   2
+     4      tramp       neg                     fneg
+     5                  add                     fadd
+     6                  sub                     fsub
+     7                  mul                     fmul
+     8                  callh                   fdiv
+     9      addp        and                     qjoin
+     10     param       or                      i2f
+     11     st          xor         stq         u2f
+     12     ld          not         ldq         qior
+     13     ialloc      lsh         qalloc      qilsh
+     14     sti         rsh         stqi
+     15     ret         ush         fret
+     16     live        xt
+     17     calli       xf          fcalli      qcalli
+     18     call        qlo         fcall
+     19     loop        qhi
+     20     x           ldcb
+     21     j           ov
+     22     jt          cs
+     23     jf          eq                      qeq
+     24     label       lt          qiand       qlt
+     25     ji          gt          qiadd       qgt
+     26     feq         le          i2q         qle
+     27     flt         ge          u2q         qge
+     28     fgt         ult                     qult
+     29     fle         ugt                     qugt
+     30     fge         ule                     qule
+     31     cmov        uge         qcmov       quge
 
-	*/
+    */
 
     /*
      * notes about particular instructions
@@ -276,18 +277,18 @@ namespace nanojit
 
     enum ArgSize {
         ARGSIZE_NONE = 0,
-        ARGSIZE_F = 1,				// double (64bit)
-        ARGSIZE_LO = 2,				// int32_t (any 32bit int/ptr)
-        ARGSIZE_Q = 3,				// uint64_t (any 64bit int/ptr)
-		ARGSIZE_MASK = 7,
-		ARGSIZE_MASK_INT = 2,
-		ARGSIZE_SHIFT = 3,
+        ARGSIZE_F = 1,              // double (64bit)
+        ARGSIZE_LO = 2,             // int32_t (any 32bit int/ptr)
+        ARGSIZE_Q = 3,              // uint64_t (any 64bit int/ptr)
+        ARGSIZE_MASK = 7,
+        ARGSIZE_MASK_INT = 2,
+        ARGSIZE_SHIFT = 3,
     };
 
-	enum IndirectCall {
-		CALL_INDIRECT = 0,
-		CALL_IMT = 1
-	};
+    enum IndirectCall {
+        CALL_INDIRECT = 0,
+        CALL_IMT = 1
+    };
 
     struct CallInfo
     {
