@@ -325,6 +325,7 @@ namespace nanojit
 			void		asm_fop(LInsp ins);
 			void		asm_i2f(LInsp ins);
 			void		asm_u2f(LInsp ins);
+			void		asm_promote(LIns *ins);
 			Register	asm_prep_fcall(Reservation *rR, LInsp ins);
 			void		asm_nongp_copy(Register r, Register s);
 			void		asm_bailout(LInsp guard, Register state);
@@ -380,7 +381,8 @@ namespace nanojit
 
 	inline int32_t disp(Reservation* r) 
 	{
-		return stack_direction((int32_t)STACK_GRANULARITY) * int32_t(r->arIndex);
+		// even on 64bit cpu's, we allocate stack area in 4byte chunks
+		return stack_direction(4 * int32_t(r->arIndex));
 	}
 }
 #endif // __nanojit_Assembler__

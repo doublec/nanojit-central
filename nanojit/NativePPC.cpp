@@ -554,14 +554,14 @@ namespace nanojit
 			underrunProtect(8); // underrunProtect might clobber CTR
 			BCTRL();
 			MTCTR(R11);
-			asm_regarg(ARGSIZE_LO, ins->arg(--argc), R11);
+			asm_regarg(ARGSIZE_P, ins->arg(--argc), R11);
 		}
 
 		int param_size = 0;
 		if (call->isInterface()) {
 			// interface thunk calling convention: put iid in R6 (4th param)
 			argc--;
-			asm_regarg(ARGSIZE_LO, ins->arg(argc), R6);
+			asm_regarg(ARGSIZE_P, ins->arg(argc), R6);
 			param_size += 4;
 		}
 
@@ -571,7 +571,7 @@ namespace nanojit
 			uint32_t j = argc - i - 1;
 			ArgSize sz = sizes[j];
 			LInsp arg = ins->arg(j);
-			if (sz == ARGSIZE_LO) {
+			if (sz == ARGSIZE_I || sz == ARGSIZE_U) {
 				// int32 arg
 				if (r <= R10) {
 					asm_regarg(sz, arg, r);
@@ -607,7 +607,7 @@ namespace nanojit
 			// ref arg - need to send addr of quad
 			TODO(ARGSIZE_Q);
 		}
-        else if (sz == ARGSIZE_LO)
+        else if (sz == ARGSIZE_I || sz == ARGSIZE_U)
         {
             // arg goes in specific register
             if (p->isconst()) {
@@ -906,7 +906,7 @@ namespace nanojit
 	RegisterMask Assembler::hint(LIns *i, RegisterMask allow) {
 		LOpcode op = i->opcode();
 		RegisterMask prefer = ~0LL;
-		if (op == LIR_call)
+		if (op == LIR_icall)
 			prefer = rmask(R3);
 		else if (op == LIR_fcall)
 			prefer = rmask(F1);
@@ -1042,6 +1042,11 @@ namespace nanojit
 			NanoAssertMsg(false, "FATAL ERROR: mprotect(PROT_EXEC) failed\n");
 			abort();
 		}
+	}
+
+	void Assembler::asm_promote(LIns *) {
+		// i2q or u2q
+		TODO(asm_promote);
 	}
 
 	void Assembler::asm_loop(LIns*, NInsList&) {

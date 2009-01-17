@@ -655,9 +655,8 @@ namespace nanojit
 	{
 		int d = disp(resv);
 		Register rr = resv->reg;
-		bool quad = i->opcode() == LIR_param || i->isQuad();
 		verbose_only( if (d && _verbose) { outputForEOL("  <= spill %s", _thisfrag->lirbuf->names->formatRef(i)); } )
-		asm_spill(rr, d, pop, quad);
+		asm_spill(rr, d, pop, i->isQuad());
 	}
 
 	void Assembler::freeRsrcOf(LIns *i, bool pop)
@@ -931,7 +930,7 @@ namespace nanojit
 			patchEntry = genPrologue();
 			verbose_only( outputAddr=true; )
 			verbose_only( asm_output("[prologue]"); )
-            NanoAssert((((int)_nIns) & 7) == 0);
+            NanoAssert((((uintptr_t)_nIns) & 7) == 0);
 		}
 		
 		// something bad happened?
@@ -1187,15 +1186,19 @@ namespace nanojit
                 case LIR_qiadd:
                 case LIR_qiand:
                 case LIR_qilsh:
+				case LIR_qursh:
+				case LIR_qirsh:
                 case LIR_qior:
+				case LIR_qaddp:
+				case LIR_qxor:
                 {
                     asm_qbinop(ins);
                     break;
                 }
 #endif
 
+				case LIR_iaddp:
 				case LIR_add:
-				case LIR_addp:
 				case LIR_sub:
 				case LIR_mul:
 				case LIR_and:
@@ -1235,6 +1238,13 @@ namespace nanojit
 				{
                     countlir_fpu();
 					asm_u2f(ins);
+					break;
+				}
+				case LIR_i2q:
+				case LIR_u2q:
+				{
+                    countlir_alu();
+					asm_promote(ins);
 					break;
 				}
 #endif // NJ_SOFTFLOAT
@@ -1396,24 +1406,35 @@ namespace nanojit
 				case LIR_ule:
 				case LIR_ugt:
 				case LIR_uge:
+#ifdef NANOJIT_64BIT
+				case LIR_qeq:
+				case LIR_qle:
+				case LIR_qlt:
+				case LIR_qgt:
+				case LIR_qge:
+				case LIR_qult:
+				case LIR_qule:
+				case LIR_qugt:
+				case LIR_quge:
+#endif
 				{
                     countlir_alu();
 					asm_cond(ins);
 					break;
 				}
-				
-#ifndef NJ_SOFTFLOAT
+
+			#ifndef NJ_SOFTFLOAT
 				case LIR_fcall:
-#endif
-#if defined NANOJIT_64BIT
-				case LIR_callh:
-#endif
-				case LIR_call:
+			#endif
+			#ifdef NANOJIT_64BIT
+				case LIR_qcall:
+			#endif
+				case LIR_icall:
 				{
                     countlir_call();
                     Register rr = UnknownReg;
 #ifndef NJ_SOFTFLOAT
-                    if ((op&LIR64))
+                    if (op == LIR_fcall)
                     {
                         // fcall
 						Reservation* rR = getresv(ins);
@@ -1518,45 +1539,29 @@ namespace nanojit
 		if (!verbose_activation)
 			return;
 			
-#ifdef NANOJIT_ARM
-		// @todo Why is there here?!?  This routine should be indep. of platform
-		verbose_only(
-			if (_verbose) {
-				char* s = &outline[0];
-				memset(s, ' ', 51);  s[51] = '\0';
-				s += strlen(s);
-				sprintf(s, " SP ");
-				s += strlen(s);
-				for(uint32_t i=_activation.lowwatermark; i<_activation.tos;i++) {
-					LInsp ins = _activation.entry[i];
-					if (ins && ins !=_activation.entry[i+1]) {
-						sprintf(s, "%d(%s) ", 4*i, _thisfrag->lirbuf->names->formatRef(ins));
-						s += strlen(s);
-					}
-				}
-				output(&outline[0]);
-			}
-		)
-#else
-		verbose_only(
-			char* s = &outline[0];
-			if (_verbose) {
-				memset(s, ' ', 51);  s[51] = '\0';
-				s += strlen(s);
-				sprintf(s, " ebp ");
-				s += strlen(s);
+		char* s = &outline[0];
+		if (_verbose) {
+			memset(s, ' ', 51);  s[51] = '\0';
+			s += strlen(s);
+			sprintf(s, " SP ");
+			s += strlen(s);
 
-				for(uint32_t i=_activation.lowwatermark; i<_activation.tos;i++) {
-					LInsp ins = _activation.entry[i];
-					if (ins) {
-						sprintf(s, "%d(%s) ", -4*i,_thisfrag->lirbuf->names->formatRef(ins));
-						s += strlen(s);
+			uint32_t max = _activation.tos < NJ_MAX_STACK_ENTRY ? _activation.tos : NJ_MAX_STACK_ENTRY;
+			for(uint32_t i = _activation.lowwatermark; i < max; i++) {
+				LIns *ins = _activation.entry[i];
+				if (ins) {
+					if (ins->isop(LIR_alloc)) {
+						while (i+1 < max && _activation.entry[i+1] == ins)
+							i++;
+					}
+					else if (ins->isQuad()) {
+						NanoAssert(_activation.entry[i+1] == ins);
+						i++;
 					}
 				}
 				output(&outline[0]);
 			}
-		)
-#endif
+		}
 	}
 #endif
 
@@ -1571,9 +1576,7 @@ namespace nanojit
 	uint32_t Assembler::arReserve(LIns* l)
 	{
 		NanoAssert(!l->isTramp());
-
-		//verbose_only(printActivationState());
-        int32_t size = l->isop(LIR_alloc) ? (l->size()>>2) : l->isQuad() ? 2 : sizeof(intptr_t)>>2;
+        int32_t size = l->isop(LIR_alloc) ? (l->size()>>2) : l->isQuad() ? 2 : 1;
         AR &ar = _activation;
 		const int32_t tos = ar.tos;
 		int32_t start = ar.lowwatermark;

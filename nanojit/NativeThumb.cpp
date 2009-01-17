@@ -277,7 +277,7 @@ namespace nanojit
 		uint32_t op = i->opcode();
 		int prefer = ~0;
 
-		if (op==LIR_call || op==LIR_fcall)
+		if (op==LIR_icall)
 			prefer = rmask(R0);
 		else if (op == LIR_callh)
 			prefer = rmask(R1);

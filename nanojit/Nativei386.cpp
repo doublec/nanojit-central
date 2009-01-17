@@ -75,6 +75,8 @@ namespace nanojit
 		};
 	#endif
 
+	#define TODO(x) do{ printf(#x); NanoAssertMsgf(false, "%s", #x); } while(0)
+
 #if defined NANOJIT_IA32
     const Register Assembler::argRegs[] = { ECX, EDX };
     const Register Assembler::retRegs[] = { EAX, EDX };
@@ -283,14 +285,14 @@ namespace nanojit
         uint32_t argc = call->get_sizes(sizes);
         if (indirect) {
             argc--;
-            asm_arg(ARGSIZE_LO, ins->arg(argc), EAX);
+            asm_arg(ARGSIZE_P, ins->arg(argc), EAX);
         }
 
         if (imt) {
             // interface thunk calling convention: put iid in EDX
             NanoAssert(call->_abi == ABI_CDECL);
             argc--;
-            asm_arg(ARGSIZE_LO, ins->arg(argc), EDX);
+            asm_arg(ARGSIZE_P, ins->arg(argc), EDX);
         }
 
 		for(uint32_t i=0; i < argc; i++)
@@ -451,7 +453,7 @@ namespace nanojit
 	{
 		uint32_t op = i->opcode();
 		int prefer = allow;
-        if (op == LIR_call) {
+        if (op == LIR_icall) {
 			prefer &= rmask(retRegs[0]);
         }
         else if (op == LIR_fcall) {
@@ -1493,7 +1495,7 @@ namespace nanojit
 				NanoAssert(0); // not supported
 			}
 		}
-        else if (sz == ARGSIZE_LO)
+        else if (sz == ARGSIZE_I || sz == ARGSIZE_U)
 		{
 			if (r != UnknownReg) {
 				// arg goes in specific register
@@ -2094,6 +2096,11 @@ namespace nanojit
             fpu_pop();
         }
     }
+
+	void Assembler::asm_promote(LIns *) {
+		// i2q or u2q
+		TODO(asm_promote);
+	}
 	
 	#endif /* FEATURE_NANOJIT */
 }

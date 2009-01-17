@@ -40,6 +40,12 @@
 #ifndef __nanojit_LIR__
 #define __nanojit_LIR__
 
+#ifdef NANOJIT_64BIT
+    #define PTR_SIZE(a,b)  b
+#else
+    #define PTR_SIZE(a,b)  a
+#endif
+
 /**
  * Fundamentally, the arguments to the various operands can be grouped along
  * two dimensions.  One dimension is size: can the arguments fit into a 32-bit
@@ -70,15 +76,15 @@ namespace nanojit
         LIR_tramp = 4,     // target is next 32bit word in LIR
 
         // non-pure operations
-        LIR_addp    = 9,  // pointer-sized integer add, not CSE enabled intentionally (see below)
-        LIR_param   = 10, // represents incoming parameter (imm8b=0) or callee-saved register (imm8b=1)
+        LIR_iaddp   = 9,  // int32 add, not CSE enabled intentionally (see below)
+        LIR_iparam  = 10, // represents incoming parameter (imm8b=0) or callee-saved register (imm8b=1)
         LIR_st      = 11, // 32-bit store
         LIR_ld      = 12, // 32-bit load
-        LIR_alloc   = 13, // alloc local stack space.  represents pointer to space
+        LIR_ialloc  = 13, // alloc local stack space.  represents pointer to space
         LIR_sti     = 14, // 32-bit store, int8 displacement
         LIR_ret     = 15, // return 32bit value
         LIR_live    = 16, // extend live range of reference
-        LIR_call    = 18, // subroutine call returning a 32-bit value
+        LIR_icall   = 18, // subroutine call returning a 32-bit GP value (int or pointer)
             
         // guards
         LIR_loop    = 19, // loop fragment; means jump to LIR_start in current fragment
@@ -93,7 +99,7 @@ namespace nanojit
         // operators
 
         // LIR_feq though LIR_fge must only be used on float arguments.  They
-        // return integers.
+        // return int32 0 or 1.
         LIR_feq     = 26, // floating-point equality [2 float inputs]
         LIR_flt     = 27, // floating-point less than: arg1 < arg2
         LIR_fgt     = 28, // floating-point greater than: arg1 > arg2
@@ -111,8 +117,7 @@ namespace nanojit
         LIR_add     = 37, // int32 addition [ 2 operand int32 intputs / int32 output ]
         LIR_sub     = 38, // int32 subtraction
         LIR_mul     = 39, // int32 multiplication (int32 = int32 * int32)
-        LIR_callh   = 40, // represents high 32bit result of call returning int64
-                          // on 64bit cpu's, represents whole int64-returning call
+        LIR_callh   = 40, // represents 2nd 32bit register of a register-pair return value
         LIR_and     = 41, // int32 bitwise and
         LIR_or      = 42, // int32 bitwise or
         LIR_xor     = 43, // int32 bitwise xor
@@ -167,8 +172,12 @@ namespace nanojit
         LIR_qiand   = 24      | LIR64,  // int64 bitwise and
         LIR_qiadd   = 25      | LIR64,  // int64 add
         LIR_qilsh   = LIR_lsh | LIR64,  // int64 left shift, rhs bits 6:63 ignored
+        LIR_qirsh   = LIR_rsh | LIR64,  // int64 signed rightshift
+        LIR_qursh   = LIR_ush | LIR64,  // uint64 unsigned rightshift
+        LIR_qparam  = LIR_iparam| LIR64, // 64bit param 
 
-        LIR_fcall   = LIR_call  | LIR64, // direct call returning double
+        LIR_fcall   = LIR_icall | LIR64, // call returning double
+        LIR_qcall   = 17        | LIR64, // call returning 64bit gp value (int/pointer)
         LIR_fneg    = LIR_neg   | LIR64, // double negate
         LIR_fadd    = LIR_add   | LIR64, // double add
         LIR_fsub    = LIR_sub   | LIR64, // double subtract
@@ -177,29 +186,51 @@ namespace nanojit
         LIR_qcmov   = LIR_cmov  | LIR64, // 64bit conditional mov
 
         LIR_qjoin   = 41 | LIR64, // int64 = int32<<32 | int32 (form quad from 2 int32)
-        LIR_i2f     = 42 | LIR64, // int32 to double
-        LIR_u2f     = 43 | LIR64, // uint32 to double
-        LIR_qior    = 44 | LIR64  // int64 bitwise or
-    };
+        LIR_i2f     = 48 | LIR64, // int32 to double
+        LIR_u2f     = 49 | LIR64, // uint32 to double
+        LIR_i2q     = 26 | LIR64, // sign-extend 32->64
+        LIR_u2q     = 27 | LIR64, // zero-extend 32->64
+        LIR_qaddp   = LIR_iaddp  | LIR64, // 64bit non-cse add
+        LIR_qalloc  = LIR_ialloc | LIR64, // stack alloc (ptr64)
+        LIR_qior    = LIR_or  | LIR64,  // int64 bitwise or
+        LIR_qxor    = LIR_xor | LIR64, // 64bit xor
 
-    // should these be more enum entries that alias existing ones?
-    #if defined NANOJIT_64BIT
-    #define LIR_ldp     LIR_ldq
-    #define LIR_stp     LIR_stq
-    #define LIR_piadd   LIR_qiadd
-    #define LIR_piand   LIR_qiand
-    #define LIR_pilsh   LIR_qilsh
-    #define LIR_pcmov   LIR_qcmov
-    #define LIR_pior    LIR_qior
-    #else
-    #define LIR_ldp     LIR_ld
-    #define LIR_stp     LIR_st
-    #define LIR_piadd   LIR_add
-    #define LIR_piand   LIR_and
-    #define LIR_pilsh   LIR_lsh
-    #define LIR_pcmov   LIR_cmov
-    #define LIR_pior    LIR_or
-    #endif
+        LIR_qeq     = LIR_eq  | LIR64, // int64  ==
+        LIR_qlt     = LIR_lt  | LIR64, // int64  <
+        LIR_qgt     = LIR_gt  | LIR64, // int64  >
+        LIR_qle     = LIR_le  | LIR64, // int64  <=
+        LIR_qge     = LIR_ge  | LIR64, // int64  >=
+        LIR_qult    = LIR_ult | LIR64, // uint64 <
+        LIR_qugt    = LIR_ugt | LIR64, // uint64 >
+        LIR_qule    = LIR_ule | LIR64, // uint64 <=
+        LIR_quge    = LIR_uge | LIR64, // uint64 >=
+
+        // alias
+        LIR_ldp     = PTR_SIZE(LIR_ld,     LIR_ldq),
+        LIR_ldcp    = PTR_SIZE(LIR_ldc,    LIR_ldqc),
+        LIR_stp     = PTR_SIZE(LIR_st,     LIR_stq),
+        LIR_piadd   = PTR_SIZE(LIR_add,    LIR_qiadd),
+        LIR_piand   = PTR_SIZE(LIR_and,    LIR_qiand),
+        LIR_pilsh   = PTR_SIZE(LIR_lsh,    LIR_qilsh),
+        LIR_pirsh   = PTR_SIZE(LIR_rsh,    LIR_qirsh),
+        LIR_pursh   = PTR_SIZE(LIR_ush,    LIR_qursh),
+        LIR_pcmov   = PTR_SIZE(LIR_cmov,   LIR_qcmov),
+        LIR_pior    = PTR_SIZE(LIR_or,     LIR_qior),
+        LIR_pxor    = PTR_SIZE(LIR_xor,    LIR_qxor),
+        LIR_addp    = PTR_SIZE(LIR_iaddp,  LIR_qaddp),
+        LIR_peq     = PTR_SIZE(LIR_eq,     LIR_qeq),
+        LIR_plt     = PTR_SIZE(LIR_lt,     LIR_qlt),
+        LIR_pgt     = PTR_SIZE(LIR_gt,     LIR_qgt),
+        LIR_ple     = PTR_SIZE(LIR_le,     LIR_qle),
+        LIR_pge     = PTR_SIZE(LIR_ge,     LIR_qge),
+        LIR_pult    = PTR_SIZE(LIR_ult,    LIR_qult),
+        LIR_pugt    = PTR_SIZE(LIR_ugt,    LIR_qugt),
+        LIR_pule    = PTR_SIZE(LIR_ule,    LIR_qule),
+        LIR_puge    = PTR_SIZE(LIR_uge,    LIR_quge),
+        LIR_alloc   = PTR_SIZE(LIR_ialloc, LIR_qalloc),
+        LIR_pcall   = PTR_SIZE(LIR_icall,  LIR_qcall),
+        LIR_param   = PTR_SIZE(LIR_iparam, LIR_qparam)
+    };
 
     /* 
      LOpcode encodings (table form, enum above must match!)
@@ -214,16 +245,16 @@ namespace nanojit
      6                  sub                     fsub
      7                  mul                     fmul
      8                  callh                   fdiv
-     9      addp        and                     qjoin
-     10     param       or                      i2f
-     11     st          xor         stq         u2f
-     12     ld          not         ldq         qior
+     9      iaddp       and         qaddp       qjoin
+     10     iparam      or          qparam      qior
+     11     st          xor         stq         qxor
+     12     ld          not         ldq         
      13     ialloc      lsh         qalloc      qilsh
-     14     sti         rsh         stqi
-     15     ret         ush         fret
-     16     live        xt
-     17     calli       xf          fcalli      qcalli
-     18     call        qlo         fcall
+     14     sti         rsh         stqi        qirsh
+     15     ret         ush         fret        qursh
+     16     live        xt                      i2f
+     17                 xf          qcall       u2f
+     18     icall       qlo         fcall
      19     loop        qhi
      20     x           ldcb
      21     j           ov
@@ -259,7 +290,6 @@ namespace nanojit
      * there is code in tamarin that uses these to build symbol tables to
      * integrate with the VTune profiler.  Much of this should be moved into
      * nanojit and factored to work with other profilers.
-     *
      */
 
     inline uint32_t argwords(uint32_t argc) {
@@ -277,12 +307,19 @@ namespace nanojit
 
     enum ArgSize {
         ARGSIZE_NONE = 0,
-        ARGSIZE_F = 1,              // double (64bit)
-        ARGSIZE_LO = 2,             // int32_t (any 32bit int/ptr)
-        ARGSIZE_Q = 3,              // uint64_t (any 64bit int/ptr)
+        ARGSIZE_F = 1,      // double (64bit)
+        ARGSIZE_I = 2,      // int32_t
+        ARGSIZE_Q = 3,      // uint64_t
+        ARGSIZE_U = 6,      // uint32_t
         ARGSIZE_MASK = 7,
-        ARGSIZE_MASK_INT = 2,
+        ARGSIZE_MASK_INT = 2, 
         ARGSIZE_SHIFT = 3,
+
+        // aliases
+        ARGSIZE_P = PTR_SIZE(ARGSIZE_I, ARGSIZE_Q), // pointer
+        ARGSIZE_LO = ARGSIZE_I, // int32_t
+        ARGSIZE_B = ARGSIZE_I, // bool
+        ARGSIZE_V = ARGSIZE_NONE, // void
     };
 
     enum IndirectCall {
@@ -322,8 +359,7 @@ namespace nanojit
     }
 
     inline bool isCall(LOpcode op) {
-        op = LOpcode(op & ~LIR64);
-        return op == LIR_call;
+        return (op & ~LIR64) == LIR_icall || op == LIR_qcall;
     }
 
     inline bool isStore(LOpcode op) {
@@ -477,15 +513,22 @@ namespace nanojit
         }
 
         uint64_t constvalq() const;
-        
-        inline void* constvalp() const
-        {
-        #ifdef AVMPLUS_64BIT
+
+    #ifdef AVMPLUS_64BIT
+        inline void* constvalp() const {
             return (void*)constvalq();
-        #else
-            return (void*)constval();
-        #endif      
         }
+        inline bool isPtr() const {
+            return isQuad();
+        }
+    #else
+        inline void* constvalp() const {
+            return (void*)constval();
+        }
+        inline bool isPtr() const {
+            return !isQuad();
+        }
+    #endif
         
         double constvalf() const;
         bool isCse() const;
@@ -538,13 +581,25 @@ namespace nanojit
         }
         size_t callInsWords() const;
         const CallInfo *callInfo() const;
+        
+        bool isPtr() {
+            #ifdef NANOJIT_64BIT
+                return isQuad();
+            #else
+                return !isQuad();
+            #endif
+        }
     };
     typedef LIns*       LInsp;
+
+    #pragma pack(push, 4)
 
     typedef struct { LIns* v; LIns i; } LirFarIns;
     typedef struct { int32_t v; LIns i; } LirImm32Ins;
     typedef struct { int32_t v[2]; LIns i; } LirImm64Ins;
     typedef struct { const CallInfo* ci; LIns i; } LirCallIns;
+
+    #pragma pack(pop)
     
     static const uint32_t LIR_FAR_SLOTS   = sizeof(LirFarIns)/sizeof(LIns); 
     static const uint32_t LIR_CALL_SLOTS = sizeof(LirCallIns)/sizeof(LIns); 
@@ -554,6 +609,7 @@ namespace nanojit
     bool FASTCALL isCse(LOpcode v);
     bool FASTCALL isCmp(LOpcode v);
     bool FASTCALL isCond(LOpcode v);
+
     inline bool isRet(LOpcode c) {
         return (c & ~LIR64) == LIR_ret;
     }
@@ -920,7 +976,7 @@ namespace nanojit
             verbose_only(DWB(LirNameMap*) names;)
             
             int32_t insCount();
-            int32_t byteCount();
+            size_t byteCount();
 
             // stats
             struct 
