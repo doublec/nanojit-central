@@ -75,7 +75,7 @@ namespace nanojit
 		};
 	#endif
 
-	#define TODO(x) do{ printf(#x); NanoAssertMsgf(false, "%s", #x); } while(0)
+	#define TODO(x) do{ verbose_only(outputf(#x);) NanoAssertMsgf(false, "%s", #x); } while(0)
 
 #if defined NANOJIT_IA32
     const Register Assembler::argRegs[] = { ECX, EDX };
