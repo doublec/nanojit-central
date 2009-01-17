@@ -52,9 +52,20 @@
 	#define NANOJIT_PPC
 #elif defined AVMPLUS_AMD64
 	#define NANOJIT_AMD64
-	#define NANOJIT_64BIT
 #else
 	#error "unknown nanojit architecture"
+#endif
+
+#ifdef AVMPLUS_64BIT
+#define NANOJIT_64BIT
+#endif
+
+#if defined NANOJIT_64BIT
+	#define IF_64BIT(...) __VA_ARGS__
+	#define UNLESS_64BIT(...)
+#else
+	#define IF_64BIT(...)
+	#define UNLESS_64BIT(...) __VA_ARGS__
 #endif
 
 /*

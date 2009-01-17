@@ -45,6 +45,10 @@ ifeq (powerpc,$(TARGET_CPU))
 nanojit_cpu_cxxsrc := NativePPC.cpp
 endif
 
+ifeq (ppc64,$(TARGET_CPU))
+nanojit_cpu_cxxsrc := NativePPC.cpp
+endif
+
 ifeq (arm,$(TARGET_CPU))
 nanojit_cpu_cxxsrc := NativeARM.cpp
 endif

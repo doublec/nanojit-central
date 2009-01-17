@@ -49,10 +49,10 @@
 extern "C" void __clear_cache(char *BEG, char *END);
 #endif
 
-#if defined AVMPLUS_MAC && defined AVMPLUS_PPC
+#if defined AVMPLUS_MAC && defined AVMPLUS_PPC && defined AVMPLUS_64BIT
 // 10.5 only
-//extern "C" void sys_icache_invalidate(const void*, size_t len);
-//extern "C" void sys_dcache_flush(const void*, size_t len);
+extern "C" void sys_icache_invalidate(const void*, size_t len);
+extern "C" void sys_dcache_flush(const void*, size_t len);
 #endif
 
 #ifdef PERFM
@@ -593,17 +593,22 @@ namespace nanojit
 
         r = resv->reg;
 
-#ifdef AVMPLUS_IA32
+#if defined NANOJIT_IA32
         if (r != UnknownReg && 
             ((rmask(r)&XmmRegs) && !(allow&XmmRegs) ||
                  (rmask(r)&x87Regs) && !(allow&x87Regs)))
+#elif defined NANOJIT_PPC
+        if (r != UnknownReg && 
+            ((rmask(r)&GpRegs) && !(allow&GpRegs) ||
+                 (rmask(r)&FpRegs) && !(allow&FpRegs)))
+#else
+		if (false)
+#endif
         {
-            // x87 <-> xmm copy required
-            //_nvprof("fpu-evict",1);
+            // illegal copy between register classes, go to memory
             evict(r);
             r = UnknownReg;
         }
-#endif
 
         if (r == UnknownReg)
 		{
@@ -906,12 +911,14 @@ namespace nanojit
 		Page *next;
 		for (Page *p = pages; p != 0; p = next) {
 			next = p->next;
-			// 10.5 only
-			//sys_dcache_flush(p, sizeof(Page));
-			//sys_icache_invalidate(p, sizeof(Page));
-
-			// carbon api depreciated, but we need it on 10.4
-			MakeDataExecutable(p, sizeof(Page));
+			#ifdef AVMPLUS_64BIT
+				// 10.5 only
+				sys_dcache_flush(p, sizeof(Page));
+				sys_icache_invalidate(p, sizeof(Page));
+			#else
+				// carbon api depreciated, but we need it on 10.4
+				MakeDataExecutable(p, sizeof(Page));
+			#endif
 		}
 #endif
 	}

@@ -97,8 +97,8 @@ namespace nanojit
 		R10 = 10, // param
 		R11 = 11, // scratch in leaf funcs, outgoing arg ptr otherwise
 		R12 = 12, // scratch
-		FP  = 13, // saved, used as FP, excluded from regalloc
-		R14 = 14,
+		R13 = 13, // ppc32: saved, ppc64: thread-specific storage
+		R14 = 14, // saved
 		R15 = 15,						
 		R16 = 16,						
 		R17 = 17,						
@@ -115,7 +115,8 @@ namespace nanojit
 		R28 = 28,						
 		R29 = 29,						
 		R30 = 30,
-		R31 = 31,			
+		R31 = 31, // excluded from regalloc since we use it as FP
+		FP  = R31,
 
 		// FP regs
 		F0  = 32, // scratch, excluded from reg alloc
@@ -179,16 +180,18 @@ namespace nanojit
 		PPC_cmpl    = 0x7C000040, // compare logical
 		PPC_cmpli   = 0x28000000, // compare logical immediate
 		PPC_cror    = 0x4C000382, // condition register or
+		PPC_extsw   = 0x7C0007B4, // extend sign word
 		PPC_fadd    = 0xFC00002A, // floating add (double precision)
+		PPC_fcfid   = 0xFC00069C, // floating convert from integer doubleword
 		PPC_fcmpu   = 0xFC000000, // floating compare unordered
 		PPC_fdiv    = 0xFC000024, // floating divide (double precision)
 		PPC_fmr     = 0xFC000090, // floating move register (double precision)
 		PPC_fmul    = 0xFC000032, // floating multiply (double precision)
 		PPC_fneg    = 0xFC000050, // floating negate
 		PPC_fsub    = 0xFC000028, // floating subtract (double precision)
-		PPC_or		= 0x7C000378, // or
-		PPC_ori     = 0x60000000, // or immediate
 		PPC_lbz     = 0x88000000, // load byte and zero
+		PPC_ld      = 0xE8000000, // load doubleword
+		PPC_ldx     = 0x7C00002A, // load doubleword indexed
 		PPC_lfd     = 0xC8000000, // load floating point double
 		PPC_lfdx    = 0x7C0004AE, // load floating-point double indexed
 		PPC_lwz     = 0x80000000, // load word and zero
@@ -200,11 +203,25 @@ namespace nanojit
 		PPC_mullw   = 0x7C0001D6, // multiply low word
 		PPC_neg     = 0x7C0000D0, // negate
 		PPC_nor		= 0x7C0000F8, // nor
+		PPC_or		= 0x7C000378, // or
+		PPC_ori     = 0x60000000, // or immediate
+		PPC_oris    = 0x64000000, // or immediate shifted
 		PPC_rlwinm  = 0x54000000, // rotate left word then and with mask
+		PPC_rldicl  = 0x78000000, // rotate left doubleword immediate then clear left
+		PPC_rldicr  = 0x78000004, // rotate left doubleword immediate then clear right
+		PPC_rldimi  = 0x7800000C, // rotate left doubleword immediate then mask insert
+		PPC_sld     = 0x7C000036, // shift left doubleword
 		PPC_slw     = 0x7C000030, // shift left word
-		PPC_srw     = 0x7C000430, // shift right word (zero ext)
-		PPC_srawi   = 0x7C000670, // shift right algebraic word immediate
+		PPC_srad    = 0x7C000634, // shift right algebraic doubleword (sign ext)
+		PPC_sradi   = 0x7C000674, // shift right algebraic doubleword immediate
 		PPC_sraw    = 0x7C000630, // shift right algebraic word (sign ext)
+		PPC_srawi   = 0x7C000670, // shift right algebraic word immediate
+		PPC_srd     = 0x7C000436, // shift right doubleword (zero ext)
+		PPC_srw     = 0x7C000430, // shift right word (zero ext)
+		PPC_std     = 0xF8000000, // store doubleword
+		PPC_stdu    = 0xF8000001, // store doubleword with update
+		PPC_stdux   = 0x7C00016A, // store doubleword with update indexed
+		PPC_stdx    = 0x7C00012A, // store doubleword indexed
 		PPC_stfd    = 0xD8000000, // store floating-point double
 		PPC_stfdx   = 0x7C0005AE, // store floating-point double indexed
 		PPC_stw		= 0x90000000, // store word
@@ -226,10 +243,15 @@ namespace nanojit
 
 	static const RegisterMask GpRegs = 0xffffffff;
 	static const RegisterMask FpRegs = 0xffffffff00000000LL;
-	// R13 is a saved reg too, but we use it as our Frame ptr FP
-	static const RegisterMask SavedRegs = 0xffffc000; // R14-R31 saved
-	static const RegisterMask SavedFpRegs = 0xffffc00000000000LL; // F14-F31 saved
-	static const int NumSavedRegs = 18; // R14-R31
+	// R31 is a saved reg too, but we use it as our Frame ptr FP
+#ifdef NANOJIT_64BIT
+	// R13 reserved for thread-specific storage on ppc64-darwin
+	static const RegisterMask SavedRegs = 0x7fffc000; // R14-R30 saved
+	static const int NumSavedRegs = 17; // R14-R30
+#else
+	static const RegisterMask SavedRegs = 0x7fffe000; // R13-R30 saved
+	static const int NumSavedRegs = 18; // R13-R30
+#endif
 
 	static inline bool IsFpReg(Register r) {
 		return r >= F0;
@@ -240,6 +262,13 @@ namespace nanojit
 	#define DECLARE_PLATFORM_STATS()
 	#define DECLARE_PLATFORM_REGALLOC()
 
+#ifdef AVMPLUS_64BIT	
+	#define DECL_PPC64()\
+        void asm_qbinop(LIns*);
+#else
+	#define DECL_PPC64()
+#endif
+
 	#define DECLARE_PLATFORM_ASSEMBLER()                                    \
 		const static Register argRegs[8], retRegs[2];                       \
 		void underrunProtect(int bytes);                                    \
@@ -249,11 +278,13 @@ namespace nanojit
 		void asm_regarg(ArgSize, LIns*, Register);                          \
 		void asm_li(Register r, int32_t imm);								\
 		void asm_li32(Register r, int32_t imm);								\
+		void asm_li64(Register r, uint64_t imm);                            \
 		void asm_cmp(LOpcode op, LIns *a, LIns *b, ConditionRegister);      \
 		NIns* asm_branch_far(bool onfalse, LIns *cond, NIns * const targ);  \
 		NIns* asm_branch_near(bool onfalse, LIns *cond, NIns * const targ); \
 		int  max_param_size; /* bytes */                                    \
-		int  *_nSlot, *_nExitSlot;
+		int  *_nSlot, *_nExitSlot;                                          \
+		DECL_PPC64()
 
 	#define swapptrs()  do {                                                \
 			NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins;          \
@@ -351,6 +382,10 @@ namespace nanojit
 	#define XOR(rd,rs,rb)   BITALU2(xor,  rd, rs, rb, 0)
 	#define XOR_(rd,rs,rb)  BITALU2(xor,  rd, rs, rb, 1)
 
+	#define SLD(rd,rs,rb)   BITALU2(sld,  rd, rs, rb, 0)
+	#define SRD(rd,rs,rb)   BITALU2(srd,  rd, rs, rb, 0)
+	#define SRAD(rd,rs,rb)  BITALU2(srad, rd, rs, rb, 0)
+
 	#define FADD(rd,ra,rb)  FPUAB(fadd, rd, ra, rb, 0)
 	#define FADD_(rd,ra,rb) FPUAB(fadd, rd, ra, rb, 1)
 	#define FDIV(rd,ra,rb)  FPUAB(fdiv, rd, ra, rb, 0)
@@ -369,14 +404,18 @@ namespace nanojit
 	#define ALU1(op, ra, rs, rc) EMIT1(PPC_##op | GPR(rs)<<21 | GPR(ra)<<16 | GPR(rs)<<11 | (rc),\
 		"%s%s %s,%s", #op, (rc)?".":"", gpn(ra), gpn(rs))
 
-	#define MR(rd, rs)   ALU1(mr, rd,rs,0)   // or   rd,rs,rs
-	#define MR_(rd, rs)  ALU1(mr, rd,rs,1)   // or.  rd,rs,rs
-	#define NOT(rd, rs)  ALU1(not,rd,rs,0)   // nor  rd,rs,rs
-	#define NOT_(rd, rs) ALU1(not,rd,rs,0)   // nor. rd,rs,rs
+	#define MR(rd, rs)    ALU1(mr,    rd, rs, 0)   // or   rd,rs,rs
+	#define MR_(rd, rs)   ALU1(mr,    rd, rs, 1)   // or.  rd,rs,rs
+	#define NOT(rd, rs)   ALU1(not,   rd, rs, 0)   // nor  rd,rs,rs
+	#define NOT_(rd, rs)  ALU1(not,   rd, rs, 0)   // nor. rd,rs,rs
+
+	#define EXTSW(rd, rs) EMIT1(PPC_extsw | GPR(rs)<<21 | GPR(rd)<<16,\
+		"extsw %s,%s", gpn(rd), gpn(rs))
 
 	#define NEG(rd, rs)  EMIT1(PPC_neg | GPR(rd)<<21 | GPR(rs)<<16, "neg %s,%s", gpn(rd), gpn(rs))
 	#define FNEG(rd,rs)  EMIT1(PPC_fneg | FPR(rd)<<21 | FPR(rs)<<11, "fneg %s,%s", gpn(rd), gpn(rs))
 	#define FMR(rd,rb)   EMIT1(PPC_fmr  | FPR(rd)<<21 | FPR(rb)<<11, "fmr %s,%s", gpn(rd), gpn(rb))
+	#define FCFID(rd,rs) EMIT1(PPC_fcfid | FPR(rd)<<21 | FPR(rs)<<11, "fcfid %s,%s", gpn(rd), gpn(rs))
 
 	#define JMP(addr) br(addr, 0)
 
@@ -395,7 +434,7 @@ namespace nanojit
 	#define MFCTR(r) MFSPR(r, ctr)
 
 	#define MEMd(op, r, d, a) do {\
-		NanoAssert(isS16(d));\
+		NanoAssert(isS16(d) && (d&3)==0);\
 		EMIT1(PPC_##op | GPR(r)<<21 | GPR(a)<<16 | uint16_t(d), "%s %s,%d(%s)", #op, gpn(r), int16_t(d), gpn(a));\
 		} while(0) /* no addr */
 
@@ -409,14 +448,38 @@ namespace nanojit
 	#define FMEMx(op, r, a, b) EMIT1(PPC_##op | FPR(r)<<21 | GPR(a)<<16 | GPR(b)<<11,\
 		"%s %s,%s,%s", #op, gpn(r), gpn(a), gpn(b))
 
+	#define MEMux(op, rs, ra, rb) EMIT1(PPC_##op | GPR(rs)<<21 | GPR(ra)<<16 | GPR(rb)<<11,\
+				"%s %s,%s,%s", #op, gpn(rs), gpn(ra), gpn(rb))
+
 	#define LBZ(r,  d, b) MEMd(lbz,  r, d, b)
 	#define LWZ(r,  d, b) MEMd(lwz,  r, d, b)
+	#define LD(r,   d, b) MEMd(ld,   r, d, b)
 	#define LWZX(r, a, b) MEMx(lwzx, r, a, b)
-	#define STW(r,  d, b) MEMd(stw,  r, d, b)
-	#define STWU(r, d, b) MEMd(stwu, r, d, b)
-	#define STWUX(rs, ra, rb) EMIT1(PPC_stwux | GPR(rs)<<21 | GPR(ra)<<16 | GPR(rb)<<11,\
-				"stwux %s,%s,%s", gpn(rs), gpn(ra), gpn(rb))
-	#define STWX(s, a, b) MEMx(stwx, s, a, b)
+	#define LDX(r,  a, b) MEMx(ldx,  r, a, b)
+
+	#define STW(r,  d, b)     MEMd(stw,    r, d, b)
+	#define STWU(r, d, b)     MEMd(stwu,   r, d, b)
+	#define STWX(s, a, b)     MEMx(stwx,   s, a, b)
+	#define STWUX(s, a, b)    MEMux(stwux, s, a, b)
+
+	#define STD(r,  d, b)     MEMd(std,    r, d, b)
+	#define STDU(r, d, b)     MEMd(stdu,   r, d, b)
+	#define STDX(s, a, b)     MEMx(stdx,   s, a, b)
+	#define STDUX(s, a, b)    MEMux(stdux, s, a, b)
+
+#ifdef NANOJIT_64BIT
+	#define LP(r, d, b)       LD(r, d, b)
+	#define STP(r, d, b)      STD(r, d, b)
+	#define STPU(r, d, b)	  STDU(r, d, b)
+	#define STPX(s, a, b)	  STDX(s, a, b)
+	#define STPUX(s, a, b) 	  STDUX(s, a, b)
+#else
+	#define LP(r, d, b)       LWZ(r, d, b)
+	#define STP(r, d, b)      STW(r, d, b)
+	#define STPU(r, d, b)	  STWU(r, d, b)
+	#define STPX(s, a, b)	  STWX(s, a, b)
+	#define STPUX(s, a, b) 	  STWUX(s, a, b)
+#endif
 
 	#define LFD(r,  d, b) FMEMd(lfd,  r, d, b)
 	#define LFDX(r, a, b) FMEMx(lfdx, r, a, b)
@@ -435,6 +498,7 @@ namespace nanojit
 
 	#define ANDI(rd,ra,d)  BITALUI(andi,  rd, ra, d)
 	#define ORI(rd,ra,d)   BITALUI(ori,   rd, ra, d)
+	#define ORIS(rd,ra,d)  BITALUI(oris,  rd, ra, d)
 	#define XORI(rd,ra,d)  BITALUI(xori,  rd, ra, d)
 	#define XORIS(rd,ra,d) BITALUI(xoris, rd, ra, d)
 
@@ -450,17 +514,25 @@ namespace nanojit
 	#define MTCR(rs) /* mtcrf 0xff,rs */
 	#define MFCR(rd) EMIT1(PPC_mfcr | GPR(rd)<<21, "mfcr %s", gpn(rd))
 
-	#define CMPWx(op, crfd, ra, rb) EMIT1(PPC_##op | (crfd)<<23 | GPR(ra)<<16 | GPR(rb)<<11,\
-		"%sw cr%d,%s,%s", #op, (crfd), gpn(ra), gpn(rb))
+	#define CMPx(op, crfd, ra, rb, l) EMIT1(PPC_##op | (crfd)<<23 | (l)<<21 | GPR(ra)<<16 | GPR(rb)<<11,\
+		"%s%c cr%d,%s,%s", #op, (l)?'d':'w', (crfd), gpn(ra), gpn(rb))
 
-	#define CMPW(cr, ra, rb)   CMPWx(cmp,    cr, ra, rb)
-	#define CMPLW(cr, ra, rb)  CMPWx(cmpl,   cr, ra, rb)
+	#define CMPW(cr, ra, rb)   CMPx(cmp,    cr, ra, rb, 0)
+	#define CMPLW(cr, ra, rb)  CMPx(cmpl,   cr, ra, rb, 0)
+	#define CMPD(cr, ra, rb)   CMPx(cmp,    cr, ra, rb, 1)
+	#define CMPLD(cr, ra, rb)  CMPx(cmpl,   cr, ra, rb, 1)
 
-	#define CMPWI(cr, ra, simm) EMIT1(PPC_cmpi | (cr)<<23 | GPR(ra)<<16 | uint16_t(simm),\
-		"cmpwi cr%d,%s,%d (0x%x)", (cr), gpn(ra), int16_t(simm), int16_t(simm))
+	#define CMPxI(cr, ra, simm, l) EMIT1(PPC_cmpi | (cr)<<23 | (l)<<21 | GPR(ra)<<16 | uint16_t(simm),\
+		"cmp%ci cr%d,%s,%d (0x%x)", (l)?'d':'w', (cr), gpn(ra), int16_t(simm), int16_t(simm))
 
-	#define CMPLWI(cr, ra, uimm) EMIT1(PPC_cmpli | (cr)<<23 | GPR(ra)<<16 | uint16_t(uimm),\
-		"cmpwi cr%d,%s,%d (0x%x)", (cr), gpn(ra), uint16_t(uimm), uint16_t(uimm))
+	#define CMPWI(cr, ra, simm) CMPxI(cr, ra, simm, 0)
+	#define CMPDI(cr, ra, simm) CMPxI(cr, ra, simm, 1)
+
+	#define CMPLxI(cr, ra, uimm, l) EMIT1(PPC_cmpli | (cr)<<23 | (l)<<21 | GPR(ra)<<16 | uint16_t(uimm),\
+		"cmp%ci cr%d,%s,%d (0x%x)", (l)?'d':'w', (cr), gpn(ra), uint16_t(uimm), uint16_t(uimm))
+
+	#define CMPLWI(cr, ra, uimm) CMPLxI(cr, ra, uimm, 0)
+	#define CMPLDI(cr, ra, uimm) CMPLxI(cr, ra, uimm, 1)
 
 	#define FCMPx(op, crfd, ra, rb) EMIT1(PPC_##op | (crfd)<<23 | FPR(ra)<<16 | FPR(rb)<<11,\
 		"%s cr%d,%s,%s", #op, (crfd), gpn(ra), gpn(rb))
@@ -473,8 +545,34 @@ namespace nanojit
 	#define RLWINM(rd,rs,sh,mb,me) EMIT1(PPC_rlwinm | GPR(rs)<<21 | GPR(rd)<<16 | (sh)<<11 | (mb)<<6 | (me)<<1,\
 		"rlwinm %s,%s,%d,%d,%d", gpn(rd), gpn(rs), (sh), (mb), (me))
 
+	#define LO5(sh) ((sh) & 31)
+	#define BIT6(sh) (((sh) >> 5) & 1)
+	#define SPLITMB(mb) (LO5(mb)<<1 | BIT6(mb))
+
+	#define RLDICL(rd,rs,sh,mb) \
+		EMIT1(PPC_rldicl | GPR(rs)<<21 | GPR(rd)<<16 | LO5(sh)<<11 | SPLITMB(mb)<<5 | BIT6(sh)<<1,\
+		"rldicl %s,%s,%d,%d", gpn(rd), gpn(rs), (sh), (mb))
+
+	// clrldi d,s,n => rldicl d,s,0,n
+	#define CLRLDI(rd,rs,n) \
+		EMIT1(PPC_rldicl | GPR(rs)<<21 | GPR(rd)<<16 | SPLITMB(n)<<5,\
+		"clrldi %s,%s,%d", gpn(rd), gpn(rs), (n))
+
+	#define RLDIMI(rd,rs,sh,mb) \
+		EMIT1(PPC_rldimi | GPR(rs)<<21 | GPR(rd)<<16 | LO5(sh)<<11 | SPLITMB(mb)<<5 | BIT6(sh)<<1,\
+		"rldimi %s,%s,%d,%d", gpn(rd), gpn(rs), (sh), (mb))
+
+	// insrdi rD,rS,n,b => rldimi rD,rS,64-(b+n),b: insert n bit value into rD starting at b
+	#define INSRDI(rd,rs,n,b) \
+		EMIT1(PPC_rldimi | GPR(rs)<<21 | GPR(rd)<<16 | LO5(64-((b)+(n)))<<11 | SPLITMB(b)<<5 | BIT6(64-((b)+(n)))<<1,\
+		"insrdi %s,%s,%d,%d", gpn(rd), gpn(rs), (n), (b))
+
 	#define EXTRWI(rd,rs,n,b) EMIT1(PPC_rlwinm | GPR(rs)<<21 | GPR(rd)<<16 | ((n)+(b))<<11 | (32-(n))<<6 | 31<<1,\
 		"extrwi %s,%s,%d,%d", gpn(rd), gpn(rs), (n), (b))
+
+	// sldi rd,rs,n (n<64) => rldicr rd,rs,n,63-n
+	#define SLDI(rd,rs,n) EMIT1(PPC_rldicr | GPR(rs)<<21 | GPR(rd)<<16 | LO5(n)<<11 | SPLITMB(63-(n))<<5 | BIT6(n)<<1,\
+		"sldi %s,%s,%d", gpn(rd), gpn(rs), (n))
 
 	#define SLWI(rd,rs,n) EMIT1(PPC_rlwinm | GPR(rs)<<21 | GPR(rd)<<16 | (n)<<11 | 0<<6 | (31-(n))<<1,\
 		"slwi %s,%s,%d", gpn(rd), gpn(rs), (n))
