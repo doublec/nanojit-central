@@ -39,7 +39,6 @@
 #ifndef __nanojit_h__
 #define __nanojit_h__
 
-#include <stddef.h>
 #include "avmplus.h"
 
 #ifdef FEATURE_NANOJIT
@@ -170,7 +169,6 @@ namespace nanojit
 #endif
 
 #ifdef NJ_VERBOSE
-	#include <stdio.h>
 	#define verbose_output						if (verbose_enabled()) Assembler::output
 	#define verbose_outputf						if (verbose_enabled()) Assembler::outputf
 	#define verbose_enabled()					(_verbose)
