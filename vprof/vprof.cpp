@@ -46,7 +46,6 @@
 #include <string.h>
 #endif
 
-#include "VMPI.h"
 #include "vprof.h"
 
 #define MIN(x,y) ((x) <= (y) ? x : y)
