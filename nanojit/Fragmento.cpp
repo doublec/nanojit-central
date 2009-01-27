@@ -243,7 +243,7 @@ namespace nanojit
 	void Fragmento::addLabel(Fragment *f, const char *prefix, int id)
 	{
 		char fragname[20];
-		sprintf(fragname,"%s%d", prefix, id);
+		VMPI_sprintf(fragname,"%s%d", prefix, id);
 		labels->add(f, sizeof(Fragment), 0, fragname);
 	}
 #endif
@@ -294,7 +294,7 @@ namespace nanojit
 	void Fragmento::dumpFragStats(Fragment *f, int level, fragstats &stat)
     {
         char buf[50];
-        sprintf(buf, "%*c%s", 1+level, ' ', labels->format(f));
+        VMPI_sprintf(buf, "%*c%s", 1+level, ' ', labels->format(f));
 
         int called = f->hits();
         if (called >= 0)
@@ -305,13 +305,13 @@ namespace nanojit
         uint32_t main = f->_native - f->_exitNative;
 
         char cause[200];
-        if (f->_token && strcmp(f->_token,"loop")==0)
-            sprintf(cause,"%s %d", f->_token, f->xjumpCount);
+        if (f->_token && VMPI_strcmp(f->_token,"loop")==0)
+            VMPI_sprintf(cause,"%s %d", f->_token, f->xjumpCount);
 		else if (f->_token) {
 			if (f->eot_target) {
-				sprintf(cause,"%s %s", f->_token, labels->format(f->eot_target));
+				VMPI_sprintf(cause,"%s %s", f->_token, labels->format(f->eot_target));
 			} else {
-	            strcpy(cause, f->_token);
+	            VMPI_strcpy(cause, f->_token);
 			}
 		}
         else

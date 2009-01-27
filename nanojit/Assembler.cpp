@@ -1548,10 +1548,10 @@ namespace nanojit
 			
 		char* s = &outline[0];
 		if (_verbose) {
-			memset(s, ' ', 51);  s[51] = '\0';
-			s += strlen(s);
-			sprintf(s, " SP ");
-			s += strlen(s);
+			VMPI_memset(s, ' ', 51);  s[51] = '\0';
+			s += VMPI_strlen(s);
+			VMPI_sprintf(s, " SP ");
+			s += VMPI_strlen(s);
 
 			uint32_t max = _activation.tos < NJ_MAX_STACK_ENTRY ? _activation.tos : NJ_MAX_STACK_ENTRY;
 			for(uint32_t i = _activation.lowwatermark; i < max; i++) {
@@ -1896,8 +1896,8 @@ namespace nanojit
 		{
 			if (_outputCache)
 			{
-				char* str = (char*)_gc->Alloc(strlen(s)+1);
-				strcpy(str, s);
+				char* str = (char*)_gc->Alloc(VMPI_strlen(s)+1);
+				VMPI_strcpy(str, s);
 				_outputCache->add(str);
 			}
 			else
@@ -1915,9 +1915,9 @@ namespace nanojit
 
 		char* Assembler::outputAlign(char *s, int col) 
 		{
-			int len = strlen(s);
+			int len = VMPI_strlen(s);
 			int add = ((col-len)>0) ? col-len : 1;
-			memset(&s[len], ' ', add);
+			VMPI_memset(&s[len], ' ', add);
 			s[col] = '\0';
 			return &s[col];
 		}

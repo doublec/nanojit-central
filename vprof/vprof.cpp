@@ -36,6 +36,8 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
+#include "VMPI.h"
+
 #ifdef WIN32
 #include "windows.h"
 #else
@@ -104,7 +106,7 @@ static char* f (double d)
     static char s[80];
     char* p;
     sprintf_s (s, sizeof(s), "%lf", d);
-    p = s+strlen(s)-1;
+    p = s+VMPI_strlen(s)-1;
     while (*p == '0') {
         *p = '\0';
         p--;
@@ -177,7 +179,7 @@ int _profileEntryValue (void* id, int64_t value)
 inline static entry_t findEntry (char* file, int line)
 {
     for (entry_t e =  entries; e; e = e->next) {
-        if ((e->line == line) && (strcmp (e->file, file) == 0)) {
+        if ((e->line == line) && (VMPI_strcmp (e->file, file) == 0)) {
             return e;
         }
     }
@@ -220,9 +222,9 @@ int profileValue(void** id, char* file, int line, int64_t value, ...)
 
             e->genptr = NULL;
 
-            memset (&e->ivar,   0, sizeof(e->ivar));
-            memset (&e->i64var, 0, sizeof(e->i64var));
-            memset (&e->dvar,   0, sizeof(e->dvar));
+            VMPI_memset (&e->ivar,   0, sizeof(e->ivar));
+            VMPI_memset (&e->i64var, 0, sizeof(e->i64var));
+            VMPI_memset (&e->dvar,   0, sizeof(e->dvar));
 
             e->next = entries;
             entries = e;
@@ -309,9 +311,9 @@ int histValue(void** id, char* file, int line, int64_t value, int nbins, ...)
             s = n*sizeof(int64_t);
             lb = (int64_t*) malloc (s);
             h->lb = lb;
-            memset (h->lb, 0, s);
+            VMPI_memset (h->lb, 0, s);
             h->count = (int64_t*) malloc (s);
-            memset (h->count, 0, s);
+            VMPI_memset (h->count, 0, s);
 
             va_start (va, nbins);
             for (b = 0; b < nbins; b++) {
@@ -328,9 +330,9 @@ int histValue(void** id, char* file, int line, int64_t value, int nbins, ...)
 
             e->genptr = NULL;
 
-            memset (&e->ivar,   0, sizeof(e->ivar));
-            memset (&e->i64var, 0, sizeof(e->i64var));
-            memset (&e->dvar,   0, sizeof(e->dvar));
+            VMPI_memset (&e->ivar,   0, sizeof(e->ivar));
+            VMPI_memset (&e->i64var, 0, sizeof(e->i64var));
+            VMPI_memset (&e->dvar,   0, sizeof(e->dvar));
 
             e->next = entries;
             entries = e;
