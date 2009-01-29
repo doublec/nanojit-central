@@ -41,9 +41,9 @@
 
 #ifdef PERFM
 #include "../vprof/vprof.h"
-#define count_instr() _nvprof("arm",1)
-#define count_prolog() _nvprof("arm-prolog",1); count_instr();
-#define count_imt() _nvprof("arm-imt",1) count_instr()
+#define count_instr() _nvprof("ppc",1)
+#define count_prolog() _nvprof("ppc-prolog",1); count_instr();
+#define count_imt() _nvprof("ppc-imt",1) count_instr()
 #else
 #define count_instr()
 #define count_prolog()
@@ -262,7 +262,7 @@ namespace nanojit
 	#define DECLARE_PLATFORM_STATS()
 	#define DECLARE_PLATFORM_REGALLOC()
 
-#ifdef AVMPLUS_64BIT	
+#ifdef NANOJIT_64BIT	
 	#define DECL_PPC64()\
         void asm_qbinop(LIns*);
 #else

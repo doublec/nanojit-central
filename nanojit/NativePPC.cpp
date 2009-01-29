@@ -106,8 +106,9 @@ namespace nanojit
 		// stw r0, lr_offset(sp)
 		// stwu sp, -framesize(sp)
 
+		// activation frame is 4 bytes per entry even on 64bit machines
 		uint32_t stackNeeded = max_param_size + linkage_size +
-			sizeof(void*) * _activation.highwatermark;
+			_activation.highwatermark * 4;
 		uint32_t aligned = alignUp(stackNeeded, NJ_ALIGN_STACK);
 
 		UNLESS_PEDANTIC( if (isS16(aligned)) {
