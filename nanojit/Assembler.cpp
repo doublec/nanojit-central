@@ -44,12 +44,12 @@
 #include "portapi_nanojit.h"
 #endif
 
-#if defined(AVMPLUS_UNIX) && defined(AVMPLUS_ARM)
+#if defined(AVMPLUS_UNIX) && defined(NANOJIT_ARM)
 #include <asm/unistd.h>
 extern "C" void __clear_cache(char *BEG, char *END);
 #endif
 
-#if defined AVMPLUS_MAC && defined AVMPLUS_PPC && defined AVMPLUS_64BIT
+#if defined AVMPLUS_MAC && defined NANOJIT_PPC && defined NANOJIT_64BIT
 // 10.5 only
 extern "C" void sys_icache_invalidate(const void*, size_t len);
 extern "C" void sys_dcache_flush(const void*, size_t len);
@@ -808,7 +808,7 @@ namespace nanojit
 		// When outOMem, nIns is set to startingIns and we overwrite the region until the error is handled
 		underrunProtect(LARGEST_UNDERRUN_PROT);  // the largest value passed to underrunProtect() 
 		_startingIns = _nIns;
-#ifdef AVMPLUS_ARM
+#ifdef NANOJIT_ARM
         _startingSlot = _nSlot;
 #endif
 		
@@ -883,7 +883,7 @@ namespace nanojit
         }
 		else {
 			_nIns = _startingIns;  // in case of failure reset nIns ready for the next assembly run
-#ifdef AVMPLUS_ARM
+#ifdef NANOJIT_ARM
             _nSlot = _startingSlot;  // in case of failure reset nSlot ready for the next assembly run
 #endif
 			IF_PEDANTIC( pedanticTop = _nIns;)
@@ -891,13 +891,13 @@ namespace nanojit
 	}
 
 	void Assembler::flush_icache(Page *pages) {
-#if defined AVMPLUS_IA32 || defined AVMPLUS_AMD64
+#if defined NANOJIT_IA32 || defined NANOJIT_AMD64
 		(void) pages;
-#elif defined AVMPLUS_ARM && defined UNDER_CE
+#elif defined NANOJIT_ARM && defined UNDER_CE
 		(void) pages;
 		// just flush all of it
 		FlushInstructionCache(GetCurrentProcess(), NULL, NULL);
-#elif defined AVMPLUS_UNIX
+#elif defined NANOJIT_UNIX
 		Page *p = pages;
 		Page *first = p;
 		while (p) {
@@ -907,11 +907,11 @@ namespace nanojit
 			}
 			p = p->next;
 		}
-#elif defined AVMPLUS_MAC && defined AVMPLUS_PPC
+#elif defined AVMPLUS_MAC && defined NANOJIT_PPC
 		Page *next;
 		for (Page *p = pages; p != 0; p = next) {
 			next = p->next;
-			#ifdef AVMPLUS_64BIT
+			#ifdef NANOJIT_64BIT
 				// 10.5 only
 				sys_dcache_flush(p, sizeof(Page));
 				sys_icache_invalidate(p, sizeof(Page));
@@ -963,7 +963,7 @@ namespace nanojit
 		else
 		{
 			_nIns = _startingIns;  // in case of failure reset nIns ready for the next assembly run
-#ifdef AVMPLUS_ARM
+#ifdef NANOJIT_ARM
             _nSlot = _startingSlot;  // in case of failure reset nSlot ready for the next assembly run
 #endif
 		}

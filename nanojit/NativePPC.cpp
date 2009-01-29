@@ -509,7 +509,7 @@ namespace nanojit
 			TODO(unknown_cond);
 		}
 
-	#if !defined AVMPLUS_64BIT
+	#if !defined NANOJIT_64BIT
 		MTCTR(R0);
 		asm_li32(R0, (int)targ);
 	#else
@@ -1372,4 +1372,4 @@ namespace nanojit
 
 } // namespace nanojit
 
-#endif // FEATURE_NANOJIT && AVMPLUS_PPC
+#endif // FEATURE_NANOJIT && NANOJIT_PPC

@@ -42,7 +42,7 @@
 #ifndef __nanojit_Fragmento__
 #define __nanojit_Fragmento__
 
-/*#ifdef AVMPLUS_VERBOSE
+/*#ifdef NJ_VERBOSE
 extern void drawTraceTrees(Fragmento *frago, FragmentMap * _frags, avmplus::AvmCore *core, char *fileName);
 #endif*/
 
@@ -129,7 +129,7 @@ namespace nanojit
 			verbose_only( DWB(BlockHist*)		mergeCounts; )
 			verbose_only( DWB(LabelMap*)        labels; )
 			
-    		#ifdef AVMPLUS_VERBOSE
+    		#ifdef NJ_VERBOSE
     		void	drawTrees(char *fileName);
             #endif
 			

@@ -566,7 +566,7 @@ namespace nanojit
 
 	bool LIns::isconstp() const
 	{
-    #ifdef AVMPLUS_64BIT
+    #ifdef NANOJIT_64BIT
 	    return isconstq();
 	#else
 	    return isconst();

@@ -514,7 +514,7 @@ namespace nanojit
 
         uint64_t constvalq() const;
 
-    #ifdef AVMPLUS_64BIT
+    #ifdef NANOJIT_64BIT
         inline void* constvalp() const {
             return (void*)constvalq();
         }
