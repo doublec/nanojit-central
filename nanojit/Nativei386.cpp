@@ -1670,6 +1670,7 @@ namespace nanojit
 			// todo support int value in memory
 			Register gr = findRegFor(ins->oprnd1(), GpRegs);
 			SSE_CVTSI2SD(rr, gr);
+            SSE_XORPDr(rr,rr);  // zero rr to ensure no dependency stalls
 #if defined NANOJIT_IA32
 		} 
 		else 
@@ -1754,6 +1755,7 @@ namespace nanojit
 #endif
 
 			SSE_CVTSI2SD(rr, gr);
+            SSE_XORPDr(rr,rr);  // zero rr to ensure no dependency stalls
 
 			Reservation* resv = getresv(ins->oprnd1());
 			Register xr;
