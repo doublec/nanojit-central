@@ -190,7 +190,7 @@ namespace nanojit
         if (can24bReach(l,to))
 		{
             l->initOpcode(LOpcode(op-1)); // nearskip or neartramp
-            l->setimm24(to-l);
+            l->setimm24(int32_t(to-l));
             _buf->commit(1);
 			_buf->_stats.lir++;
         }
@@ -264,9 +264,9 @@ namespace nanojit
 	
 	uint32_t LIns::reference(LIns *r) const
 	{
-		int delta = this-r-1;
+		ptrdiff_t delta = this-r-1;
 		NanoAssert(isU8(delta));
-		return delta;
+		return uint32_t(delta);
 	}
 
     LIns* LIns::deref(int32_t off) const
@@ -450,7 +450,7 @@ namespace nanojit
 
 	LInsp LirBufWriter::skip(size_t size)
 	{
-        const uint32_t n = (size+sizeof(LIns)-1)/sizeof(LIns);
+        const size_t n = (size+sizeof(LIns)-1)/sizeof(LIns);
 		ensureRoom(n); // make room for it
  		LInsp last = _buf->next()-1;  // safe, next()-1+n guaranteed to be on same page
 		_buf->commit(n);
@@ -1083,7 +1083,11 @@ namespace nanojit
 
 	LIns* LirWriter::insImmPtr(const void *ptr)
 	{
-		return sizeof(ptr) == 8 ? insImmq((uintptr_t)ptr) : insImm((intptr_t)ptr);
+#ifdef NANOJIT_64BIT
+        return insImmq((uintptr_t)ptr);
+#else
+        return insImm((uintptr_t)ptr);
+#endif
 	}
 
 	LIns* LirWriter::ins_choose(LIns* cond, LIns* iftrue, LIns* iffalse)
@@ -1549,7 +1553,7 @@ namespace nanojit
 		LiveTable(GC *gc) : live(gc), retired(gc), maxlive(0) {}
         ~LiveTable()
         {
-            for (size_t i = 0; i < retired.size(); i++) {
+            for (uint32_t i = 0; i < retired.size(); i++) {
                 NJ_DELETE(retired.get(i));
             }
 

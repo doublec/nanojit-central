@@ -65,6 +65,8 @@
 #include "NativePPC.h"
 #elif defined(NANOJIT_AMD64)
 #include "NativeAMD64.h"
+#elif defined(NANOJIT_X64)
+#include "NativeX64.h"
 #else
 #error "unknown nanojit architecture"
 #endif
