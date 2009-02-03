@@ -515,13 +515,13 @@ namespace nanojit
 
     // the CVTSI2SD instruction only writes to the low 64bits of the target
     // XMM register, which hinders register renaming and makes dependence
-    // chaings longer.  So we precede with PXOR to clear the target register.
+    // chaings longer.  So we precede with XORPD to clear the target register.
 
     void Assembler::asm_i2f(LIns *ins) {
         Register r = prepResultReg(ins, FpRegs);
         Register b = findRegFor(ins->oprnd1(), GpRegs);
         emitprr(X64_cvtsi2sd, r, b);    // cvtsi2sd xmmr, b  only writes xmm:0:64
-        emitprr(X64_pxor, r, r);        // pxor xmmr,xmmr to break dependency chains
+        emitprr(X64_xorps, r, r);       // xorpd xmmr,xmmr to break dependency chains
     }
 
     void Assembler::asm_u2f(LIns *ins) {
@@ -530,7 +530,7 @@ namespace nanojit
         NanoAssert(!ins->oprnd1()->isQuad());
         // since oprnd1 value is 32bit, its okay to zero-extend the value without worrying about clobbering.
         emitprr(X64_cvtsq2sd, r, b);    // convert int64 to double
-        emitprr(X64_pxor, r, r);        // pxor xmmr,xmmr to break dependency chains
+        emitprr(X64_xorps, r, r);       // xorpd xmmr,xmmr to break dependency chains
         emitrr(X64_movlr, b, b);        // zero extend u32 to int64
     }
 
@@ -816,8 +816,8 @@ namespace nanojit
             // gpr <- xmm: use movq r/m64, xmm (66 REX.W 0F 7E /r)
             emitprr(X64_movqrx, s, d);
         } else if (IsFpReg(d) && IsFpReg(s)) {
-            // xmm <- xmm: use movsd
-            emitprr(X64_movsdrr, d, s);
+            // xmm <- xmm: use movaps. movsd r,r causes partial register stall
+            emitrr(X64_movapsr, d, s);
         } else {
             // xmm <- gpr: use movq xmm, r/m64 (66 REX.W 0F 6E /r)
             emitprr(X64_movqxr, d, s);
@@ -956,20 +956,35 @@ namespace nanojit
         // if this is last use of a in reg, we can re-use result reg
         if (rA == 0 || (ra = rA->reg) == UnknownReg) {
             ra = findSpecificRegFor(a, rr);
-        } else if (!(rmask(ra) & allow)) {
-            TODO(unary_ra);
         } else {
-            // rA already has a register assigned.
+            // rA already has a register assigned.  caller must emit a copy
+            // to rr once instr code is generated.  (ie  mov rr,ra ; op rr)
         }
     }
 
+    static const AVMPLUS_ALIGN16(uint64_t) negateMask[] = {0x8000000000000000LL,0};
+
     void Assembler::asm_fneg(LIns *ins) {
-        Register rr = prepResultReg(ins, FpRegs);
-        Register ra = findRegFor(ins->oprnd1(), FpRegs & ~rmask(rr));
-        // xor r,r
-        // r -= a
-        emitprr(X64_subsd, rr, ra);
-        emitprr(X64_pxor, rr, rr);        // pxor xmmr,xmmr to set r = 0
+        Register rr, ra;
+        regalloc_unary(ins, FpRegs, rr, ra);
+        if (isS32((uintptr_t)negateMask)) {
+            // builtin code is in bottom or top 2GB addr space, use absolute addressing
+            underrunProtect(4+8);
+            *((int32_t*)(_nIns -= 4)) = (int32_t)(uintptr_t)negateMask;
+            uint64_t xop = X64_xorpsa | uint64_t((rr&7)<<3)<<48; // put rr[0:2] into mod/rm byte
+            xop |= rexrb(rr, (Register)0) << (64-8*oplen(xop));  // put rr[3] into rex byte
+            emit(xop);
+        } else if (isS32((NIns*)negateMask - _nIns)) {
+            // jit code is within +/-2GB of builtin code, use rip-relative
+            underrunProtect(4+8);
+            *((int32_t*)(_nIns -= 4)) = (int32_t)((NIns*)negateMask - _nIns);
+            emitrr(X64_xorpsm, rr, (Register)0);
+        } else {
+            // this is just hideous
+            TODO(fneg-far-negateMask);
+        }
+        if (ra != rr) 
+            asm_nongp_copy(rr,ra);
     }
 
     void Assembler::asm_qhi(LIns*) {

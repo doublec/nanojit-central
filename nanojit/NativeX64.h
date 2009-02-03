@@ -103,6 +103,33 @@ namespace nanojit
         LastReg = XMM15,
     };
 
+/*
+ * Micro-templating variable-length opcodes, idea first
+ * describe by Mike Pall of Luajit.
+ *
+ * X86-64 opcode encodings:  LSB encodes the length of the 
+ * opcode in bytes, remaining bytes are encoded as 1-7 bytes
+ * in a single uint64_t value.  The value is written as a single
+ * store into the code stream, and the code pointer is decremented
+ * by the length.  each successive instruction partially overlaps
+ * the previous one.
+ *
+ * emit methods below are able to encode mod/rm, sib, rex, and
+ * register and small immediate values into these opcode values
+ * without much branchy code.
+ *
+ * these opcodes encapsulate all the const parts of the instruction.
+ * for example, the alu-immediate opcodes (add, sub, etc) encode
+ * part of their opcode in the R field of the mod/rm byte;  this
+ * hardcoded value is in the constant below, and the R argument
+ * to emitrr() is 0.  In a few cases, a whole instruction is encoded
+ * this way (eg X64_addsp8, callrax).
+ *
+ * when a disp32, imm32, or imm64 suffix can't fit in an 8-byte
+ * opcode, then it is written into the code separately and not counted
+ * in the opcode length.
+ */
+
     enum X64Opcode
 #if defined(_MSC_VER) && _MSC_VER >= 1400
 #pragma warning(disable:4480) // nonstandard extension used: specifying underlying type for enum
@@ -151,11 +178,12 @@ namespace nanojit
         X64_movqr   = 0xC08B480000000003LL, // 64bit mov r <- b
         X64_movqi   = 0xB848000000000002LL, // 64bit mov r <- imm64
         X64_movi    = 0xB840000000000002LL, // 32bit mov r <- imm32
+        X64_movapsr = 0xC0280F4000000004LL, // 128bit mov xmm <- xmm
         X64_movqrx  = 0xC07E0F4866000005LL, // 64bit mov b <- xmm-r
         X64_movqxr  = 0xC06E0F4866000005LL, // 64bit mov b -> xmm-r
         X64_movqrm  = 0x00000000808B4807LL, // 64bit load r <- [b+d32]
-        X64_movsdrr = 0xC0100F40F2000005LL, // 64bit mov xmm-r <- xmm-b
-        X64_movsdrm = 0x80100F40F2000005LL, // 64bit load xmm-r <- [b+d32]
+        X64_movsdrr = 0xC0100F40F2000005LL, // 64bit mov xmm-r <- xmm-b (upper 64bits unchanged)
+        X64_movsdrm = 0x80100F40F2000005LL, // 64bit load xmm-r <- [b+d32] (upper 64 cleared)
         X64_movsdmr = 0x80110F40F2000005LL, // 64bit store xmm-r -> [b+d32]
         X64_movsxdr = 0xC063480000000003LL, // sign extend i32 to i64 r = (int64)(int32) b
         X64_movzx8  = 0xC0B60F4000000004LL, // zero extend i8 to i64 r = (uint64)(uint8) b
@@ -198,6 +226,10 @@ namespace nanojit
         X64_ucomisd = 0xC02E0F4066000005LL, // unordered compare scalar double
         X64_xorqrr  = 0xC033480000000003LL, // 64bit xor r &= b
         X64_xorrr   = 0xC033400000000003LL, // 32bit xor r &= b
+        X64_xorpd   = 0xC0570F4066000005LL, // 128bit xor xmm (two packed doubles)
+        X64_xorps   = 0xC0570F4000000004LL, // 128bit xor xmm (four packed singles), one byte shorter
+        X64_xorpsm  = 0x05570F4000000004LL, // 128bit xor xmm, [rip+disp32]
+        X64_xorpsa  = 0x2504570F40000005LL, // 128bit xor xmm, [disp32]
 
         X86_and8r   = 0xC022000000000002LL, // and rl,rh
         X86_sete    = 0xC0940F0000000003LL, // no-rex version of X64_sete
