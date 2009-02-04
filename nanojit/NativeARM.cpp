@@ -370,7 +370,8 @@ Assembler::asm_call(LInsp ins)
         }
         else {
             // pre-assign registers R0-R3 for arguments (if they fit)
-            NanoAssert(sz == ARGSIZE_LO || sz == ARGSIZE_Q);
+            NanoAssert(sz == ARGSIZE_I || sz == ARGSIZE_U
+				|| sz == ARGSIZE_Q);
             if (r < R4) {
                 asm_regarg(sz, arg, r);
                 r = nextreg(r);
@@ -799,7 +800,7 @@ Assembler::asm_call(LInsp ins)
             int da = findMemFor(p);
             asm_add_imm(r, FP, da, 0);
         }
-        else if (sz == ARGSIZE_LO)
+        else if (sz == ARGSIZE_I || sz == ARGSIZE_U)
         {
             // arg goes in specific register
             if (p->isconst()) {
