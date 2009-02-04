@@ -515,7 +515,7 @@ namespace nanojit
 
     // the CVTSI2SD instruction only writes to the low 64bits of the target
     // XMM register, which hinders register renaming and makes dependence
-    // chaings longer.  So we precede with XORPD to clear the target register.
+    // chains longer.  So we precede with XORPS to clear the target register.
 
     void Assembler::asm_i2f(LIns *ins) {
         Register r = prepResultReg(ins, FpRegs);
