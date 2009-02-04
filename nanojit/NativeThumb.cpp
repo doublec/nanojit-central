@@ -38,6 +38,8 @@
 
 #include "nanojit.h"
 
+#ifdef NANOJIT_ARM	// probably not right
+
 #ifdef AVMPLUS_PORTING_API
 #include "portapi_nanojit.h"
 #endif
@@ -1321,3 +1323,6 @@ namespace nanojit
 	}
     #endif /* FEATURE_NANOJIT */
 }
+
+#endif // NANOJIT_ARM
+

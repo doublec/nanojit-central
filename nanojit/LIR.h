@@ -319,7 +319,7 @@ namespace nanojit
         ARGSIZE_P = PTR_SIZE(ARGSIZE_I, ARGSIZE_Q), // pointer
         ARGSIZE_LO = ARGSIZE_I, // int32_t
         ARGSIZE_B = ARGSIZE_I, // bool
-        ARGSIZE_V = ARGSIZE_NONE, // void
+        ARGSIZE_V = ARGSIZE_NONE  // void
     };
 
     enum IndirectCall {

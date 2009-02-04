@@ -100,7 +100,7 @@ namespace nanojit
         FP = RBP,
         UnknownReg = 32,
         FirstReg = RAX,
-        LastReg = XMM15,
+        LastReg = XMM15
     };
 
 /*
@@ -233,7 +233,7 @@ namespace nanojit
 
         X86_and8r   = 0xC022000000000002LL, // and rl,rh
         X86_sete    = 0xC0940F0000000003LL, // no-rex version of X64_sete
-        X86_setnp   = 0xC09B0F0000000003LL, // no-rex set byte if odd parity (ordered fcmp result) (PF == 0)
+        X86_setnp   = 0xC09B0F0000000003LL  // no-rex set byte if odd parity (ordered fcmp result) (PF == 0)
     };
 
     typedef uint32_t RegisterMask;
