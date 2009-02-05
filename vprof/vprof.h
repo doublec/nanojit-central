@@ -112,7 +112,7 @@ extern void* _tprof_before_id;
 }
 #endif 
 
-#define DOPROF
+//#define DOPROF
 
 #ifndef DOPROF
 #define _vprof(v,...)

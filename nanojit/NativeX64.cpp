@@ -44,6 +44,10 @@
 
 #include "nanojit.h"
 
+// uncomment this to enable _vprof/_nvprof macros
+//#define DOPROF
+#include "../vprof/vprof.h"
+
 #if defined AVMPLUS_UNIX || defined AVMPLUS_MAC
 #include <sys/mman.h>
 #include <errno.h>
@@ -65,7 +69,6 @@ mir parity
 - disp8 branches
 - disp64 branch/call
 - fold immedate operands
-- don't issue REX when not needed
 - don't overwrite PageHeader sentinel (maybe read/modify/write?)
 - windows abi
 - use sub imm8 to align stack before call
@@ -101,6 +104,7 @@ namespace nanojit
     // MODRM and restrictions:
     // memory access modes != 11 require SIB if base&7 == 4 (RSP or R12)
     // mode 00 with base&7 == 5 means RIP+disp32 (RBP or R13), use mode 01 disp8=0 instead
+    // rex prefix required to use RSP-R15 as 8bit registers in mod/rm8 modes.
 
     // take R12 out of play as a base register because it requires the SIB byte like ESP
     const RegisterMask BaseRegs = GpRegs & ~rmask(R12);
@@ -109,43 +113,40 @@ namespace nanojit
         return op & 255;
     }
 
-    // op+r form
-    static inline uint64_t X64r(uint64_t op, Register r) {
-        NanoAssert(r < 8);
-        return op | uint64_t(r)<<56;
+    // encode 2-register rex prefix.  dropped if none of its bits are set.
+    static inline uint64_t rexrb(uint64_t op, Register r, Register b) {
+        int shift = 64 - 8*oplen(op);
+        uint64_t rex = (op >> shift) & 255 | (r&8)>>1 | (b&8)>>3;
+        return rex != 0x40 ? op | rex << shift : op - 1;
     }
 
-    static inline uint64_t rexb(Register b) {
-        return (b&8)>>3;
+    // encode 2-register rex prefix.  dropped if none of its bits are set, but
+    // keep REX if b >= rsp, to allow uniform use of all 16 8bit registers
+    static inline uint64_t rexrb8(uint64_t op, Register r, Register b) {
+        int shift = 64 - 8*oplen(op);
+        uint64_t rex = (op >> shift) & 255 | (r&8)>>1 | (b&8)>>3;
+        return ((rex | b&~3) != 0x40) ? op | rex << shift : op - 1;
     }
 
-    static inline uint64_t rexrb(Register r, Register b) {
-        return (r&8)>>1 | (b&8)>>3;
-    }
-
-    static inline uint64_t rexrxb(Register r, Register x, Register b) {
-        return (r&8)>>1 | (x&8)>>2 | (b&8)>>3;
+    // encode 2-register rex prefix that follows a manditory prefix (66,F2,F3)
+    // [prefix][rex][opcode]
+    static inline uint64_t rexprb(uint64_t op, Register r, Register b) {
+        int shift = 64 - 8*oplen(op) + 8;
+        uint64_t rex = (op >> shift) & 255 | (r&8)>>1 | (b&8)>>3;
+        // to drop rex, we replace rex with manditory prefix, and decrement length
+        return rex != 0x40 ? op | rex << shift :
+            ((op & ~(255LL<<shift)) | (op>>(shift-8)&255) << shift) - 1;
     }
 
     // [rex][opcode][mod-rr]
     static inline uint64_t mod_rr(uint64_t op, Register r, Register b) {
-        return uint64_t((r&7)<<3 | (b&7))<<56 | rexrb(r, b)<<(64-8*oplen(op));
+        return op | uint64_t((r&7)<<3 | (b&7))<<56;
     }
 
-    // [rex][opcode][mod-rr] with only b specified, r is hardcoded in op
-    static inline uint64_t mod_r1(uint64_t op, Register b) {
-        return uint64_t(b&7)<<56 | rexb(b)<<(64-8*oplen(op));
-    }
-
-    // [prefix][rex][opcode][mod-rr]
-    static inline uint64_t mod_prr(uint64_t op, Register r, Register b) {
-        return uint64_t((r&7)<<3 | (b&7))<<56 | rexrb(r, b)<<(64-8*oplen(op)+8);
-    }
-
-    static inline uint64_t mod_rm32(uint64_t op, Register r, Register b) {
+    static inline uint64_t mod_disp32(uint64_t op, Register r, Register b) {
         NanoAssert(r < 16 && b < 16);
         NanoAssert((b & 7) != 4); // using RSP or R12 as base requires SIB
-        return uint64_t((r&7)<<3 | (b&7))<<24 | rexrb(r, b)<<(64-8*oplen(op));
+        return op | uint64_t((r&7)<<3 | (b&7))<<24;
     }
 
     #ifdef NJ_VERBOSE
@@ -169,6 +170,7 @@ namespace nanojit
         underrunProtect(8);
         ((int64_t*)_nIns)[-1] = op;
         _nIns -= len; // move pointer by length encoded in opcode
+        _nvprof("x64-bytes", len);
         verbose_only( if (_verbose) dis(_nIns, len); )
     }
 
@@ -182,35 +184,31 @@ namespace nanojit
         emit(op | uint64_t(uint32_t(v))<<32);
     }
 
-    // single-register form, no modrm, r is part of opcode
-    void Assembler::emitr(uint64_t op, Register r) {
-        emit(op | uint64_t(r&7)<<56 | rexb(r)<<(64-8*oplen(op)));
-    }
-
-    // 1-register modrm form (r is hardcoded, b is the 1 register)
-    void Assembler::emitr1(uint64_t op, Register b) {
-        emit(op | mod_r1(op, b));
-    }
-
-    // 2-register modrm form
+    // 2-register modrm32 form
     void Assembler::emitrr(uint64_t op, Register r, Register b) {
-        emit(op | mod_rr(op, r, b));
+        emit(rexrb(mod_rr(op, r, b), r, b));
+    }
+
+    // 2-register modrm8 form (8 bit operand size)
+    void Assembler::emitrr8(uint64_t op, Register r, Register b) {
+        emit(rexrb8(mod_rr(op, r, b), r, b));
     }
 
     // same as emitrr, but with a prefix byte
     void Assembler::emitprr(uint64_t op, Register r, Register b) {
-        emit(op | mod_prr(op, r, b));
+        emit(rexprb(mod_rr(op, r, b), r, b));
     }
 
     // disp32 modrm form, when the disp fits in the instruction (opcode is 1-3 bytes)
     void Assembler::emitrm(uint64_t op, Register r, int32_t d, Register b) {
-        emit32(op | mod_rm32(op, r, b), d);
+        emit32(rexrb(mod_disp32(op, r, b), r, b), d);
     }
 
     // disp32 modrm form when the disp must be written separately (opcode is 4+ bytes)
-    void Assembler::emitprm32(uint64_t op, Register r, int32_t d, Register b) {
+    void Assembler::emitprm(uint64_t op, Register r, int32_t d, Register b) {
         underrunProtect(4+8); // room for displ plus fullsize op
         *((int32_t*)(_nIns -= 4)) = d;
+        _nvprof("x64-bytes", 4);
         emitprr(op, r, b);
     }
 
@@ -288,7 +286,7 @@ namespace nanojit
             xop = X64_shl;
             break;
         }
-        emitr1(xop, rr);
+        emitr(xop, rr);
         if (rr != ra) 
             MR(rr, ra);
     }
@@ -381,7 +379,7 @@ namespace nanojit
         } else {
             xop = X64_neg;
         }
-        emitr1(xop, rr);
+        emitr(xop, rr);
 		if (rr != ra) 
 			MR(rr, ra); 
     }
@@ -707,7 +705,7 @@ namespace nanojit
             // result = ZF & !PF, must do logic on flags
             // r = al|bl|cl|dl, can only use rh without rex prefix
             Register r = prepResultReg(ins, 1<<RAX|1<<RCX|1<<RDX|1<<RBX);
-            emitrr(X64_movzx8, r, r);                   // movzx8   r,rl     r[8:63] = 0
+            emitrr8(X64_movzx8, r, r);                  // movzx8   r,rl     r[8:63] = 0
             emit(X86_and8r | uint64_t(r<<3|(r|4))<<56); // and      rl,rh    rl &= rh
             emit(X86_setnp | uint64_t(r|4)<<56);        // setnp    rh       rh = !PF
             emit(X86_sete  | uint64_t(r)<<56);          // sete     rl       rl = ZF
@@ -720,8 +718,8 @@ namespace nanojit
                 LIns *t = a; a = b; b = t;
             }
             Register r = prepResultReg(ins, GpRegs); // x64 can use any GPR as setcc target
-            emitrr(X64_movzx8, r, r);
-            emitr1(op == LIR_fgt ? X64_seta : X64_setae, r);
+            emitrr8(X64_movzx8, r, r);
+            emitr8(op == LIR_fgt ? X64_seta : X64_setae, r);
         }
         fcmp(a, b);
     }
@@ -755,7 +753,7 @@ namespace nanojit
             if (IsFpReg(r)) {
                 NanoAssert(ins->isQuad());
                 // load 64bits into XMM.  don't know if double or int64, assume double.
-                emitprm32(X64_movsdrm, r, d, FP);
+                emitprm(X64_movsdrm, r, d, FP);
             } else if (ins->isQuad()) {
                 emitrm(X64_movqrm, r, d, FP);
             } else {
@@ -773,7 +771,7 @@ namespace nanojit
         // unlike x86-32, with a rex prefix we can use any GP register as an 8bit target
         Register r = prepResultReg(ins, GpRegs);
         // SETcc only sets low 8 bits, so extend 
-        emitrr(X64_movzx8, r, r);
+        emitrr8(X64_movzx8, r, r);
         X64Opcode xop;
         switch (op) {
         default:
@@ -799,7 +797,7 @@ namespace nanojit
         case LIR_ov:    xop = X64_seto;     break;
         case LIR_cs:    xop = X64_setc;     break;
         }
-        emitr1(xop, r);
+        emitr8(xop, r);
         asm_cmp(ins);
     }
 
@@ -847,7 +845,7 @@ namespace nanojit
             emitrm(X64_movqrm, rr, dr, rb);
         } else {
             // load 64bits into XMM.  don't know if double or int64, assume double.
-            emitprm32(X64_movsdrm, rr, dr, rb);
+            emitprm(X64_movsdrm, rr, dr, rb);
         }
     }
 
@@ -876,7 +874,7 @@ namespace nanojit
         }
         else {
             // xmm store
-            emitprm32(X64_movsdmr, r, d, b);
+            emitprm(X64_movsdmr, r, d, b);
         }
     }
 
@@ -893,6 +891,7 @@ namespace nanojit
         underrunProtect(4+8); // imm32 + worst case instr len
         ((int32_t*)_nIns)[-1] = v;
         _nIns -= 4;
+        _nvprof("x64-bytes", 4);
         emitr(X64_movi, r);
     }
 
@@ -901,6 +900,7 @@ namespace nanojit
         underrunProtect(8+8); // imm64 + worst case instr len
         ((uint64_t*)_nIns)[-1] = v;
         _nIns -= 8;
+        _nvprof("x64-bytes", 8);
         emitr(X64_movqi, r);
     }
 
@@ -971,13 +971,15 @@ namespace nanojit
             // builtin code is in bottom or top 2GB addr space, use absolute addressing
             underrunProtect(4+8);
             *((int32_t*)(_nIns -= 4)) = (int32_t)(uintptr_t)negateMask;
+            _nvprof("x64-bytes", 4);
             uint64_t xop = X64_xorpsa | uint64_t((rr&7)<<3)<<48; // put rr[0:2] into mod/rm byte
-            xop |= rexrb(rr, (Register)0) << (64-8*oplen(xop));  // put rr[3] into rex byte
+            xop = rexrb(xop, rr, (Register)0);  // put rr[3] into rex byte
             emit(xop);
         } else if (isS32((NIns*)negateMask - _nIns)) {
             // jit code is within +/-2GB of builtin code, use rip-relative
             underrunProtect(4+8);
             *((int32_t*)(_nIns -= 4)) = (int32_t)((NIns*)negateMask - _nIns);
+            _nvprof("x64-bytes", 4);
             emitrr(X64_xorpsm, rr, (Register)0);
         } else {
             // this is just hideous
@@ -1006,7 +1008,7 @@ namespace nanojit
             } else {
                 // store 64bits from XMM to memory
                 NanoAssert(quad);
-                emitprm32(X64_movsdmr, rr, d, FP);
+                emitprm(X64_movsdmr, rr, d, FP);
             }
         }
     }
@@ -1055,7 +1057,7 @@ namespace nanojit
         // pop rbp
         // ret
         emit(X64_ret);
-        emit(X64r(X64_pop, RBP));
+        emitr(X64_popr, RBP);
         MR(RSP, RBP);
         return _nIns;
     }

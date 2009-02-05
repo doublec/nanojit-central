@@ -198,8 +198,8 @@ namespace nanojit
         X64_not     = 0xD0F7400000000003LL, // 32bit ones compliment b = ~b
         X64_orlrr   = 0xC00B400000000003LL, // 32bit or r |= b
         X64_orqrr   = 0xC00B480000000003LL, // 64bit or r |= b
-        X64_pop     = 0x5800000000000001LL, // pop stack (no REX)
-        X64_pushr   = 0x5040000000000002LL, // 64bit push r
+        X64_popr    = 0x5840000000000002LL, // 64bit pop r <- [rsp++]
+        X64_pushr   = 0x5040000000000002LL, // 64bit push r -> [--rsp]
         X64_pxor    = 0xC0EF0F4066000005LL, // 128bit xor xmm-r ^= xmm-b
         X64_ret     = 0xC300000000000001LL, // near return from called procedure
         X64_sete    = 0xC0940F4000000004LL, // set byte if equal (ZF == 1)
@@ -266,12 +266,13 @@ namespace nanojit
         void emit(uint64_t op);\
         void emit8(uint64_t op, int val);\
         void emit32(uint64_t op, int64_t val);\
-        void emitr(uint64_t op, Register r);\
-        void emitr1(uint64_t op, Register b);\
         void emitrr(uint64_t op, Register r, Register b);\
+        void emitrr8(uint64_t op, Register r, Register b);\
+        void emitr(uint64_t op, Register b) { emitrr(op, (Register)0, b); }\
+        void emitr8(uint64_t op, Register b) { emitrr8(op, (Register)0, b); }\
         void emitprr(uint64_t op, Register r, Register b);\
         void emitrm(uint64_t op, Register r, int32_t d, Register b);\
-        void emitprm32(uint64_t op, Register r, int32_t d, Register b);\
+        void emitprm(uint64_t op, Register r, int32_t d, Register b);\
         void emit_int(Register r, int32_t v);\
         void emit_quad(Register r, uint64_t v);\
         void asm_regarg(ArgSize, LIns*, Register);\
