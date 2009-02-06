@@ -286,14 +286,21 @@ namespace nanojit
 
     static const RegisterMask GpRegs = 0xffff;
     static const RegisterMask FpRegs = 0xffff0000;
+#ifdef _MSC_VER
+    static const RegisterMask SavedRegs = 1<<RBX | 1<<RSI | 1<<RDI | 1<<R12 | 1<<R13 | 1<<R14 | 1<<R15;
+    static const int NumSavedRegs = 7; // rbx, rsi, rdi, r12-15
+    static const int NumArgRegs = 4;
+#else
     static const RegisterMask SavedRegs = 1<<RBX | 1<<R12 | 1<<R13 | 1<<R14 | 1<<R15;
     static const int NumSavedRegs = 5; // rbx, r12-15
+    static const int NumArgRegs = 6;
+#endif
 
     static inline bool IsFpReg(Register r) {
-        return (1<<r) & FpRegs;
+        return ((1<<r) & FpRegs) != 0;
     }
     static inline bool IsGpReg(Register r) {
-        return (1<<r) & GpRegs;
+        return ((1<<r) & GpRegs) != 0;
     }
 
     verbose_only( extern const char* regNames[]; )
@@ -302,7 +309,7 @@ namespace nanojit
     #define DECLARE_PLATFORM_REGALLOC()
 
     #define DECLARE_PLATFORM_ASSEMBLER()                                    \
-        const static Register argRegs[6], retRegs[2];                       \
+        const static Register argRegs[NumArgRegs], retRegs[1];              \
         void underrunProtect(ptrdiff_t bytes);                              \
         void nativePageReset();                                             \
         void nativePageSetup();                                             \
@@ -310,7 +317,7 @@ namespace nanojit
         void MR(Register, Register);\
         void JMP(NIns*);\
         void emit(uint64_t op);\
-        void emit8(uint64_t op, int val);\
+        void emit8(uint64_t op, int64_t val);\
         void emit32(uint64_t op, int64_t val);\
         void emitrr(uint64_t op, Register r, Register b);\
         void emitrr8(uint64_t op, Register r, Register b);\

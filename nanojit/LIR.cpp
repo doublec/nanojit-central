@@ -154,7 +154,7 @@ namespace nanojit
 		return _unused;
 	}
 
-	void LirBufWriter::ensureRoom(uint32_t count)
+	void LirBufWriter::ensureRoom(size_t count)
 	{
 		LInsp before = _buf->next();
 		LInsp after = before+count+LIR_FAR_SLOTS;
@@ -252,7 +252,7 @@ namespace nanojit
 		NanoAssert(from>i1 && from>i2 && from>i3);
 	}
 
-	LInsp LirBuffer::commit(uint32_t count)
+	LInsp LirBuffer::commit(size_t count)
 	{
 		NanoAssertMsg( samepage(_unused, _unused+count), "You need to call ensureRoom first!" );
 		return _unused += count;

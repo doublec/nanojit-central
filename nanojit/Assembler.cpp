@@ -347,7 +347,7 @@ namespace nanojit
 	#define bytesToBottom(x)	( (size_t)pageBottom(x) - (size_t)(x) )
 	#define bytesBetween(x,y)	( (size_t)(x) - (size_t)(y) )
 	
-	int32_t Assembler::codeBytes()
+	size_t Assembler::codeBytes()
 	{
 		// start and end on same page?
 		size_t exit = 0;
@@ -438,7 +438,7 @@ namespace nanojit
 				continue;
 			Reservation *r = getresv(ins);
             NanoAssert(r != 0);
-			int32_t idx = r - _resvTable;
+			ptrdiff_t idx = r - _resvTable;
 			NanoAssertMsg(idx, "MUST have a resource for the instruction for it to have a stack location assigned to it");
             if (r->arIndex) {
                 if (ins->isop(LIR_alloc)) {
@@ -498,7 +498,7 @@ namespace nanojit
 					// @todo we should be able to check across RegAlloc's somehow (to include savedGP...)
 					Reservation *v = getresv(ins);
 					NanoAssert(v != 0);
-					int32_t idx = v - _resvTable;
+					ptrdiff_t idx = v - _resvTable;
 					NanoAssert(idx >= 0 && idx < NJ_MAX_STACK_ENTRY);
 					NanoAssertMsg(idx, "MUST have a resource for the instruction for it to have a register assigned to it");
 					NanoAssertMsg( regs->getActive(v->reg)==ins, "Register record mismatch");
@@ -1911,7 +1911,7 @@ namespace nanojit
 
 		char* Assembler::outputAlign(char *s, int col) 
 		{
-			int len = VMPI_strlen(s);
+			int len = (int)VMPI_strlen(s);
 			int add = ((col-len)>0) ? col-len : 1;
 			VMPI_memset(&s[len], ' ', add);
 			s[col] = '\0';

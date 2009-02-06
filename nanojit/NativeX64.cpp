@@ -87,9 +87,14 @@ only for tracing
 
 namespace nanojit
 {
-    const Register Assembler::retRegs[] = { RAX, RDX, };
+    const Register Assembler::retRegs[] = { RAX };
+#ifdef _MSC_VER
+    const Register Assembler::argRegs[] = { RCX, RDX, R8, R9 };
+    const Register Assembler::savedRegs[] = { RBX, RSI, RDI, R12, R13, R14, R15 };
+#else
     const Register Assembler::argRegs[] = { RDI, RSI, RDX, RCX, R8, R9 };
     const Register Assembler::savedRegs[] = { RBX, R12, R13, R14, R15 };
+#endif
 
     const char *regNames[] = {
         "rax",   "rcx",  "rdx",   "rbx",   "rsp",   "rbp",   "rsi",   "rdi",
@@ -98,11 +103,15 @@ namespace nanojit
         "xmm8",  "xmm9", "xmm10", "xmm11", "xmm12", "xmm13", "xmm14", "xmm15"
     };
 
+#ifdef _DEBUG
     #define TODO(x) todo(#x)
     static void todo(const char *s) {
-        printf("%s",s);
+        verbose_only( printf("%s",s); )
         NanoAssertMsgf(false, "%s", s);
     }
+#else
+    #define TODO(x)
+#endif
 
     // MODRM and restrictions:
     // memory access modes != 11 require SIB if base&7 == 4 (RSP or R12)
@@ -186,7 +195,7 @@ namespace nanojit
         verbose_only( if (_verbose) dis(_nIns, len); )
     }
 
-    void Assembler::emit8(uint64_t op, int v) {
+    void Assembler::emit8(uint64_t op, int64_t v) {
         NanoAssert(isS8(v));
         emit(op | uint64_t(v)<<56);
     }
@@ -502,10 +511,9 @@ namespace nanojit
         const CallInfo *call = ins->callInfo();
         ArgSize sizes[MAXARGS];
         int argc = call->get_sizes(sizes);
-        int max_int_args = 6;
 
-        bool indirect;
-        if (!(indirect = call->isIndirect())) {
+        bool indirect = call->isIndirect();
+        if (!indirect) {
             verbose_only(if (_verbose)
                 outputf("        %p:", _nIns);
             )
@@ -533,23 +541,35 @@ namespace nanojit
             param_size += sizeof(void*);
         }
 
-        int int_arg_index = 0;
+    #ifdef _MSC_VER
+        int stk_used = 32; // always reserve 32byte shadow area
+    #else
         int stk_used = 0;
         Register fr = XMM0;
+    #endif
+        int arg_index = 0;
         for (int i = 0; i < argc; i++) {
             int j = argc - i - 1;
             ArgSize sz = sizes[j];
             LIns* arg = ins->arg(j);
-            if ((sz & ARGSIZE_MASK_INT) && int_arg_index < max_int_args) {
+            if ((sz & ARGSIZE_MASK_INT) && arg_index < NumArgRegs) {
                 // gp arg
-                asm_regarg(sz, arg, argRegs[int_arg_index]);
-                int_arg_index++;
+                asm_regarg(sz, arg, argRegs[arg_index]);
+                arg_index++;
             }
+        #ifdef _MSC_VER
+            else if (sz == ARGSIZE_F && arg_index < NumArgRegs) {
+                // double goes in XMM reg # based on overall arg_index
+                asm_regarg(sz, arg, Register(XMM0+arg_index));
+                arg_index++;
+            } 
+        #else
             else if (sz == ARGSIZE_F && fr < XMM8) {
-                // double xmm arg
+                // double goes in next available XMM register
                 asm_regarg(sz, arg, fr);
                 fr = nextreg(fr);
             }
+        #endif
             else {
                 asm_stkarg(sz, arg, stk_used);
                 stk_used += sizeof(void*);
@@ -589,6 +609,7 @@ namespace nanojit
     }
 
     void Assembler::asm_stkarg(ArgSize sz, LIns *p, int stk_off) {
+        NanoAssert(isS8(stk_off));
         if (sz & ARGSIZE_MASK_INT) {
             Register r = findRegFor(p, GpRegs);
             uint64_t xop = X64_movqspr | uint64_t(stk_off) << 56;         // movq [rsp+d8], r
@@ -596,9 +617,11 @@ namespace nanojit
             emit(xop);
             if (sz == ARGSIZE_I) {
                 // extend int32 to int64
+                NanoAssert(!p->isQuad());
                 emitrr(X64_movsxdr, r, r);
             } else if (sz == ARGSIZE_U) {
                 // extend uint32 to uint64
+                NanoAssert(!p->isQuad());
                 emitrr(X64_movlr, r, r);
             }
         } else {
@@ -1093,31 +1116,38 @@ namespace nanojit
         }
     }
 
-    static const AVMPLUS_ALIGN16(uint64_t) negateMask[] = {0x8000000000000000LL,0};
+    static const AVMPLUS_ALIGN16(int64_t) negateMask[] = {0x8000000000000000LL,0};
 
     void Assembler::asm_fneg(LIns *ins) {
         Register rr, ra;
-        regalloc_unary(ins, FpRegs, rr, ra);
-        if (isS32((uintptr_t)negateMask)) {
-            // builtin code is in bottom or top 2GB addr space, use absolute addressing
-            underrunProtect(4+8);
-            *((int32_t*)(_nIns -= 4)) = (int32_t)(uintptr_t)negateMask;
-            _nvprof("x64-bytes", 4);
-            uint64_t xop = X64_xorpsa | uint64_t((rr&7)<<3)<<48; // put rr[0:2] into mod/rm byte
-            xop = rexrb(xop, rr, (Register)0);  // put rr[3] into rex byte
-            emit(xop);
-        } else if (isS32((NIns*)negateMask - _nIns)) {
-            // jit code is within +/-2GB of builtin code, use rip-relative
-            underrunProtect(4+8);
-            *((int32_t*)(_nIns -= 4)) = (int32_t)((NIns*)negateMask - _nIns);
-            _nvprof("x64-bytes", 4);
-            emitrr(X64_xorpsm, rr, (Register)0);
+        if (isS32((uintptr_t)negateMask) || isS32((NIns*)negateMask - _nIns)) {
+            regalloc_unary(ins, FpRegs, rr, ra);
+            if (isS32((uintptr_t)negateMask)) {
+                // builtin code is in bottom or top 2GB addr space, use absolute addressing
+                underrunProtect(4+8);
+                *((int32_t*)(_nIns -= 4)) = (int32_t)(uintptr_t)negateMask;
+                _nvprof("x64-bytes", 4);
+                uint64_t xop = X64_xorpsa | uint64_t((rr&7)<<3)<<48; // put rr[0:2] into mod/rm byte
+                xop = rexrb(xop, rr, (Register)0);  // put rr[3] into rex byte
+                emit(xop);
+            } else {
+                // jit code is within +/-2GB of builtin code, use rip-relative
+                underrunProtect(4+8);
+                *((int32_t*)(_nIns -= 4)) = (int32_t)((NIns*)negateMask - _nIns);
+                _nvprof("x64-bytes", 4);
+                emitrr(X64_xorpsm, rr, (Register)0);
+            }
+            if (ra != rr) 
+                asm_nongp_copy(rr,ra);
         } else {
-            // this is just hideous
-            TODO(fneg-far-negateMask);
+            // this is just hideous - can't use RIP-relative load, can't use
+            // absolute-address load, and cant move imm64 const to XMM.
+            // so do it all in a GPR.  hrmph.
+            rr = prepResultReg(ins, GpRegs);
+            ra = findRegFor(ins->oprnd1(), GpRegs & ~rmask(rr));
+            emitrr(X64_xorqrr, rr, ra);         // xor rr, ra
+            emit_quad(rr, negateMask[0]);       // mov rr, 0x8000000000000000
         }
-        if (ra != rr) 
-            asm_nongp_copy(rr,ra);
     }
 
     void Assembler::asm_qhi(LIns*) {
@@ -1178,7 +1208,7 @@ namespace nanojit
         underrunProtect(8);
         int code_align = (intptr_t)_nIns & 7;
         if (code_align) {
-            static uint64_t nops[8] = {
+            static const uint64_t nops[8] = {
                 0, X64_nop1, X64_nop2, X64_nop3, X64_nop4, X64_nop5, X64_nop6, X64_nop7
             };
             emit(nops[code_align]);
@@ -1250,7 +1280,11 @@ namespace nanojit
         // add scratch registers to our free list for the allocator
         a.clear();
         a.used = 0;
+#ifdef _MSC_VER
+        a.free = 0x001fffcf; // rax-rbx, rsi, rdi, r8-r15, xmm0-xmm5
+#else
         a.free = 0xffffffff & ~(1<<RSP | 1<<RBP);
+#endif
         debug_only( a.managed = a.free; )
     }
 
@@ -1263,18 +1297,19 @@ namespace nanojit
             // jcc disp32
             next = patch+6;
         } else {
+            next = 0;
             TODO(unknown_patch);
         }
         NanoAssert(((int32_t*)next)[-1] == 0);
         NanoAssert(isS32(target - next));
-        ((int32_t*)next)[-1] = target - next;
+        ((int32_t*)next)[-1] = int32_t(target - next);
         if (next[0] == 0x0F && next[1] == 0x8A) {
             // code is jne<target>,jp<target>, for LIR_jf(feq)
             // we just patched the jne, now patch the jp.
             next += 6;
             NanoAssert(((int32_t*)next)[-1] == 0);
             NanoAssert(isS32(target - next));
-            ((int32_t*)next)[-1] = target - next;
+            ((int32_t*)next)[-1] = int32_t(target - next);
         }
     }
 

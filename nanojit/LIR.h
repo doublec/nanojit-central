@@ -993,7 +993,7 @@ namespace nanojit
         protected:
             friend class LirBufWriter;
 
-            LInsp       commit(uint32_t count);
+            LInsp       commit(size_t count);
             Page*       pageAlloc();
 
             PageList    _pages;
@@ -1033,7 +1033,7 @@ namespace nanojit
 
         protected:
             LInsp   insFar(LOpcode op, LInsp target);
-            void    ensureRoom(uint32_t count);
+            void    ensureRoom(size_t count);
             bool    can8bReach(LInsp from, LInsp to) { return isU8(from-to-1); }
             bool    can24bReach(LInsp from, LInsp to){ return isS24(from-to); }     
             void    prepFor(LInsp& i1, LInsp& i2, LInsp& i3);
