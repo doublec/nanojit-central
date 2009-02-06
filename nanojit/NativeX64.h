@@ -146,8 +146,6 @@ namespace nanojit
         X64_andqr8  = 0x00E0834800000004LL, // 64bit and r &= int64(imm8)
         X64_orqri   = 0xC881480000000003LL, // 64bit or  r |= int64(imm32)
         X64_orqr8   = 0x00C8834800000004LL, // 64bit or  r |= int64(imm8)
-        X64_subqri  = 0xE881480000000003LL, // 64bit sub r -= int64(imm32)
-        X64_subqr8  = 0x00E8834800000004LL, // 64bit sub r -= int64(imm8)
         X64_xorqri  = 0xF081480000000003LL, // 64bit xor r ^= int64(imm32)
         X64_xorqr8  = 0x00F0834800000004LL, // 64bit xor r ^= int64(imm8)
         X64_addlri  = 0xC081400000000003LL, // 32bit add r += imm32
@@ -180,7 +178,8 @@ namespace nanojit
         X64_imul    = 0xC0AF0F4000000004LL, // 32bit signed mul r *= b
         X64_imuli   = 0xC069400000000003LL, // 32bit signed mul r = b * imm32
         X64_imul8   = 0x00C06B4000000004LL, // 32bit signed mul r = b * imm8
-        X64_jmp     = 0x00000000E9000005LL, // jump near
+        X64_jmp     = 0x00000000E9000005LL, // jump near rel32
+        X64_jmp8    = 0x00EB000000000002LL, // jump near rel8
         X64_jb      = 0x00000000820F0006LL, // jump near if below (uint <)
         X64_jae     = 0x00000000830F0006LL, // jump near if above or equal (uint >=)
         X64_ja      = 0x00000000870F0006LL, // jump near if above (uint >)
@@ -193,7 +192,20 @@ namespace nanojit
         X64_jle     = 0x000000008E0F0006LL, // jump near if less or equal (int <=)
         X64_jp      = 0x000000008A0F0006LL, // jump near if parity (PF == 1)
         X64_jnp     = 0x000000008B0F0006LL, // jump near if not parity (PF == 0)
-        X64_jp8     = 0x007A000000000002LL, // jump near if parity (PF == 1) 8bit offset
+        X64_jneg    = 0x0000000001000000LL, // xor with this mask to negate the condition
+        X64_jb8     = 0x0072000000000002LL, // jump near if below (uint <)
+        X64_jae8    = 0x0073000000000002LL, // jump near if above or equal (uint >=)
+        X64_ja8     = 0x0077000000000002LL, // jump near if above (uint >)
+        X64_jbe8    = 0x0076000000000002LL, // jump near if below or equal (uint <=)
+        X64_je8     = 0x0074000000000002LL, // near jump if equal
+        X64_jne8    = 0x0075000000000002LL, // jump near if not equal
+        X64_jl8     = 0x007C000000000002LL, // jump near if less (int <)
+        X64_jge8    = 0x007D000000000002LL, // jump near if greater or equal (int >=)
+        X64_jg8     = 0x007F000000000002LL, // jump near if greater (int >)
+        X64_jle8    = 0x007E000000000002LL, // jump near if less or equal (int <=)
+        X64_jp8     = 0x007A000000000002LL, // jump near if parity (PF == 1)
+        X64_jnp8    = 0x007B000000000002LL, // jump near if not parity (PF == 0)
+        X64_jneg8   = 0x0001000000000000LL, // xor with this mask to negate the condition
         X64_leaqrm  = 0x00000000808D4807LL, // 64bit load effective addr reg <- disp32+base
         X64_learm   = 0x00000000808D4007LL, // 32bit load effective addr reg <- disp32+base
         X64_movlr   = 0xC08B400000000003LL, // 32bit mov r <- b
@@ -254,6 +266,8 @@ namespace nanojit
         X64_shrqi   = 0x00E8C14800000004LL, // 64bit uint right shift r >>= imm8
         X64_subqrr  = 0xC02B480000000003LL, // 64bit sub r -= b
         X64_subrr   = 0xC02B400000000003LL, // 32bit sub r -= b
+        X64_subqri  = 0xE881480000000003LL, // 64bit sub r -= int64(imm32)
+        X64_subqr8  = 0x00E8834800000004LL, // 64bit sub r -= int64(imm8)
         X64_ucomisd = 0xC02E0F4066000005LL, // unordered compare scalar double
         X64_xorqrr  = 0xC033480000000003LL, // 64bit xor r &= b
         X64_xorrr   = 0xC033400000000003LL, // 32bit xor r &= b

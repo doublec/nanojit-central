@@ -146,10 +146,19 @@ namespace nanojit
         return op | uint64_t((r&7)<<3 | (b&7))<<56;
     }
 
-    static inline uint64_t mod_disp32(uint64_t op, Register r, Register b) {
-        NanoAssert(r < 16 && b < 16);
+    static inline uint64_t mod_disp32(uint64_t op, Register r, Register b, int32_t d) {
+        NanoAssert(IsGpReg(r) && IsGpReg(b));
         NanoAssert((b & 7) != 4); // using RSP or R12 as base requires SIB
-        return op | uint64_t((r&7)<<3 | (b&7))<<24;
+        if (isS8(d)) {
+            // op is:  0x[disp32=0][mod=2:r:b][op][rex][len]
+            NanoAssert((((op>>24)&255)>>6) == 2); // disp32 mode
+            int len = oplen(op);
+            op = (op & ~0xff000000LL) | (0x40 | (r&7)<<3 | (b&7))<<24; // replace mod
+            return op<<24 | int64_t(d)<<56 | (len-3); // shrink disp, add disp8
+        } else {
+            // op is: 0x[disp32][mod][op][rex][len]
+            return op | int64_t(d)<<32 | uint64_t((r&7)<<3 | (b&7))<<24;
+        }
     }
 
     #ifdef NJ_VERBOSE
@@ -204,14 +213,22 @@ namespace nanojit
 
     // disp32 modrm form, when the disp fits in the instruction (opcode is 1-3 bytes)
     void Assembler::emitrm(uint64_t op, Register r, int32_t d, Register b) {
-        emit32(rexrb(mod_disp32(op, r, b), r, b), d);
+        emit(rexrb(mod_disp32(op, r, b, d), r, b));
     }
 
     // disp32 modrm form when the disp must be written separately (opcode is 4+ bytes)
     void Assembler::emitprm(uint64_t op, Register r, int32_t d, Register b) {
-        underrunProtect(4+8); // room for displ plus fullsize op
-        *((int32_t*)(_nIns -= 4)) = d;
-        _nvprof("x64-bytes", 4);
+        if (isS8(d)) {
+            NanoAssert(((op>>56)&0xC0) == 0x80); // make sure mod bits == 2 == disp32 mode
+            underrunProtect(1+8);
+            *(--_nIns) = (NIns) d;
+            _nvprof("x64-bytes", 1);
+            op ^= 0xC000000000000000LL; // change mod bits to 1 == disp8 mode
+        } else {
+            underrunProtect(4+8); // room for displ plus fullsize op
+            *((int32_t*)(_nIns -= 4)) = d;
+            _nvprof("x64-bytes", 4);
+        }
         emitprr(op, r, b);
     }
 
@@ -238,7 +255,11 @@ namespace nanojit
     void Assembler::JMP(NIns *target) {
         if (!target || isS32(target - _nIns)) {
             underrunProtect(8); // must do this before calculating offset
-            emit32(X64_jmp, target ? target - _nIns : 0);
+            if (target && isS8(target - _nIns)) {
+                emit8(X64_jmp8, target - _nIns);
+            } else {
+                emit32(X64_jmp, target ? target - _nIns : 0);
+            }
         } else {
             TODO(jmp64);
         }
@@ -313,8 +334,8 @@ namespace nanojit
         case LIR_rsh:       xop = X64_sari;     break;
         case LIR_lsh:       xop = X64_shli;     break;
         }
-        uint64_t shift = ins->oprnd2()->constval() & 255;
-        emit(rexrb(xop | shift << 56 | uint64_t(rr&7)<<48, (Register)0, rr));
+        int shift = ins->oprnd2()->constval() & 255;
+        emit8(rexrb(xop | uint64_t(rr&7)<<48, (Register)0, rr), shift);
         if (rr != ra)
             MR(rr, ra);
     }
@@ -677,55 +698,29 @@ namespace nanojit
         LOpcode condop = cond->opcode();
         if (condop >= LIR_feq && condop <= LIR_fge)
             return asm_fbranch(onFalse, cond, target);
-        // emit the branch
-        X64Opcode xop = X64_jmp;
-        if (onFalse) {
-            switch (condop) {
-            default: TODO(branch);
-            case LIR_eq:
-            case LIR_qeq:   xop = X64_jne;  break;
-            case LIR_ult:
-            case LIR_qult:  xop = X64_jae;  break;
-            case LIR_lt:
-            case LIR_qlt:   xop = X64_jge;  break;
-            case LIR_gt:
-            case LIR_qgt:   xop = X64_jle;  break;
-            case LIR_ugt:
-            case LIR_qugt:  xop = X64_jbe;  break;
-            case LIR_le:
-            case LIR_qle:   xop = X64_jg;   break;
-            case LIR_ule:
-            case LIR_qule:  xop = X64_ja;   break;
-            case LIR_ge:
-            case LIR_qge:   xop = X64_jl;   break;
-            case LIR_uge:
-            case LIR_quge:  xop = X64_jb;   break;
-            }
+
+        // we must ensure there's room for the instr before calculating
+        // the offset.  and the offset, determines the opcode (8bit or 32bit)
+        underrunProtect(8);
+        if (target && isS8(target - _nIns)) {
+            static const X64Opcode j8[] = {
+                X64_je8, // eq
+                X64_jl8, X64_jg8, X64_jle8, X64_jge8, // lt,  gt,  le,  ge
+                X64_jb8, X64_ja8, X64_jbe8, X64_jae8  // ult, ugt, ule, uge
+            };
+            uint64_t xop = j8[(condop & ~LIR64) - LIR_eq];
+            xop ^= onFalse ? (uint64_t)X64_jneg8 : 0;
+            emit8(xop, target - _nIns);
         } else {
-            switch (condop) {
-            default: TODO(branch);
-            case LIR_eq:
-            case LIR_qeq:   xop = X64_je;   break;
-            case LIR_lt:
-            case LIR_qlt:   xop = X64_jl;   break;
-            case LIR_ult:
-            case LIR_qult:  xop = X64_jb;   break;
-            case LIR_gt:
-            case LIR_qgt:   xop = X64_jg;   break;
-            case LIR_ugt:
-            case LIR_qugt:  xop = X64_ja;   break;
-            case LIR_le:
-            case LIR_qle:   xop = X64_jle;  break;
-            case LIR_ule:
-            case LIR_qule:  xop = X64_jbe;  break;
-            case LIR_ge:
-            case LIR_qge:   xop = X64_jge;   break;
-            case LIR_uge:
-            case LIR_quge:  xop = X64_jae;   break;
-            }
+            static const X64Opcode j32[] = {
+                X64_je, // eq
+                X64_jl, X64_jg, X64_jle, X64_jge, // lt,  gt,  le,  ge
+                X64_jb, X64_ja, X64_jbe, X64_jae  // ult, ugt, ule, uge
+            };
+            uint64_t xop = j32[(condop & ~LIR64) - LIR_eq];
+            xop ^= onFalse ? (uint64_t)X64_jneg : 0;
+            emit32(xop, target ? target - _nIns : 0);
         }
-        underrunProtect(8);             // must do this before calculating offset
-        emit32(xop, target ? target - _nIns : 0);
         NIns *patch = _nIns;            // addr of instr to patch
         asm_cmp(cond);
         return patch;
@@ -782,8 +777,8 @@ namespace nanojit
     //
     //  branch  >=  >   <=       <        =
     //  ------  --- --- ---      ---      ---
-    //  jt      jae ja  swap+jae swap+ja  jp over je
-    //  jf      jb  jbe swap+jb  swap+jbe jne+jp          
+    //  LIR_jt  jae ja  swap+jae swap+ja  jp over je
+    //  LIR_jf  jb  jbe swap+jb  swap+jbe jne+jp          
 
     NIns* Assembler::asm_fbranch(bool onFalse, LIns *cond, NIns *target) {
         LOpcode condop = cond->opcode();
@@ -819,7 +814,7 @@ namespace nanojit
             X64Opcode xop;
             if (condop == LIR_fgt)
                 xop = onFalse ? X64_jbe : X64_ja;
-            else
+            else // LIR_fge
                 xop = onFalse ? X64_jb : X64_jae;
             underrunProtect(8);
             emit32(xop, target ? target - _nIns : 0);
