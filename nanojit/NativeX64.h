@@ -45,6 +45,7 @@
 #endif
 
 #ifdef PERFM
+#define DOPROF
 #include "../vprof/vprof.h"
 #define count_instr() _nvprof("x64",1)
 #define count_prolog() _nvprof("x64-prolog",1); count_instr();

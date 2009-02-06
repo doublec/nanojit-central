@@ -40,6 +40,7 @@
 #define __nanojit_NativePPC__
 
 #ifdef PERFM
+#define DOPROF
 #include "../vprof/vprof.h"
 #define count_instr() _nvprof("ppc",1)
 #define count_prolog() _nvprof("ppc-prolog",1); count_instr();

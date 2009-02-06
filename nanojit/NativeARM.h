@@ -43,6 +43,7 @@
 
 
 #ifdef PERFM
+#define DOPROF
 #include "../vprof/vprof.h"
 #define count_instr() _nvprof("arm",1)
 #define count_prolog() _nvprof("arm-prolog",1); count_instr();

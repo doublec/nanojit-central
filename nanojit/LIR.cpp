@@ -38,10 +38,6 @@
 
 #include "nanojit.h"
 
-#ifdef PERFM
-#include "../vprof/vprof.h"
-#endif /* PERFM */
-
 namespace nanojit
 {
     using namespace avmplus;

@@ -55,10 +55,6 @@ extern "C" void sys_icache_invalidate(const void*, size_t len);
 extern "C" void sys_dcache_flush(const void*, size_t len);
 #endif
 
-#ifdef PERFM
-#include "../vprof/vprof.h"
-#endif /* PERFM */
-
 #ifdef VTUNE
 #include "../codegen/CodegenLIR.h"
 #define vtune_only(...) __VA_ARGS__
