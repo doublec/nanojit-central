@@ -73,7 +73,7 @@ mir parity
 someday
 - spill gp values to xmm registers?
 - prefer xmm registers for copies since gprs are in higher demand?
-- stack arg int, double, uint
+- stack arg doubles
 - stack based LIR_param
 
 only for tracing
@@ -504,21 +504,6 @@ namespace nanojit
         int argc = call->get_sizes(sizes);
         int max_int_args = 6;
 
-        // figure out how much stack is needed
-        int call_argc = argc - (call->isIndirect() ? 1 : 0) - (call->isInterface() ? 1 : 0);
-        int iargs = 0;
-        for (int i = 0; i < call_argc; i++) {
-            if (sizes[call_argc - i - 1] != ARGSIZE_F)
-                iargs++;
-        }
-        int stk_pad = 0;
-        if (iargs > max_int_args) {
-            int stk_used = (iargs - max_int_args) * sizeof(void*);
-            int stk_total = alignUp(stk_used, NJ_ALIGN_STACK);
-            stk_pad = stk_total - stk_used;
-            emitr_imm8(X64_addqr8, RSP, stk_total);
-        }
-
         bool indirect;
         if (!(indirect = call->isIndirect())) {
             verbose_only(if (_verbose)
@@ -549,41 +534,30 @@ namespace nanojit
         }
 
         int int_arg_index = 0;
+        int stk_used = 0;
         Register fr = XMM0;
         for (int i = 0; i < argc; i++) {
             int j = argc - i - 1;
             ArgSize sz = sizes[j];
             LIns* arg = ins->arg(j);
-            if (sz & ARGSIZE_MASK_INT) {
+            if ((sz & ARGSIZE_MASK_INT) && int_arg_index < max_int_args) {
                 // gp arg
-                if (int_arg_index < max_int_args) {
-                    asm_regarg(sz, arg, argRegs[int_arg_index]);
-                    int_arg_index++;
-                } else {
-                    asm_stkarg(sz, arg);
-                }
+                asm_regarg(sz, arg, argRegs[int_arg_index]);
+                int_arg_index++;
             }
-            else if (sz == ARGSIZE_F) {
-                // double arg
-                if (fr < XMM8) {
-                    asm_regarg(sz, arg, fr);
-                    fr = nextreg(fr);
-                } else {
-                    // arg goes on stack
-                    TODO(stack_double_arg);
-                }
+            else if (sz == ARGSIZE_F && fr < XMM8) {
+                // double xmm arg
+                asm_regarg(sz, arg, fr);
+                fr = nextreg(fr);
             }
             else {
-                TODO(argtype_q);
+                asm_stkarg(sz, arg, stk_used);
+                stk_used += sizeof(void*);
             }
         }
 
-        if (stk_pad != 0) {
-            if (isS8(stk_pad))
-                emitr_imm8(X64_subqr8, RSP, stk_pad);
-            else
-                emitr_imm(X64_subqri, RSP, stk_pad);
-        }
+        if (stk_used > max_stk_used)
+            max_stk_used = stk_used;
     }
 
     void Assembler::asm_regarg(ArgSize sz, LIns *p, Register r) {
@@ -614,17 +588,19 @@ namespace nanojit
         findSpecificRegFor(p, r);
     }
 
-    void Assembler::asm_stkarg(ArgSize sz, LIns *p) {
+    void Assembler::asm_stkarg(ArgSize sz, LIns *p, int stk_off) {
         if (sz & ARGSIZE_MASK_INT) {
             Register r = findRegFor(p, GpRegs);
+            uint64_t xop = X64_movqspr | uint64_t(stk_off) << 56;         // movq [rsp+d8], r
+            xop |= uint64_t((r&7)<<3) << 40 | uint64_t((r&8)>>1) << 24;   // insert r into mod/rm and rex bytes
+            emit(xop);
             if (sz == ARGSIZE_I) {
                 // extend int32 to int64
-                TODO(asm_stkarg_int);
+                emitrr(X64_movsxdr, r, r);
             } else if (sz == ARGSIZE_U) {
                 // extend uint32 to uint64
-                TODO(asm_stkarg_uint);
+                emitrr(X64_movlr, r, r);
             }
-            emitr(X64_pushr, r);
         } else {
             TODO(asm_stkarg_non_int);
         }
@@ -1174,7 +1150,7 @@ namespace nanojit
 
     NIns* Assembler::genPrologue() {
         // activation frame is 4 bytes per entry even on 64bit machines
-        uint32_t stackNeeded = _activation.highwatermark * 4;
+        uint32_t stackNeeded = max_stk_used + _activation.highwatermark * 4;
 
         uint32_t stackPushed =
             sizeof(void*) + // returnaddr
@@ -1214,6 +1190,7 @@ namespace nanojit
         // mov rsp, rbp
         // pop rbp
         // ret
+        max_stk_used = 0;
         emit(X64_ret);
         emitr(X64_popr, RBP);
         MR(RSP, RBP);

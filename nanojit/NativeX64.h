@@ -212,6 +212,7 @@ namespace nanojit
         X64_movlmr  = 0x0000000080894007LL, // 32bit store r -> [b+d32]
         X64_movlrm  = 0x00000000808B4007LL, // 32bit load r <- [b+d32]
         X64_movqmr  = 0x0000000080894807LL, // 64bit store gpr -> [b+d32]
+        X64_movqspr = 0x0024448948000005LL, // 64bit store gpr -> [rsp+d32] (sib required)
         X64_movqr   = 0xC08B480000000003LL, // 64bit mov r <- b
         X64_movqi   = 0xB848000000000002LL, // 64bit mov r <- imm64
         X64_movi    = 0xB840000000000002LL, // 32bit mov r <- imm32
@@ -324,7 +325,7 @@ namespace nanojit
         void emit_int(Register r, int32_t v);\
         void emit_quad(Register r, uint64_t v);\
         void asm_regarg(ArgSize, LIns*, Register);\
-        void asm_stkarg(ArgSize, LIns*);\
+        void asm_stkarg(ArgSize, LIns*, int);\
         void asm_shift(LIns*);\
         void asm_shift_imm(LIns*);\
         void asm_arith_imm(LIns*);\
@@ -335,7 +336,8 @@ namespace nanojit
         void asm_cmp(LIns*);\
         void asm_cmp_imm(LIns*);\
         void fcmp(LIns*, LIns*);\
-        NIns* asm_fbranch(bool, LIns*, NIns*);
+        NIns* asm_fbranch(bool, LIns*, NIns*);\
+        int max_stk_used;
 
 	#define swapptrs()  { NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins; }
 
