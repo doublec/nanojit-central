@@ -124,7 +124,7 @@ namespace nanojit
  * part of their opcode in the R field of the mod/rm byte;  this
  * hardcoded value is in the constant below, and the R argument
  * to emitrr() is 0.  In a few cases, a whole instruction is encoded
- * this way (eg X64_addsp8, callrax).
+ * this way (eg callrax).
  *
  * when a disp32, imm32, or imm64 suffix can't fit in an 8-byte
  * opcode, then it is written into the code separately and not counted
@@ -139,8 +139,27 @@ namespace nanojit
     {
         // 64bit opcode constants
         //              msb        lsb len
-        X64_addsp8  = 0x00C4834800000004LL, // 64bit add rsp += imm8
         X64_addqrr  = 0xC003480000000003LL, // 64bit add r += b
+        X64_addqri  = 0xC081480000000003LL, // 64bit add r += int64(imm32)
+        X64_addqr8  = 0x00C0834800000004LL, // 64bit add r += int64(imm8)
+        X64_andqri  = 0xE081480000000003LL, // 64bit and r &= int64(imm32)
+        X64_andqr8  = 0x00E0834800000004LL, // 64bit and r &= int64(imm8)
+        X64_orqri   = 0xC881480000000003LL, // 64bit or  r |= int64(imm32)
+        X64_orqr8   = 0x00C8834800000004LL, // 64bit or  r |= int64(imm8)
+        X64_subqri  = 0xE881480000000003LL, // 64bit sub r -= int64(imm32)
+        X64_subqr8  = 0x00E8834800000004LL, // 64bit sub r -= int64(imm8)
+        X64_xorqri  = 0xF081480000000003LL, // 64bit xor r ^= int64(imm32)
+        X64_xorqr8  = 0x00F0834800000004LL, // 64bit xor r ^= int64(imm8)
+        X64_addlri  = 0xC081400000000003LL, // 32bit add r += imm32
+        X64_addlr8  = 0x00C0834000000004LL, // 32bit add r += imm8
+        X64_andlri  = 0xE081400000000003LL, // 32bit and r &= imm32
+        X64_andlr8  = 0x00E0834000000004LL, // 32bit and r &= imm8
+        X64_orlri   = 0xC881400000000003LL, // 32bit or  r |= imm32
+        X64_orlr8   = 0x00C8834000000004LL, // 32bit or  r |= imm8
+        X64_sublri  = 0xE881400000000003LL, // 32bit sub r -= imm32
+        X64_sublr8  = 0x00E8834000000004LL, // 32bit sub r -= imm8
+        X64_xorlri  = 0xF081400000000003LL, // 32bit xor r ^= imm32
+        X64_xorlr8  = 0x00F0834000000004LL, // 32bit xor r ^= imm8
         X64_addrr   = 0xC003400000000003LL, // 32bit add r += b
         X64_andqrr  = 0xC023480000000003LL, // 64bit and r &= b
         X64_andrr   = 0xC023400000000003LL, // 32bit and r &= b
@@ -149,12 +168,18 @@ namespace nanojit
         X64_cmovqne = 0xC0450F4800000004LL, // 64bit conditional mov if (c) r = b
         X64_cmplr   = 0xC03B400000000003LL, // 32bit compare r,b
         X64_cmpqr   = 0xC03B480000000003LL, // 64bit compare r,b
+        X64_cmplri  = 0xF881400000000003LL, // 32bit compare r,imm32
+        X64_cmpqri  = 0xF881480000000003LL, // 64bit compare r,int64(imm32)
+        X64_cmplr8  = 0x00F8834000000004LL, // 32bit compare r,imm8
+        X64_cmpqr8  = 0x00F8834800000004LL, // 64bit compare r,int64(imm8)
         X64_cvtsi2sd= 0xC02A0F40F2000005LL, // convert int32 to double r = (double) b
         X64_cvtsq2sd= 0xC02A0F48F2000005LL, // convert int64 to double r = (double) b
         X64_divsd   = 0xC05E0F40F2000005LL, // divide scalar double r /= b
         X64_mulsd   = 0xC0590F40F2000005LL, // multiply scalar double r *= b
         X64_addsd   = 0xC0580F40F2000005LL, // add scalar double r += b
-        X64_imul    = 0xC0AF0F4000000004LL, // 32bit signed mul edx:eax = eax * b
+        X64_imul    = 0xC0AF0F4000000004LL, // 32bit signed mul r *= b
+        X64_imuli   = 0xC069400000000003LL, // 32bit signed mul r = b * imm32
+        X64_imul8   = 0x00C06B4000000004LL, // 32bit signed mul r = b * imm8
         X64_jmp     = 0x00000000E9000005LL, // jump near
         X64_jb      = 0x00000000820F0006LL, // jump near if below (uint <)
         X64_jae     = 0x00000000830F0006LL, // jump near if above or equal (uint >=)
@@ -174,11 +199,11 @@ namespace nanojit
         X64_movlr   = 0xC08B400000000003LL, // 32bit mov r <- b
         X64_movlmr  = 0x0000000080894007LL, // 32bit store r -> [b+d32]
         X64_movlrm  = 0x00000000808B4007LL, // 32bit load r <- [b+d32]
-        X64_movrd   = 0x0000000000B84007LL, // 32bit mov r <- i32
         X64_movqmr  = 0x0000000080894807LL, // 64bit store gpr -> [b+d32]
         X64_movqr   = 0xC08B480000000003LL, // 64bit mov r <- b
         X64_movqi   = 0xB848000000000002LL, // 64bit mov r <- imm64
         X64_movi    = 0xB840000000000002LL, // 32bit mov r <- imm32
+        X64_movqi32 = 0xC0C7480000000003LL, // 64bit mov r <- int64(imm32)
         X64_movapsr = 0xC0280F4000000004LL, // 128bit mov xmm <- xmm
         X64_movqrx  = 0xC07E0F4866000005LL, // 64bit mov b <- xmm-r
         X64_movqxr  = 0xC06E0F4866000005LL, // 64bit mov b -> xmm-r
@@ -221,9 +246,14 @@ namespace nanojit
         X64_shrq    = 0xE8D3480000000003LL, // 64bit uint right shift r >>= rcx
         X64_sar     = 0xF8D3400000000003LL, // 32bit int right shift r >>= rcx
         X64_sarq    = 0xF8D3480000000003LL, // 64bit int right shift r >>= rcx
+        X64_shli    = 0x00E0C14000000004LL, // 32bit left shift r <<= imm8
+        X64_shlqi   = 0x00E0C14800000004LL, // 64bit left shift r <<= imm8
+        X64_sari    = 0x00F8C14000000004LL, // 32bit int right shift r >>= imm8
+        X64_sarqi   = 0x00F8C14800000004LL, // 64bit int right shift r >>= imm8
+        X64_shri    = 0x00E8C14000000004LL, // 32bit uint right shift r >>= imm8
+        X64_shrqi   = 0x00E8C14800000004LL, // 64bit uint right shift r >>= imm8
         X64_subqrr  = 0xC02B480000000003LL, // 64bit sub r -= b
         X64_subrr   = 0xC02B400000000003LL, // 32bit sub r -= b
-        X64_subspi  = 0x00000000EC814807LL, // 64bit sub rsp -= imm32
         X64_ucomisd = 0xC02E0F4066000005LL, // unordered compare scalar double
         X64_xorqrr  = 0xC033480000000003LL, // 64bit xor r &= b
         X64_xorrr   = 0xC033400000000003LL, // 32bit xor r &= b
@@ -274,16 +304,22 @@ namespace nanojit
         void emitprr(uint64_t op, Register r, Register b);\
         void emitrm(uint64_t op, Register r, int32_t d, Register b);\
         void emitprm(uint64_t op, Register r, int32_t d, Register b);\
+        void emitrr_imm(uint64_t op, Register r, Register b, int32_t imm);\
+        void emitr_imm(uint64_t op, Register r, int32_t imm) { emitrr_imm(op, (Register)0, r, imm); }\
+        void emitr_imm8(uint64_t op, Register b, int32_t imm8);\
         void emit_int(Register r, int32_t v);\
         void emit_quad(Register r, uint64_t v);\
         void asm_regarg(ArgSize, LIns*, Register);\
         void asm_stkarg(ArgSize, LIns*);\
         void asm_shift(LIns*);\
+        void asm_shift_imm(LIns*);\
+        void asm_arith_imm(LIns*);\
         void regalloc_unary(LIns *ins, RegisterMask allow, Register &rr, Register &ra);\
         void regalloc_binary(LIns *ins, RegisterMask allow, Register &rr, Register &ra, Register &rb);\
         void regalloc_load(LIns *ins, Register &rr, int32_t &d, Register &rb);\
         void dis(NIns *p, int bytes);\
         void asm_cmp(LIns*);\
+        void asm_cmp_imm(LIns*);\
         void fcmp(LIns*, LIns*);\
         NIns* asm_fbranch(bool, LIns*, NIns*);
 
