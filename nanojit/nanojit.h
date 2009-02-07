@@ -45,9 +45,6 @@
 
 #if defined AVMPLUS_IA32
 	#define NANOJIT_IA32
-	#ifdef AVMPLUS_AMD64
-	#  error("AVMPLUS_IA32 and AVMPLUS_AMD64 both defined")
-	#endif
 #elif defined AVMPLUS_ARM
 	#define NANOJIT_ARM
 #elif defined AVMPLUS_PPC

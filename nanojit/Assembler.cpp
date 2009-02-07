@@ -887,7 +887,7 @@ namespace nanojit
 	}
 
 	void Assembler::flush_icache(Page *pages) {
-#if defined NANOJIT_IA32 || defined NANOJIT_AMD64 || defined NANOJIT_X64
+#if defined NANOJIT_IA32 || defined NANOJIT_X64
 		(void) pages;
 #elif defined NANOJIT_ARM && defined UNDER_CE
 		(void) pages;
