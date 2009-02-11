@@ -61,9 +61,9 @@ ifeq (thumb,$(TARGET_CPU))
 nanojit_cpu_cxxsrc := NativeThumb.cpp
 endif
 
-#ifeq (sparc,$(TARGET_CPU))
-#nanojit_cpu_cxxsrc := SparcAssembler.cpp
-#endif
+ifeq (sparc,$(TARGET_CPU))
+nanojit_cpu_cxxsrc := NativeSparc.cpp
+endif
 
 avmplus_CXXSRCS := $(avmplus_CXXSRCS) \
   $(curdir)/Assembler.cpp \

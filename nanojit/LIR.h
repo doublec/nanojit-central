@@ -592,14 +592,22 @@ namespace nanojit
     };
     typedef LIns*       LInsp;
 
+#if defined __SUNPRO_C || defined __SUNPRO_CC
+    #pragma pack(4)
+#else
     #pragma pack(push, 4)
+#endif
 
     typedef struct { LIns* v; LIns i; } LirFarIns;
     typedef struct { int32_t v; LIns i; } LirImm32Ins;
     typedef struct { int32_t v[2]; LIns i; } LirImm64Ins;
     typedef struct { const CallInfo* ci; LIns i; } LirCallIns;
 
+#if defined __SUNPRO_C || defined __SUNPRO_CC
+    #pragma pack(0)
+#else
     #pragma pack(pop)
+#endif
     
     static const uint32_t LIR_FAR_SLOTS   = sizeof(LirFarIns)/sizeof(LIns); 
     static const uint32_t LIR_CALL_SLOTS = sizeof(LirCallIns)/sizeof(LIns); 

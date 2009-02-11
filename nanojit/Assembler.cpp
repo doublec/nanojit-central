@@ -49,6 +49,11 @@
 extern "C" void __clear_cache(char *BEG, char *END);
 #endif
 
+#ifdef AVMPLUS_SPARC
+extern  "C"	void sync_instruction_memory(caddr_t v, u_int len);
+#endif
+
+
 #if defined AVMPLUS_MAC && defined NANOJIT_PPC && defined NANOJIT_64BIT
 // 10.5 only
 extern "C" void sys_icache_invalidate(const void*, size_t len);
@@ -893,6 +898,12 @@ namespace nanojit
 		(void) pages;
 		// just flush all of it
 		FlushInstructionCache(GetCurrentProcess(), NULL, NULL);
+#elif defined AVMPLUS_SPARC
+		Page *next;
+		for (Page *p = pages; p != 0; p = next) {
+			next = p->next;
+			sync_instruction_memory((char*)p, sizeof(Page));
+		}
 #elif defined NANOJIT_UNIX
 		Page *p = pages;
 		Page *first = p;

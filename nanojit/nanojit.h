@@ -49,6 +49,8 @@
 	#define NANOJIT_ARM
 #elif defined AVMPLUS_PPC
 	#define NANOJIT_PPC
+#elif defined AVMPLUS_SPARC
+	#define NANOJIT_SPARC
 #elif defined AVMPLUS_AMD64
 	#define NANOJIT_X64
 #else

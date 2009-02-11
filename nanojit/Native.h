@@ -63,6 +63,8 @@
 #endif
 #elif defined(NANOJIT_PPC)
 #include "NativePPC.h"
+#elif defined(NANOJIT_SPARC)
+#include "NativeSparc.h"
 #elif defined(NANOJIT_X64)
 #include "NativeX64.h"
 #else
@@ -98,7 +100,7 @@ namespace nanojit {
 		#define gpn(r)					regNames[(r)] 
 		#define fpn(r)					regNames[(r)] 
 	#else
-		#define asm_output(f, ...)
+		#define asm_output(...)
 		#define gpn(r)		
 		#define fpn(r)		
 	#endif /* NJ_VERBOSE */
