@@ -91,6 +91,9 @@ namespace nanojit
 	class Fragmento : public GCFinalizedObject
 	{
 		public:
+			
+			enum { MAX_CACHE_SIZE_LOG2 = 30 }; // 640KB^H^H^H^H^H 1GB should be enough for anybody...
+			
 			Fragmento(AvmCore* core, uint32_t cacheSizeLog2);
 			~Fragmento();
 
