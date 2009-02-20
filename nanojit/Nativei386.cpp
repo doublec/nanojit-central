@@ -199,8 +199,9 @@ namespace nanojit
 		const int32_t pushsize = 4*istack + 8*fargs; // actual stack space used
 
 #if _MSC_VER
-        // msc is slack, and MIR doesn't do anything extra, so lets use this
-        // call-site alignment to at least have code size parity with MIR.
+        // msc only provides 4-byte alignment, anything more than 4 on windows
+		// x86-32 requires dynamic ESP alignment in prolog/epilog and static
+		// esp-alignment here.
         uint32_t align = 4;//NJ_ALIGN_STACK;
 #else
         uint32_t align = NJ_ALIGN_STACK;

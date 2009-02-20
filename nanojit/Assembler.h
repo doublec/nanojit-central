@@ -50,8 +50,6 @@ namespace nanojit
 	 *     integer is used as an index into a function look-up table that contains information
 	 *     about the target that is to be called; including address, # parameters, etc.
 	 * 
-	 *   The class RegAlloc is essentially the register allocator from MIR
-	 * 
 	 *   The Assembler class parses the LIR instructions starting at any point and converts 
 	 *   them to machine code.  It does the translation using expression trees which are simply
 	 *   LIR instructions in the stream that have side-effects.  Any other instruction in the 
@@ -161,7 +159,7 @@ namespace nanojit
  	 * as we generate machine code.  As part of the prologue, we issue
 	 * a stack adjustment instruction and then later patch the adjustment
 	 * value.  Temporary values can be placed into the AR as method calls
-	 * are issued.   Also MIR_alloc instructions will consume space.
+	 * are issued.   Also LIR_alloc instructions will consume space.
 	 */
 	class Assembler MMGC_SUBCLASS_DECL
 	{
