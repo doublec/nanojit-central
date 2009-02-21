@@ -62,21 +62,16 @@ completion
 - finish cmov/qcmov with other conditions
 - validate asm_cond with other conditions
 
-mir parity
+better code
 - put R12 back in play as a base register
 - no-disp addr modes (except RBP/R13)
-- disp8 addressing modes
-- disp8 branches
 - disp64 branch/call
-- windows abi
-
-someday
 - spill gp values to xmm registers?
 - prefer xmm registers for copies since gprs are in higher demand?
 - stack arg doubles
 - stack based LIR_param
 
-only for tracing
+tracing
 - asm_adjustBranch
 - asm_loop
 - asm_qjoin
