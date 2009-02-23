@@ -61,7 +61,7 @@ extern "C" void sys_dcache_flush(const void*, size_t len);
 #endif
 
 #ifdef VTUNE
-#include "../codegen/CodegenLIR.h"
+#include "../core/CodegenLIR.h"
 #define vtune_only(...) __VA_ARGS__
 #else
 #define vtune_only(...)
@@ -162,7 +162,7 @@ namespace nanojit
 	/**
 	 * Need the following:
 	 *
-	 *	- merging paths ( build a graph? ), possibly use external rep to drive codegen
+	 *	- merging paths ( build a graph? ), possibly use external rep to drive code gen
 	 */
     Assembler::Assembler(Fragmento* frago)
         : hasLoop(0)
