@@ -51,6 +51,10 @@
 #include <stdlib.h>
 #endif
 
+#if defined AVMPLUS_MAC
+#  include <mach/mach.h> // for vm_protect()
+#endif
+
 #ifdef _MSC_VER
 	// disable some specific warnings which are normally useful, but pervasive in the code-gen macros
 	#pragma warning(disable:4310) // cast truncates constant value
