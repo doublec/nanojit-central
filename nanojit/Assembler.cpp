@@ -60,6 +60,11 @@ extern "C" void sys_icache_invalidate(const void*, size_t len);
 extern "C" void sys_dcache_flush(const void*, size_t len);
 #endif
 
+#if defined AVMPLUS_MAC && defined NANOJIT_PPC
+// for MakeDataExecutable
+#include <Carbon/Carbon.h>
+#endif
+
 #ifdef VTUNE
 #include "../core/CodegenLIR.h"
 #define vtune_only(...) __VA_ARGS__

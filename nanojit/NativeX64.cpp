@@ -347,7 +347,7 @@ namespace nanojit
     static bool isImm32(LIns *ins) {
         return ins->isconst() || ins->isconstq() && isS32(ins->constvalq());
     }
-    static int32 getImm32(LIns *ins) {
+    static int32_t getImm32(LIns *ins) {
         return ins->isconst() ? ins->constval() : int32_t(ins->constvalq());
     }
 

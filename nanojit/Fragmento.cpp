@@ -39,7 +39,7 @@
  * ***** END LICENSE BLOCK ***** */
 
 #include "nanojit.h"
-#undef MEMORY_INFO
+#undef MMGC_MEMORY_INFO
 
 namespace nanojit
 {	
@@ -64,7 +64,7 @@ namespace nanojit
 		    _max_pages(1 << (calcSaneCacheSize(cacheSizeLog2) - NJ_LOG2_PAGE_SIZE)),
 			_pagesGrowth(16)
 	{
-#ifdef MEMORY_INFO
+#ifdef MMGC_MEMORY_INFO
 		_allocList.set_meminfo_name("Fragmento._allocList");
 #endif
 		NanoAssert(_max_pages > _pagesGrowth); // shrink growth if needed 
@@ -85,7 +85,7 @@ namespace nanojit
 		while( _allocList.size() > 0 )
 		{
 			//fprintf(stderr,"dealloc %x\n", (intptr_t)_allocList.get(_allocList.size()-1));
-#ifdef MEMORY_INFO
+#ifdef MMGC_MEMORY_INFO
 			ChangeSizeExplicit("NanoJitMem", -1, _gcHeap->Size(_allocList.last()));
 #endif
             entry = _allocList.removeLast();
@@ -135,7 +135,7 @@ namespace nanojit
 	void Fragmento::pagesGrow(int32_t count)
 	{
 		NanoAssert(!_freePages.size());
-		MMGC_MEM_TYPE("NanojitFragmentoMem"); 
+		MMGC_MEM_TAG("NanojitFragmentoMem"); 
 		Page* memory = 0;
         GC *gc = _core->GetGC();
 		if (_stats.pages < _max_pages)
@@ -153,9 +153,8 @@ namespace nanojit
 			
 			// convert _max_pages to gc page count 
 			int32_t gcpages = (count*NJ_PAGE_SIZE) / _gcHeap->kNativePageSize;
-			MMGC_MEM_TYPE("NanoJitMem"); 
 			memory = (Page*)_gcHeap->Alloc(gcpages);
-#ifdef MEMORY_INFO
+#ifdef MMGC_MEMORY_INFO
 			ChangeSizeExplicit("NanoJitMem", 1, _gcHeap->Size(memory));
 #endif
 			NanoAssert((int*)memory == pageTop(memory));

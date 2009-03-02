@@ -1259,7 +1259,7 @@ namespace nanojit
 	LInsHashSet::LInsHashSet(GC* gc) : 
 			m_used(0), m_cap(kInitialCap), m_gc(gc)
 	{
-#ifdef MEMORY_INFO
+#ifdef MMGC_MEMORY_INFO
 //		m_list.set_meminfo_name("LInsHashSet.list");
 #endif
         LInsp *list = (LInsp*) gc->Alloc(sizeof(LInsp)*m_cap, GC::kZero);
@@ -1352,7 +1352,7 @@ namespace nanojit
 		const uint32_t newcap = m_cap << 1;
         LInsp *newlist = (LInsp*) m_gc->Alloc(newcap * sizeof(LInsp), GC::kZero);
         LInsp *list = m_list;
-#ifdef MEMORY_INFO
+#ifdef MMGC_MEMORY_INFO
 //		newlist.set_meminfo_name("LInsHashSet.list");
 #endif
 		for (uint32_t i=0, n=m_cap; i < n; i++) {
@@ -2031,7 +2031,7 @@ namespace nanojit
 		bool treeCompile = core->config.tree_opt && (triggerFrag->kind == BranchTrace);
 		RegAllocMap regMap(gc);
 		NInsList loopJumps(gc);
-#ifdef MEMORY_INFO
+#ifdef MMGC_MEMORY_INFO
 //		loopJumps.set_meminfo_name("LIR loopjumps");
 #endif
 		assm->beginAssembly(triggerFrag, &regMap);
