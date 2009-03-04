@@ -1089,7 +1089,7 @@ namespace nanojit
     class Assembler;
 
     void compile(Assembler *assm, Fragment *frag);
-    verbose_only(void live(GC *gc, LirBuffer *lirbuf);)
+    verbose_only(void live(GC *gc, LirBuffer *lirbuf, bool showLiveRefs);)
 
     class StackFilter: public LirFilter
     {

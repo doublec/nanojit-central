@@ -1555,7 +1555,7 @@ namespace nanojit
 
         }
 		void add(LInsp i, LInsp use) {
-            if (!i->isconst() && !i->isconstq() && !live.containsKey(i)) {
+            if (!live.containsKey(i)) {
                 live.put(i,use);
             }
 		}
@@ -1579,7 +1579,14 @@ namespace nanojit
 		}
 	};
 
-    void live(GC *gc, LirBuffer *lirbuf)
+	/*
+	 * traverse the LIR buffer and discover which instructions are live
+	 * by starting from instructions with side effects (stores, calls, branches)
+	 * and marking instructions used by them.  Works bottom-up, in one pass.
+	 * if showLiveRefs == true, also print the set of live expressions next to
+	 * each instruction
+	 */
+    void live(GC *gc, LirBuffer *lirbuf, bool showLiveRefs)
 	{
 		// traverse backwards to find live exprs and a few other stats.
 
@@ -1596,7 +1603,8 @@ namespace nanojit
             total++;
 
             // first handle side-effect instructions
-			if (i->isStore() || i->isGuard() || i->isCall() && !i->callInfo()->_cse)
+			if (i->isop(LIR_label) || i->isBranch() || i->isStore() || isRet(i->opcode()) ||
+				i->isGuard() || i->isCall() && !i->callInfo()->_cse)
 			{
 				live.add(i,0);
                 if (i->isGuard())
@@ -1632,7 +1640,8 @@ namespace nanojit
  
 		printf("live instruction count %d, total %u, max pressure %d\n",
 			live.retired.size(), total, live.maxlive);
-        printf("side exits %u\n", exits);
+		if (exits > 0)
+			printf("side exits %u\n", exits);
 
 		// print live exprs, going forwards
 		LirNameMap *names = lirbuf->names;
@@ -1646,13 +1655,17 @@ namespace nanojit
                 printf("\n");
             }
             newblock = false;
-            for (int k=0,n=e->live.size(); k < n; k++) {
-				VMPI_strcpy(s, names->formatRef(e->live[k]));
-				s += VMPI_strlen(s);
-				*s++ = ' '; *s = 0;
-				NanoAssert(s < livebuf+sizeof(livebuf));
-            }
-			printf("%-60s %s\n", livebuf, names->formatIns(e->i));
+			if (showLiveRefs) {
+				for (int k=0,n=e->live.size(); k < n; k++) {
+					VMPI_strcpy(s, names->formatRef(e->live[k]));
+					s += VMPI_strlen(s);
+					*s++ = ' '; *s = 0;
+					NanoAssert(s < livebuf+sizeof(livebuf));
+				}
+				printf("%60s %s\n", livebuf, names->formatIns(e->i));
+			} else {
+				printf("    %s\n", names->formatIns(e->i));
+			}
             if (e->i->isGuard() || e->i->isBranch() || isRet(e->i->opcode())) {
 				printf("\n");
                 newblock = true;
@@ -2026,7 +2039,7 @@ namespace nanojit
 		verbose_only( assm->_outputCache = &asmOutput; )
 
 		verbose_only(if (assm->_verbose && core->config.verbose_live)
-			live(gc, triggerFrag->lirbuf);)
+			live(gc, triggerFrag->lirbuf, /* showLiveRefs */ true);)
 
 		bool treeCompile = core->config.tree_opt && (triggerFrag->kind == BranchTrace);
 		RegAllocMap regMap(gc);
