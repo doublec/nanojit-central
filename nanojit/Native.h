@@ -56,11 +56,7 @@
 #ifdef NANOJIT_IA32
 #include "Nativei386.h"
 #elif defined(NANOJIT_ARM)
-#ifdef THUMB
-#include "NativeThumb.h"
-#else
 #include "NativeARM.h"
-#endif
 #elif defined(NANOJIT_PPC)
 #include "NativePPC.h"
 #elif defined(NANOJIT_SPARC)

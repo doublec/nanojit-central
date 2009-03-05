@@ -471,11 +471,10 @@ enum {
 
 
 // load 8-bit, zero extend
-// note, only 5-bit offsets (!) are supported for this, but that's all we need at the moment
-// (LDRB actually allows 12-bit offset in ARM mode but constraining to 5-bit gives us advantage for Thumb)
+// LDRB allows 12-bit offset in ARM mode
 // @todo, untested!
 #define LDRB(_d,_off,_b) do {                                           \
-        NanoAssert((_off)>=0&&(_off)<=31);                                    \
+        NanoAssert((_off)>=0&&(_off)<=0xfff);                                    \
         underrunProtect(4);                                             \
         *(--_nIns) = (NIns)( COND_AL | (0x5D<<20) | ((_b)<<16) | ((_d)<<12) |  ((_off)&0xfff)  ); \
         asm_output("ldrb %s, [%s, #0x%X]", gpn(_d),gpn(_b),(_off));          \
@@ -755,4 +754,4 @@ enum {
         asm_output("fcpyd %s,%s", gpn(_Dd), gpn(_Dm));                 \
     } while (0)
 }
-#endif // __nanojit_NativeThumb__
+#endif // __nanojit_NativeArm__

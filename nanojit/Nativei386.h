@@ -375,9 +375,7 @@ namespace nanojit
 #define LD16S(r,d,b) do { count_ld(); ALU2m(0x0fbf,r,d,b); asm_output("movsx %s,%d(%s)", gpn(r),d,gpn(b)); } while(0)
 
 // load 8-bit, zero extend
-// note, only 5-bit offsets (!) are supported for this, but that's all we need at the moment
-// (movzx actually allows larger offsets mode but 5-bit gives us advantage in Thumb mode)
-#define LD8Z(r,d,b)	do { count_ld(); NanoAssert((d)>=0&&(d)<=31); ALU2m(0x0fb6,r,d,b); asm_output("movzx %s,%d(%s)", gpn(r),d,gpn(b)); } while(0)
+#define LD8Z(r,d,b)	do { count_ld(); ALU2m(0x0fb6,r,d,b); asm_output("movzx %s,%d(%s)", gpn(r),d,gpn(b)); } while(0)
 
 #define LDi(r,i) do { \
 	count_ld();\
