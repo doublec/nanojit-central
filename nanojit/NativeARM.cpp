@@ -910,7 +910,7 @@ Assembler::nPatchBranch(NIns* branch, NIns* target)
 
     int32_t offset = PC_OFFSET_FROM(target, branch);
 
-    //printf("---patching branch at 0x%08x to location 0x%08x (%d-0x%08x)\n", branch, target, offset, offset);
+    //avmplus::AvmLog("---patching branch at 0x%08x to location 0x%08x (%d-0x%08x)\n", branch, target, offset, offset);
 
     // We have 2 words to work with here -- if offset is in range of a 24-bit
     // relative jump, emit that; otherwise, we do a pc-relative load into pc.

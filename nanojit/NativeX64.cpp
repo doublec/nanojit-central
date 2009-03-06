@@ -101,7 +101,7 @@ namespace nanojit
 #ifdef _DEBUG
     #define TODO(x) todo(#x)
     static void todo(const char *s) {
-        verbose_only( printf("%s",s); )
+        verbose_only( avmplus::AvmLog("%s",s); )
         NanoAssertMsgf(false, "%s", s);
     }
 #else

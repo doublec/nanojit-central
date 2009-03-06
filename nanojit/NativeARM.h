@@ -227,7 +227,7 @@ verbose_only( extern const char *regNames[], *condNames[], *shiftNames[]; )
     int *_nExitSlot;                                                    \
     bool blx_lr_bug;
 
-//printf("jmp_l_n count=%d, nins=%X, %X = %X\n", (_c), nins, _nIns, ((intptr_t)(nins+(_c))-(intptr_t)_nIns - 4) );
+//avmplus::AvmLog("jmp_l_n count=%d, nins=%X, %X = %X\n", (_c), nins, _nIns, ((intptr_t)(nins+(_c))-(intptr_t)_nIns - 4) );
 
 #define swapptrs()  {                                                   \
         NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins;          \

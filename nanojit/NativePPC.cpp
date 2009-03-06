@@ -77,7 +77,7 @@ namespace nanojit
 
 	const char *bitNames[] = { "lt", "gt", "eq", "so" };
 
-	#define TODO(x) do{ printf(#x); NanoAssertMsgf(false, "%s", #x); } while(0)
+	#define TODO(x) do{ avmplus::AvmLog(#x); NanoAssertMsgf(false, "%s", #x); } while(0)
 
 	/* 
 	 * see http://developer.apple.com/documentation/developertools/Conceptual/LowLevelABI/index.html

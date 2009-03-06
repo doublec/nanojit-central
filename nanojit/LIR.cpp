@@ -1638,10 +1638,10 @@ namespace nanojit
 			}
 		}
  
-		printf("live instruction count %d, total %u, max pressure %d\n",
+		AvmLog("live instruction count %d, total %u, max pressure %d\n",
 			live.retired.size(), total, live.maxlive);
 		if (exits > 0)
-			printf("side exits %u\n", exits);
+			AvmLog("side exits %u\n", exits);
 
 		// print live exprs, going forwards
 		LirNameMap *names = lirbuf->names;
@@ -1652,7 +1652,7 @@ namespace nanojit
             char livebuf[4000], *s=livebuf;
             *s = 0;
             if (!newblock && e->i->isop(LIR_label)) {
-                printf("\n");
+                AvmLog("\n");
             }
             newblock = false;
 			if (showLiveRefs) {
@@ -1662,12 +1662,12 @@ namespace nanojit
 					*s++ = ' '; *s = 0;
 					NanoAssert(s < livebuf+sizeof(livebuf));
 				}
-				printf("%60s %s\n", livebuf, names->formatIns(e->i));
+				AvmLog("%60s %s\n", livebuf, names->formatIns(e->i));
 			} else {
-				printf("    %s\n", names->formatIns(e->i));
+				AvmLog("    %s\n", names->formatIns(e->i));
 			}
             if (e->i->isGuard() || e->i->isBranch() || isRet(e->i->opcode())) {
-				printf("\n");
+				AvmLog("\n");
                 newblock = true;
             }
 		}
@@ -2363,13 +2363,13 @@ namespace nanojit
 			return "";
 	}
 	
-	static void printLinks(FILE* o, uint32_t num, BBList& l)
+	static void printLinks(uint32_t num, BBList& l)
 	{
 		uint32_t c = l.size();
 		for(uint32_t i=0; i<c; i++)
 		{
 			BBNode* to = l.get(i);
-			fprintf(o, "bb%d -> bb%d [weight=2 %s] \n", num, to->num, BBArrow(num,to));
+			AvmLog("bb%d -> bb%d [weight=2 %s] \n", num, to->num, BBArrow(num,to));
 		}
 	}
 
@@ -2377,23 +2377,22 @@ namespace nanojit
 	{
 		// generate dot info for the graph 
 		//   'dot -Tjpg a.txt > a.jpg'  - will then generate a pretty picture for you
-		FILE* o = stdout;
-		fprintf(o, "digraph \"%s\" {\n", name);
-		fprintf(o, "ratio=fill\n");
-		fprintf(o, "ranksep=.1\n");
-		fprintf(o, "nodesep=.2\n");
-		fprintf(o, "rankdir=LR\n");
-		fprintf(o, "edge [arrowsize=.7,labeldistance=1.0,labelangle=-45,labelfontsize=9]\n");
-		fprintf(o, "node [fontsize=9,shape=box,width=.2,height=.2]\n");
+		AvmLog("digraph \"%s\" {\n", name);
+		AvmLog("ratio=fill\n");
+		AvmLog("ranksep=.1\n");
+		AvmLog("nodesep=.2\n");
+		AvmLog("rankdir=LR\n");
+		AvmLog("edge [arrowsize=.7,labeldistance=1.0,labelangle=-45,labelfontsize=9]\n");
+		AvmLog("node [fontsize=9,shape=box,width=.2,height=.2]\n");
 
 		uint32_t c = _bbs.size();
 		for(uint32_t i=1; i<c; i++)
 		{
 			BBNode* b = _bbs.at(i);  // zero node is repeated starting node so skip it
-			fprintf(o, "bb%d [label=\"BB%d\" %s]\n", (int)i, (int)i, BBShape(b));
-			printLinks(o,b->num,b->succ);
+			AvmLog("bb%d [label=\"BB%d\" %s]\n", (int)i, (int)i, BBShape(b));
+			printLinks(b->num,b->succ);
 		}
-		fprintf(o, "}\n");
+		AvmLog("}\n");
 	}
 	
 	LInsp BlockLocator::ins1(LOpcode v, LIns* a)						{ return update( _out->ins1(v,a) ); }
