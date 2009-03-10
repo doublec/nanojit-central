@@ -1730,7 +1730,7 @@ namespace nanojit
 			VMPI_strcat(buf, cname8.c_str());
 		}
 		else if (ref->isconstq()) {
-            VMPI_sprintf(buf, "#0x%llxLL", (int64_t) ref->constvalq());
+            VMPI_sprintf(buf, "#0x%llxLL", (long long unsigned int) ref->constvalq());
 		}
 		else if (ref->isconst()) {
 			formatImm(ref->constval(), buf);
