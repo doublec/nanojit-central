@@ -1542,6 +1542,8 @@ namespace nanojit
 
 	void Assembler::arFree(uint32_t idx)
 	{
+        verbose_only( printActivationState(" >FP"); )
+
         AR &ar = _activation;
         LIns *i = ar.entry[idx];
         NanoAssert(i != 0);
@@ -1552,37 +1554,46 @@ namespace nanojit
 	}
 
 #ifdef NJ_VERBOSE
-	void Assembler::printActivationState()
+	void Assembler::printActivationState(const char* what)
 	{
-		bool verbose_activation = false;
-		if (!verbose_activation)
-			return;
-			
-		char* s = &outline[0];
-		if (_verbose) {
-			VMPI_memset(s, ' ', 51);  s[51] = '\0';
-			s += VMPI_strlen(s);
-			VMPI_sprintf(s, " SP ");
-			s += VMPI_strlen(s);
+        bool verbose_activation = false;
+        if (!verbose_activation || !verbose_enabled())
+            return;
 
-			uint32_t max = _activation.tos < NJ_MAX_STACK_ENTRY ? _activation.tos : NJ_MAX_STACK_ENTRY;
-			for(uint32_t i = _activation.lowwatermark; i < max; i++) {
-				LIns *ins = _activation.entry[i];
-				if (ins) {
-					if (ins->isop(LIR_alloc)) {
-						while (i+1 < max && _activation.entry[i+1] == ins)
-							i++;
-					}
-					else if (ins->isQuad()) {
-						NanoAssert(_activation.entry[i+1] == ins);
-						i++;
-					}
-				}
-				output(&outline[0]);
-			}
-		}
-	}
-#endif
+        char* s = &outline[0];
+        VMPI_memset(s, ' ', 45);  s[45] = '\0';
+        s += VMPI_strlen(s);
+        VMPI_sprintf(s, what);
+        s += VMPI_strlen(s);
+
+        int32_t max = _activation.tos < NJ_MAX_STACK_ENTRY ? _activation.tos : NJ_MAX_STACK_ENTRY;
+        for(int32_t i = _activation.lowwatermark; i < max; i++) {
+            LIns *ins = _activation.entry[i];
+            if (ins) {
+                const char* n = _thisfrag->lirbuf->names->formatRef(ins);
+                if (ins->isop(LIR_alloc)) {
+                    int32_t count = ins->size()>>2;
+                    VMPI_sprintf(s," %d-%d(%s)", 4*i, 4*(i+count-1), n);
+                    count += i-1;
+                    while (i < count) {
+                        NanoAssert(_activation.entry[i] == ins);
+                        i++;
+                    }
+                }
+                else if (ins->isQuad()) {
+                    VMPI_sprintf(s," %d+(%s)", 4*i, n);
+                    NanoAssert(_activation.entry[i+1] == ins);
+                    i++;
+                }
+                else {
+                    VMPI_sprintf(s," %d(%s)", 4*i, n);
+                }
+            }
+            s += VMPI_strlen(s);
+        }
+        output(&outline[0]);
+    }
+ #endif
 
     bool canfit(int32_t size, int32_t loc, AR &ar) {
         for (int i=0; i < size; i++) {
@@ -1601,6 +1612,7 @@ namespace nanojit
 		int32_t start = ar.lowwatermark;
 		int32_t i = 0;
 		NanoAssert(start>0);
+        verbose_only( printActivationState(" <FP"); )
 
         if (size == 1) {
             // easy most common case -- find a hole, or make the frame bigger

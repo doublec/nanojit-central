@@ -1050,8 +1050,6 @@ Assembler::asm_load64(LInsp ins)
     Reservation *resv = getresv(ins);
     int d = disp(resv);
 
-    freeRsrcOf(ins, false);
-
 #ifdef NJ_ARM_VFP
     Register rb = findRegFor(base, GpRegs);
     Register rr = resv->reg;
@@ -1076,6 +1074,11 @@ Assembler::asm_load64(LInsp ins)
     Register rb = findRegFor(base, GpRegs);
     asm_mmq(FP, d, rb, offset);
 #endif
+
+    // bug https://bugzilla.mozilla.org/show_bug.cgi?id=477228
+    // make sure we release the instruction's stack slot *after* 
+    // any findRegFor() since that call can trigger a spill
+    freeRsrcOf(ins, false);
 
     //asm_output(">>> load64");
 }
