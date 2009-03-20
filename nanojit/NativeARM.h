@@ -125,7 +125,7 @@ typedef enum {
     LR  = 14,
     PC  = 15,
 
-    // VFP regs
+    // VFP regs (we currently only use D0-D6 and S14)
     D0 = 16,
     D1 = 17,
     D2 = 18,
@@ -133,14 +133,14 @@ typedef enum {
     D4 = 20,
     D5 = 21,
     D6 = 22,
-    D7 = 23,
+    // don't specify D7/S14, since S14 is hardcoded into i2f/u2f operations
 
     FirstFloatReg = D0,
     LastFloatReg = D6,
         
     FirstReg = R0,
 #ifdef NJ_ARM_VFP
-    LastReg = D7,
+    LastReg = D6,
 #else
     LastReg = PC,
 #endif
@@ -154,8 +154,8 @@ typedef enum {
 typedef enum {
     EQ = 0x0, // Equal
     NE = 0x1, // Not Equal
-    CS = 0x2, // Carry Set (or HS)
-    CC = 0x3, // Carry Clear (or LO)
+    CS = 0x2, HS = 0x2, // Carry Set (or HS)
+    CC = 0x3, LO = 0x3, // Carry Clear (or LO)
     MI = 0x4, // MInus
     PL = 0x5, // PLus
     VS = 0x6, // oVerflow Set
@@ -167,9 +167,9 @@ typedef enum {
     GT = 0xC, // Greater Than
     LE = 0xD, // Less or Equal
     AL = 0xE, // ALways
-    NV = 0xF  // NeVer
 } ConditionCode;
-
+#define OppositeCond(cc)  ((ConditionCode)(((int)(cc))^1))
+#define IsCond(cc)        (((cc) >= EQ) && ((cc) <= AL))
 
 typedef int RegisterMask;
 typedef struct _FragInfo {
@@ -178,9 +178,9 @@ typedef struct _FragInfo {
 } FragInfo;
 
 #ifdef NJ_ARM_VFP
-static const RegisterMask SavedFpRegs = 1<<D0 | 1<<D1 | 1<<D2 | 1<<D3 | 1<<D4 | 1<<D5 | 1<<D6 | 1<<D7;
+static const RegisterMask SavedFpRegs = 0; // we only use D0-D7 (S14), none of which need to be saved
 static const RegisterMask SavedRegs = 1<<R4 | 1<<R5 | 1<<R6 | 1<<R7 | 1<<R8 | 1<<R9 | 1<<R10 | SavedFpRegs;
-static const int NumSavedRegs = 15;
+static const int NumSavedRegs = 7;
 #else
 static const RegisterMask SavedFpRegs = 0;
 static const RegisterMask SavedRegs = 1<<R4 | 1<<R5 | 1<<R6 | 1<<R7 | 1<<R8 | 1<<R9 | 1<<R10;
@@ -189,8 +189,8 @@ static const int NumSavedRegs = 7;
 static const RegisterMask FpRegs = 1<<D0 | 1<<D1 | 1<<D2 | 1<<D3 | 1<<D4 | 1<<D5 | 1<<D6; // no D7; S14-S15 are used for i2f/u2f.
 static const RegisterMask GpRegs = 0xFFFF;
 
-#define IsFpReg(_r)     ((rmask(_r) & (FpRegs | (1<<D7))) != 0)
-#define IsGpReg(_r)     ((rmask(_r) & GpRegs) != 0)
+#define IsFpReg(_r)     ((rmask((Register)(_r)) & FpRegs) != 0)
+#define IsGpReg(_r)     ((rmask((Register)(_r)) & GpRegs) != 0)
 #define FpRegNum(_fpr)  ((_fpr) - FirstFloatReg)
 
 #define firstreg()      R0
@@ -254,6 +254,7 @@ typedef enum {
     RRX     = 6, // Rotate Right one bit with extend (c == 0)
     ROR_reg = 7  // Rotate Right
 } ShiftOperator;
+#define IsShift(sh)    (((sh) >= LSL_imm) && ((sh) <= ROR_reg))
 
 #define LD32_size 8
 
@@ -266,6 +267,7 @@ typedef enum {
 #if NJ_ARM_ARCH >= NJ_ARM_V4T
 #define BX(_r)  do {                                                    \
         underrunProtect(4);                                             \
+        NanoAssert(IsGpReg(_r));                                        \
         *(--_nIns) = (NIns)( COND_AL | (0x12<<20) | (0xFFF<<8) | (1<<4) | (_r)); \
         asm_output("bx %s", gpn(_r)); } while(0)
 #endif
@@ -273,6 +275,7 @@ typedef enum {
 #if NJ_ARM_ARCH >= NJ_ARM_V5
 #define BLX(_r)  do {                                                    \
         underrunProtect(4);                                             \
+        NanoAssert(IsGpReg(_r));                                        \
         *(--_nIns) = (NIns)( COND_AL | (0x12<<20) | (0xFFF<<8) | (3<<4) | (_r)); \
         asm_output("blx %s", gpn(_r)); } while(0)
 #endif
@@ -295,9 +298,14 @@ enum {
     ARM_bic = 14,
     ARM_mvn = 15
 };
+#define IsOp(op)      (((ARM_##op) >= ARM_and) && ((ARM_##op) <= ARM_mvn))
 
 #define ALUi(cond, op, S, rd, rl, imm) do {\
         underrunProtect(4);\
+        NanoAssert(IsCond(cond));\
+        NanoAssert(IsOp(op));\
+        NanoAssert(((S)==0) || ((S)==1));\
+        NanoAssert(IsGpReg(rd) && IsGpReg(rl));\
         NanoAssert(isU8(imm));\
         *(--_nIns) = (NIns) ((cond)<<28 | OP_IMM | (ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (imm));\
         if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
@@ -311,6 +319,11 @@ enum {
 
 #define ALUi_rot(cond, op, S, rd, rl, imm, rot) do {\
         underrunProtect(4);\
+        NanoAssert(IsCond(cond));\
+        NanoAssert(IsOp(op));\
+        NanoAssert(((S)==0) || ((S)==1));\
+        NanoAssert(IsGpReg(rd) && IsGpReg(rl));\
+        NanoAssert(((rot)>=0) && ((rot)<=15));\
         NanoAssert(isU8(imm));\
         *(--_nIns) = (NIns) ((cond)<<28 | OP_IMM | (ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (rot)<<8 | (imm));\
         if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
@@ -324,6 +337,10 @@ enum {
 
 #define ALUr(cond, op, S, rd, rl, rr) do {\
         underrunProtect(4);\
+        NanoAssert(IsCond(cond));\
+        NanoAssert(IsOp(op));\
+        NanoAssert(((S)==0) || ((S)==1));\
+        NanoAssert(IsGpReg(rd) && IsGpReg(rl) && IsGpReg(rr));\
         *(--_nIns) = (NIns) ((cond)<<28 |(ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (rr));\
         if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
             asm_output("%s%s%s %s, %s", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rr));\
@@ -336,6 +353,11 @@ enum {
 
 #define ALUr_shi(cond, op, S, rd, rl, rr, sh, imm) do {\
         underrunProtect(4);\
+        NanoAssert(IsCond(cond));\
+        NanoAssert(IsOp(op));\
+        NanoAssert(((S)==0) || ((S)==1));\
+        NanoAssert(IsGpReg(rd) && IsGpReg(rl) && IsGpReg(rr));\
+        NanoAssert(IsShift(sh));\
         NanoAssert((imm)>=0 && (imm)<32);\
         *(--_nIns) = (NIns) ((cond)<<28 |(ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (imm)<<7 | (sh)<<4 | (rr));\
         if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
@@ -349,6 +371,11 @@ enum {
 
 #define ALUr_shr(cond, op, S, rd, rl, rr, sh, rs) do {\
         underrunProtect(4);\
+        NanoAssert(IsCond(cond));\
+        NanoAssert(IsOp(op));\
+        NanoAssert(((S)==0) || ((S)==1));\
+        NanoAssert(IsGpReg(rd) && IsGpReg(rl) && IsGpReg(rr) && IsGpReg(rs));\
+        NanoAssert(IsShift(sh));\
         *(--_nIns) = (NIns) ((cond)<<28 |(ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (rs)<<8 | (sh)<<4 | (rr));\
         if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
             asm_output("%s%s%s %s, %s, %s %s", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rr), shiftNames[sh], gpn(rs));\
@@ -362,19 +389,19 @@ enum {
 // _d = _r OR _l
 #define ORR(_d,_l,_r) ALUr(AL, orr, 0, _d, _l, _r)
 
-// _r = _r OR _imm
+// _d = _r OR _imm
 #define ORRi(_d, _l, _imm) ALUi(AL, orr, 0, _d, _l, _imm)
 
 // _d = _r AND _l
 #define AND(_d, _l, _r) ALUr(AL, and, 0, _d, _l, _r)
 
-// _r = _r AND _imm
+// _d = _r AND _imm
 #define ANDi(_d,_r,_imm) ALUi(AL, and, 0, _d, _r, _imm)
 
 // _d = _l ^ _r
 #define EOR(_d,_l,_r) ALUr(AL, eor, 0, _d, _l, _r)
 
-// _r = _r XOR _imm
+// _d = _r XOR _imm
 #define EORi(_d,_r,_imm) ALUi(AL, eor, 0, _d, _r, _imm)
 
 // _d = _n + _m
@@ -384,10 +411,20 @@ enum {
 #define SUB(_d,_l,_r) ALUr(AL, sub, 0, _d, _l, _r)
 
 // _d = _l * _r
-#define MUL(_d, _l,_r)  do {                                                \
+#define MUL_dont_check_op1(_d, _l, _r)  do {                            \
         underrunProtect(4);                                             \
-        *(--_nIns) = (NIns)( COND_AL | (_d)<<16 | (_l)<<8 | 9<<4 | (_r) ); \
+        NanoAssert(IsGpReg(_d) && IsGpReg(_l) && IsGpReg(_r));\
+        *(--_nIns) = (NIns)( COND_AL | (_d)<<16 | (_r)<<8 | 9<<4 | (_l) ); \
         asm_output("mul %s, %s, %s",gpn(_d),gpn(_l),gpn(_r)); } while(0)
+
+#if NJ_ARM_ARCH >= NJ_ARM_V6
+#define MUL(_d, _l, _r) MUL_dont_check_op1(_d, _l, _r)
+#else
+#define MUL(_d, _l, _r) do {            \
+        NanoAssert((_d)!=(_l));         \
+        MUL_dont_check_op1(_d, _l, _r); \
+    } while(0)
+#endif
 
 // RSBS _d, _r
 // _d = 0 - _r
@@ -399,30 +436,30 @@ enum {
 
 // MOVS _d, _r, LSR <_s>
 // _d = _r >> _s
-#define SHR(_d,_r,_s) ALUr_shr(AL, mov, 1, _d, 0, _r, LSR_reg, _s)
+#define LSR(_d,_r,_s) ALUr_shr(AL, mov, 1, _d, 0, _r, LSR_reg, _s)
 
 // MOVS _d, _r, LSR #_imm
 // _d = _r >> _imm
-#define SHRi(_d,_r,_imm)  ALUr_shi(AL, mov, 1, _d, 0, _r, LSR_imm, _imm)
+#define LSRi(_d,_r,_imm)  ALUr_shi(AL, mov, 1, _d, 0, _r, LSR_imm, _imm)
 
 // MOVS _d, _r, ASR <_s>
 // _d = _r >> _s
-#define SAR(_d,_r,_s) ALUr_shr(AL, mov, 1, _d, 0, _r, ASR_reg, _s)
+#define ASR(_d,_r,_s) ALUr_shr(AL, mov, 1, _d, 0, _r, ASR_reg, _s)
 
 // MOVS _r, _r, ASR #_imm
 // _d = _r >> _imm
-#define SARi(_d,_r,_imm) ALUr_shi(AL, mov, 1, _d, 0, _r, ASR_imm, _imm)
+#define ASRi(_d,_r,_imm) ALUr_shi(AL, mov, 1, _d, 0, _r, ASR_imm, _imm)
 
 // MOVS _d, _r, LSL <_s>
 // _d = _r << _s
-#define SHL(_d, _r, _s) ALUr_shr(AL, mov, 1, _d, 0, _r, LSL_reg, _s)
+#define LSL(_d, _r, _s) ALUr_shr(AL, mov, 1, _d, 0, _r, LSL_reg, _s)
 
 // MOVS _d, _r, LSL #_imm
 // _d = _r << _imm
-#define SHLi(_d, _r, _imm) ALUr_shi(AL, mov, 1, _d, 0, _r, LSL_imm, _imm)
+#define LSLi(_d, _r, _imm) ALUr_shi(AL, mov, 1, _d, 0, _r, LSL_imm, _imm)
                     
 // TST
-#define TEST(_l,_r)     ALUr(AL, tst, 1, 0, _l, _r)
+#define TST(_l,_r)     ALUr(AL, tst, 1, 0, _l, _r)
 #define TSTi(_d,_imm)   ALUi(AL, tst, 1, 0, _d, _imm)
 
 // CMP
@@ -441,11 +478,12 @@ enum {
 #define MOVLE(dr,sr) MOV_cond(dr, sr, LE)
 #define MOVGT(dr,sr) MOV_cond(dr, sr, GT)
 #define MOVGE(dr,sr) MOV_cond(dr, sr, GE)
-#define MOVCC(dr,sr) MOV_cond(dr, sr, CC)
-#define MOVBE(dr,sr) MOV_cond(dr, sr, LS)
+#define MOVLO(dr,sr) MOV_cond(dr, sr, LO)
+#define MOVLS(dr,sr) MOV_cond(dr, sr, LS)
 #define MOVHI(dr,sr) MOV_cond(dr, sr, HI)
-#define MOVAE(dr,sr) MOV_cond(dr, sr, CS)
-#define MOVVC(dr,sr) MOV_cond(dr, sr, VC) // overflow clear
+#define MOVHS(dr,sr) MOV_cond(dr, sr, HS)
+#define MOVCC(dr,sr) MOV_cond(dr, sr, CC)
+#define MOVVC(dr,sr) MOV_cond(dr, sr, VC)
 
 // for Assembler.cpp compatibility
 #define MR(d,s) MOV(d,s)
@@ -454,6 +492,7 @@ enum {
 #define LDR_nochk(_d,_b,_off)  asm_ldr_chk(_d,_b,_off,0)
 
 #define LDi(_d,_imm) do {                                               \
+        NanoAssert(IsGpReg(_d));                                        \
         if (isS8((_imm)) || isU8((_imm))) {                      \
             underrunProtect(4);                                         \
             if ((_imm)<0) {\
@@ -471,17 +510,20 @@ enum {
 
 
 // load 8-bit, zero extend
-// LDRB allows 12-bit offset in ARM mode
+// note, only 5-bit offsets (!) are supported for this, but that's all we need at the moment
+// (LDRB actually allows 12-bit offset in ARM mode but constraining to 5-bit gives us advantage for Thumb)
 // @todo, untested!
-#define LDRB(_d,_off,_b) do {                                           \
-        NanoAssert((_off)>=0&&(_off)<=0xfff);                                    \
+#define LDRB(_d,_n,_off) do {                                           \
+        NanoAssert(IsGpReg(_d) && IsGpReg(_n));                         \
+        NanoAssert((_off)>=0&&(_off)<=31);                                    \
         underrunProtect(4);                                             \
-        *(--_nIns) = (NIns)( COND_AL | (0x5D<<20) | ((_b)<<16) | ((_d)<<12) |  ((_off)&0xfff)  ); \
-        asm_output("ldrb %s, [%s, #0x%X]", gpn(_d),gpn(_b),(_off));          \
+        *(--_nIns) = (NIns)( COND_AL | (0x5D<<20) | ((_n)<<16) | ((_d)<<12) |  ((_off)&0xfff)  ); \
+        asm_output("ldrb %s, [%s, #0x%X]", gpn(_d),gpn(_n),(_off));          \
     } while(0)
 
 #define STR(_d,_n,_off) do {                                            \
-        NanoAssert(!IsFpReg(_d) && isS12(_off));                        \
+        NanoAssert(IsGpReg(_d) && IsGpReg(_n));                         \
+        NanoAssert(isS12(_off));                                        \
         underrunProtect(4);                                             \
         if ((_off)<0) {\
             *(--_nIns) = (NIns)( COND_AL | (0x50<<20) | ((_n)<<16) | ((_d)<<12) | ((-(_off))&0xFFF) ); \
@@ -494,7 +536,8 @@ enum {
 
 // Rd += _off; [Rd] = Rn
 #define STR_preindex(_d,_n,_off) do {                                   \
-        NanoAssert(!IsFpReg(_d) && isS12(_off));                        \
+        NanoAssert(IsGpReg(_d) && IsGpReg(_n));                         \
+        NanoAssert(isS12(_off));                                        \
         underrunProtect(4);                                             \
         if ((_off)<0) {\
             *(--_nIns) = (NIns)( COND_AL | (0x52<<20) | ((_n)<<16) | ((_d)<<12) | ((-(_off))&0xFFF) ); \
@@ -507,7 +550,8 @@ enum {
 
 // [Rd] = Rn ; Rd += _off
 #define STR_postindex(_d,_n,_off) do {                                  \
-        NanoAssert(!IsFpReg(_d) && isS12(_off));                        \
+        NanoAssert(IsGpReg(_d) && IsGpReg(_n));                         \
+        NanoAssert(isS12(_off));                                        \
         underrunProtect(4);                                             \
         if ((_off)<0) {\
             *(--_nIns) = (NIns)( COND_AL | (0x40<<20) | ((_n)<<16) | ((_d)<<12) | ((-(_off))&0xFFF) ); \
@@ -517,11 +561,6 @@ enum {
             asm_output("str %s, [%s], %d", gpn(_d), gpn(_n), (_off));      \
         }\
     } while(0)
-
-
-//#define RET()   underrunProtect(1); *(--_nIns) = 0xc3;    asm_output("ret")
-//#define INT3()  underrunProtect(1); *(--_nIns) = 0xcc;  asm_output("int3")
-//#define RET() INT3()
 
 // NOP
 #if NJ_ARM_ARCH >= NJ_ARM_V7
@@ -539,25 +578,31 @@ enum {
         asm_output("bkpt");\
     } while (0)
 
-// this is pushing a reg
+// STMFD SP!,{single reg}
 #define PUSHr(_r)  do {                                                 \
         underrunProtect(4);                                             \
+        NanoAssert(IsGpReg(_r));                                        \
         *(--_nIns) = (NIns)( COND_AL | (0x92<<20) | (SP<<16) | (1<<(_r)) ); \
         asm_output("push %s",gpn(_r)); } while (0)
 
-// STMDB
+// STMFD SP!,{reglist}
 #define PUSH_mask(_mask)  do {                                          \
         underrunProtect(4);                                             \
+        NanoAssert(isU16(_mask));                                       \
         *(--_nIns) = (NIns)( COND_AL | (0x92<<20) | (SP<<16) | (_mask) ); \
         asm_output("push %x", (_mask));} while (0)
 
+// LDMFD SP!,{single reg}
 #define POPr(_r) do {                                                   \
         underrunProtect(4);                                             \
+        NanoAssert(IsGpReg(_r));                                        \
         *(--_nIns) = (NIns)( COND_AL | (0x8B<<20) | (SP<<16) | (1<<(_r)) ); \
         asm_output("pop %s",gpn(_r));} while (0)
 
+// LDMFD SP!,{reglist}
 #define POP_mask(_mask) do {                                            \
         underrunProtect(4);                                             \
+        NanoAssert(isU16(_mask));                                       \
         *(--_nIns) = (NIns)( COND_AL | (0x8B<<20) | (SP<<16) | (_mask) ); \
         asm_output("pop %x", (_mask));} while (0)
 
@@ -575,8 +620,8 @@ enum {
 #define B(t)    B_cond(AL,t)
 #define BHI(t)  B_cond(HI,t)
 #define BLS(t)  B_cond(LS,t)
-#define BCC(t)  B_cond(CC,t)
-#define BCS(t)  B_cond(CS,t)
+#define BHS(t)  B_cond(HS,t)
+#define BLO(t)  B_cond(LO,t)
 #define BEQ(t)  B_cond(EQ,t)
 #define BNE(t)  B_cond(NE,t)
 #define BLT(t)  B_cond(LT,t)
@@ -585,33 +630,36 @@ enum {
 #define BGT(t)  B_cond(GT,t)
 #define BVS(t)  B_cond(VS,t)
 #define BVC(t)  B_cond(VC,t)
+#define BCC(t)  B_cond(CC,t)
+#define BCS(t)  B_cond(CS,t)
 
 #define JMP(t) B(t)
 
 // emit a placeholder that will be filled in later by nPatchBranch
 #define B_long_placeholder() B(0)
 
-// MOV(EQ) _r, #1 
-// MOV(NE) _r, #0
+// MOV(cond)  _r, #1 
+// MOV(!cond) _r, #0
 #define SET(_r,_cond) do {                                              \
-    ALUi((_cond)^1, mov, 0, _r, 0, 0);                                  \
+    ALUi(OppositeCond(_cond), mov, 0, _r, 0, 0);                        \
     ALUi(_cond, mov, 0, _r, 0, 1);                                      \
-    } while (0) /* no semi */
+    } while (0)
 
-#define SETE(r)     SET(r,EQ)
-#define SETL(r)     SET(r,LT)
+#define SETEQ(r)    SET(r,EQ)
+#define SETLT(r)    SET(r,LT)
 #define SETLE(r)    SET(r,LE)
-#define SETG(r)     SET(r,GT)
+#define SETGT(r)    SET(r,GT)
 #define SETGE(r)    SET(r,GE)
-#define SETB(r)     SET(r,CC)
-#define SETBE(r)    SET(r,LS)
-#define SETAE(r)    SET(r,CS)
-#define SETA(r)     SET(r,HI)
-#define SETO(r)     SET(r,VS)
-#define SETC(r)     SET(r,CS)
+#define SETLO(r)    SET(r,LO)
+#define SETLS(r)    SET(r,LS)
+#define SETHI(r)    SET(r,HI)
+#define SETHS(r)    SET(r,HS)
+#define SETVS(r)    SET(r,VS)
+#define SETCS(r)    SET(r,CS)
 
 #define STMIA(_b, _mask) do {                                           \
         underrunProtect(4);                                             \
+        NanoAssert(IsGpReg(_b));                                        \
         NanoAssert(((_mask)&rmask(_b))==0 && isU8(_mask));              \
         *(--_nIns) = (NIns)(COND_AL | (0x8A<<20) | ((_b)<<16) | (_mask)&0xFF); \
         asm_output("stmia %s!,{0x%x}", gpn(_b), _mask); \
@@ -619,6 +667,7 @@ enum {
 
 #define LDMIA(_b, _mask) do {                                           \
         underrunProtect(4);                                             \
+        NanoAssert(IsGpReg(_b));                                        \
         NanoAssert(((_mask)&rmask(_b))==0 && isU8(_mask));              \
         *(--_nIns) = (NIns)(COND_AL | (0x8B<<20) | ((_b)<<16) | (_mask)&0xFF); \
         asm_output("ldmia %s!,{0x%x}", gpn(_b), (_mask)); \
@@ -633,6 +682,8 @@ enum {
 /*
  * VFP
  */
+
+#ifdef NJ_ARM_VFP
 
 #define FMDRR(_Dm,_Rd,_Rn) do {                                         \
         underrunProtect(4);                                             \
@@ -651,7 +702,7 @@ enum {
 #define FSTD(_Dd,_Rn,_offs) do {                                        \
         underrunProtect(4);                                             \
         NanoAssert((((_offs) & 3) == 0) && isS8((_offs) >> 2));         \
-        NanoAssert(IsFpReg(_Dd) && !IsFpReg(_Rn));                      \
+        NanoAssert(IsFpReg(_Dd) && IsGpReg(_Rn));                       \
         int negflag = 1<<23;                                            \
         intptr_t offs = (_offs);                                        \
         if (_offs < 0) {                                                \
@@ -665,7 +716,7 @@ enum {
 #define FLDD_chk(_Dd,_Rn,_offs,_chk) do {                               \
         if(_chk) underrunProtect(4);                                    \
         NanoAssert((((_offs) & 3) == 0) && isS8((_offs) >> 2));         \
-        NanoAssert(IsFpReg(_Dd) && !IsFpReg(_Rn));                      \
+        NanoAssert(IsFpReg(_Dd) && IsGpReg(_Rn));                       \
         int negflag = 1<<23;                                            \
         intptr_t offs = (_offs);                                        \
         if (_offs < 0) {                                                \
@@ -740,11 +791,12 @@ enum {
         asm_output("fmstat");                       \
     } while (0)
 
-#define FCMPD(_Dd,_Dm) do {                                             \
+#define FCMPD(_Dd,_Dm,_E) do {                                          \
         underrunProtect(4);                                             \
         NanoAssert(IsFpReg(_Dd) && IsFpReg(_Dm));                       \
-        *(--_nIns) = (NIns)( COND_AL | (0xEB4<<16) | (FpRegNum(_Dd)<<12) | (0xB4<<4) | (FpRegNum(_Dm)) ); \
-        asm_output("fcmpd %s,%s", gpn(_Dd), gpn(_Dm));                 \
+        NanoAssert(((_E)==0) || ((_E)==1));                             \
+        *(--_nIns) = (NIns)( COND_AL | (0xEB4<<16) | (FpRegNum(_Dd)<<12) | (0xB<<8) | ((_E)<<7) | (0x4<<4) | (FpRegNum(_Dm)) ); \
+        asm_output("fcmp%sd %s,%s", (((_E)==1)?"e":""), gpn(_Dd), gpn(_Dm));  \
     } while (0)
 
 #define FCPYD(_Dd,_Dm) do {                                             \
@@ -753,5 +805,7 @@ enum {
         *(--_nIns) = (NIns)( COND_AL | (0xEB0<<16) | (FpRegNum(_Dd)<<12) | (0xB4<<4) | (FpRegNum(_Dm)) ); \
         asm_output("fcpyd %s,%s", gpn(_Dd), gpn(_Dm));                 \
     } while (0)
+
+#endif // NJ_ARM_VFP
 }
 #endif // __nanojit_NativeArm__
