@@ -592,6 +592,12 @@ namespace nanojit
     };
     typedef LIns*       LInsp;
 
+#ifdef ANDROID
+    typedef struct { LIns* v; LIns i; } LirFarIns __attribute__ ((aligned (4)));
+    typedef struct { int32_t v; LIns i; } LirImm32Ins __attribute__ ((aligned (4)));
+    typedef struct { int32_t v[2]; LIns i; } LirImm64Ins __attribute__ ((aligned (4)));
+    typedef struct { const CallInfo* ci; LIns i; } LirCallIns __attribute__ ((aligned (4)));
+#else
 #if defined __SUNPRO_C || defined __SUNPRO_CC
     #pragma pack(4)
 #else
@@ -608,6 +614,7 @@ namespace nanojit
 #else
     #pragma pack(pop)
 #endif
+#endif // ANDROID
     
     static const uint32_t LIR_FAR_SLOTS   = sizeof(LirFarIns)/sizeof(LIns); 
     static const uint32_t LIR_CALL_SLOTS = sizeof(LirCallIns)/sizeof(LIns); 

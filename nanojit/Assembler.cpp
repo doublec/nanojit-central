@@ -988,8 +988,8 @@ namespace nanojit
 
 
 #ifdef AVMPLUS_PORTING_API
-		NanoJIT_PortAPI_FlushInstructionCache(_nIns, _startingIns);
-		NanoJIT_PortAPI_FlushInstructionCache(_nExitIns, _endJit2Addr);
+		NanoJIT_PortAPI_FlushInstructionCache((char*)_nIns, (char*)_startingIns);
+		NanoJIT_PortAPI_FlushInstructionCache((char*)_nExitIns, (char*)_endJit2Addr);
 #else
 		flush_icache(_nativePages);
 		flush_icache(_nativeExitPages);

@@ -812,7 +812,7 @@ Assembler::nMarkExecute(Page* page, int flags)
     }
 #endif
 #ifdef AVMPLUS_PORTING_API
-    NanoJIT_PortAPI_MarkExecutable(page, (void*)((char*)page+NJ_PAGE_SIZE), flags);
+    NanoJIT_PortAPI_MarkExecutable((char*)page, (char*)((char*)page+NJ_PAGE_SIZE), flags);
     // todo, must add error-handling to the portapi
 #endif
 }
@@ -1289,7 +1289,7 @@ Assembler::asm_adjustBranch(NIns* at, NIns* target)
 #endif
 
 #ifdef AVMPLUS_PORTING_API
-    NanoJIT_PortAPI_FlushInstructionCache(at, at+4);
+    NanoJIT_PortAPI_FlushInstructionCache((char*)at, (char*)(at+4));
 #endif
 
     return was;
