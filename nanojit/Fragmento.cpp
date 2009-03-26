@@ -149,10 +149,10 @@ namespace nanojit
                 count = 0;
 			// @todo nastiness that needs a fix'n
 			_gcHeap = gc->GetGCHeap();
-			NanoAssert(int32_t(NJ_PAGE_SIZE)<=_gcHeap->kNativePageSize);
+			NanoAssert(size_t(NJ_PAGE_SIZE)<=_gcHeap->kNativePageSize);
 			
 			// convert _max_pages to gc page count 
-			int32_t gcpages = (count*NJ_PAGE_SIZE) / _gcHeap->kNativePageSize;
+			int32_t gcpages = (int32_t)((count*NJ_PAGE_SIZE) / _gcHeap->kNativePageSize);
 			memory = (Page*)_gcHeap->Alloc(gcpages);
 #ifdef MMGC_MEMORY_INFO
 			ChangeSizeExplicit("NanoJitMem", 1, _gcHeap->Size(memory));
