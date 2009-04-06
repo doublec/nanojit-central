@@ -783,12 +783,13 @@ namespace nanojit
         else if (sz == ARGSIZE_F) {
 			Reservation* rA = getresv(p);
 			if (rA) {
-				if (rA->reg == UnknownReg) {
+				if (rA->reg == UnknownReg || !IsFpReg(rA->reg)) {
 					// load it into the arg reg
 					int d = findMemFor(p);
 					LFD(r, d, FP);
 				} else {
 					// it must be in a saved reg
+					NanoAssert(IsFpReg(r) && IsFpReg(rA->reg));
 					FMR(r, rA->reg);
 				}
 			} 
