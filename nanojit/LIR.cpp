@@ -97,7 +97,7 @@ namespace nanojit
 	
 	// LCompressedBuffer
 	LirBuffer::LirBuffer(Fragmento* frago)
-		: _frago(frago), _pages(frago->core()->GetGC()), abi(ABI_FASTCALL)
+		: abi(ABI_FASTCALL), _frago(frago), _pages(frago->core()->GetGC())
 	{
 		clear();
 		Page* start = pageAlloc();
@@ -2252,7 +2252,7 @@ namespace nanojit
 	
 	// BB mgmt functions
 	BlockLocator::BlockLocator(GC* gc, LirWriter* out)
-		: LirWriter(out), _tbd(gc), _bbs(gc), _gc(gc) 
+		: LirWriter(out), _gc(gc), _tbd(gc), _bbs(gc)
 	{		
 		_out = out;
 	}
