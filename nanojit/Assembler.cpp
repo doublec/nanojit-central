@@ -1093,7 +1093,14 @@ namespace nanojit
 					
                 case LIR_live: {
                     countlir_live();
-                    pending_lives.add(ins->oprnd1());
+                    LInsp op1 = ins->oprnd1();
+                    // alloca's are meant to live until the point of the LIR_live instruction, marking
+                    // other expressions as live ensures that they remain so at loop bottoms.
+                    if (op1->isop(LIR_alloc)) {
+                        findMemFor(op1);
+                    } else {
+                        pending_lives.add(op1);
+                    }
                     break;
                 }
 
