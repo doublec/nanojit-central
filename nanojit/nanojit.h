@@ -79,9 +79,14 @@
 	macro-ization of operator new isn't strictly necessary, but is done to bottleneck both
 	sides of the new/delete pair to forestall future needs.
 */
-#ifdef MMGC_API
+#ifdef VMCFG_NANOJIT_STANDALONE
 
-    using namespace MMgc;
+	#define NJ_NEW(gc, cls)			new (gc) cls
+	#define NJ_DELETE(obj)			do { delete obj; } while (0)
+
+#else
+
+	using namespace MMgc;
 	
 	// separate overloads because GCObject and GCFinalizedObjects have different dtors 
 	// (GCFinalizedObject's is virtual, GCObject's is not)
@@ -105,9 +110,7 @@
 
 	#define NJ_NEW(gc, cls)			new (gc) cls
 	#define NJ_DELETE(obj)			do { mmgc_delete(obj); } while (0)
-#else
-	#define NJ_NEW(gc, cls)			new (gc) cls
-	#define NJ_DELETE(obj)			do { delete obj; } while (0)
+
 #endif
 
 namespace nanojit
