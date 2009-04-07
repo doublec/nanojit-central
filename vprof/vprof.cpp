@@ -127,13 +127,13 @@ static void dumpProfile (void)
             printf (":%d", e->line);
         } 
         printf (" %s [%lld : %lld] %lld %lld ", 
-                f(((double)e->sum)/((double)e->count)), e->min, e->max, e->sum, e->count);
+                f(((double)e->sum)/((double)e->count)), (long long int)e->min, (long long int)e->max, (long long int)e->sum, (long long int)e->count);
         if (e->h) {
             int j = MAXINT;
             for (j = 0; j < e->h->nbins; j ++) {
-                printf ("(%lld < %lld) ", e->h->count[j], e->h->lb[j]);
+                printf ("(%lld < %lld) ", (long long int)e->h->count[j], (long long int)e->h->lb[j]);
             }
-            printf ("(%lld >= %lld) ", e->h->count[e->h->nbins], e->h->lb[e->h->nbins-1]);
+            printf ("(%lld >= %lld) ", (long long int)e->h->count[e->h->nbins], (long long int)e->h->lb[e->h->nbins-1]);
         }
         if (e->func) {
             int j;
@@ -144,7 +144,7 @@ static void dumpProfile (void)
             }
             for (j = 0; j < NUM_EVARS; j++) {
                 if (e->i64var[j] != 0) {
-                    printf ("I64VAR%d %lld ", j, e->i64var[j]);
+                    printf ("I64VAR%d %lld ", j, (long long int)e->i64var[j]);
                 }
             }
             for (j = 0; j < NUM_EVARS; j++) {
