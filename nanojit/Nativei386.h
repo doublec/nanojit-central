@@ -691,7 +691,7 @@ namespace nanojit
 
 #define FPU(o,r)							\
 		underrunProtect(2);					\
-		*(--_nIns) = uint8_t(((uint8_t)(o)&0xff) | r&7);\
+		*(--_nIns) = uint8_t(((uint8_t)(o)&0xff) | (r&7));\
 		*(--_nIns) = (uint8_t)(((o)>>8)&0xff)
 
 #define FPUm(o,d,b)							\

@@ -102,7 +102,7 @@ namespace nanojit
 			for (;;) {
 				LInsp i = in->read();
 				if (!i || i->isGuard() || i->isBranch()
-					|| i->isCall() && !i->callInfo()->_cse
+					|| (i->isCall() && !i->callInfo()->_cse)
 					|| !ignoreInstruction(i))
 					return i;
 			}
@@ -432,8 +432,8 @@ namespace nanojit
 		if (error()) return;
 
 #ifdef NANOJIT_IA32
-        NanoAssert(_allocator.active[FST0] && _fpuStkDepth == -1 ||
-            !_allocator.active[FST0] && _fpuStkDepth == 0);
+        NanoAssert((_allocator.active[FST0] && _fpuStkDepth == -1) ||
+            (!_allocator.active[FST0] && _fpuStkDepth == 0));
 #endif
 		
         AR &ar = _activation;
@@ -601,12 +601,12 @@ namespace nanojit
 
 #if defined NANOJIT_IA32
         if (r != UnknownReg && 
-            ((rmask(r)&XmmRegs) && !(allow&XmmRegs) ||
-                 (rmask(r)&x87Regs) && !(allow&x87Regs)))
+            (((rmask(r)&XmmRegs) && !(allow&XmmRegs)) ||
+                 ((rmask(r)&x87Regs) && !(allow&x87Regs))))
 #elif defined NANOJIT_PPC
         if (r != UnknownReg && 
-            ((rmask(r)&GpRegs) && !(allow&GpRegs) ||
-                 (rmask(r)&FpRegs) && !(allow&FpRegs)))
+            (((rmask(r)&GpRegs) && !(allow&GpRegs)) ||
+                 ((rmask(r)&FpRegs) && !(allow&FpRegs))))
 #else
 		if (false)
 #endif
@@ -1570,7 +1570,7 @@ namespace nanojit
         char* s = &outline[0];
         VMPI_memset(s, ' ', 45);  s[45] = '\0';
         s += VMPI_strlen(s);
-        VMPI_sprintf(s, what);
+        VMPI_sprintf(s, "%s", what);
         s += VMPI_strlen(s);
 
         int32_t max = _activation.tos < NJ_MAX_STACK_ENTRY ? _activation.tos : NJ_MAX_STACK_ENTRY;

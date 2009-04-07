@@ -123,7 +123,7 @@ namespace nanojit
     // encode 2-register rex prefix.  dropped if none of its bits are set.
     static inline uint64_t rexrb(uint64_t op, Register r, Register b) {
         int shift = 64 - 8*oplen(op);
-        uint64_t rex = (op >> shift) & 255 | (r&8)>>1 | (b&8)>>3;
+        uint64_t rex = ((op >> shift) & 255) | ((r&8)>>1) | ((b&8)>>3);
         return rex != 0x40 ? op | rex << shift : op - 1;
     }
 
@@ -131,15 +131,15 @@ namespace nanojit
     // keep REX if b >= rsp, to allow uniform use of all 16 8bit registers
     static inline uint64_t rexrb8(uint64_t op, Register r, Register b) {
         int shift = 64 - 8*oplen(op);
-        uint64_t rex = (op >> shift) & 255 | (r&8)>>1 | (b&8)>>3;
-        return ((rex | b&~3) != 0x40) ? op | rex << shift : op - 1;
+        uint64_t rex = ((op >> shift) & 255) | ((r&8)>>1) | ((b&8)>>3);
+        return ((rex | (b & ~3)) != 0x40) ? (op | (rex << shift)) : op - 1;
     }
 
     // encode 2-register rex prefix that follows a manditory prefix (66,F2,F3)
     // [prefix][rex][opcode]
     static inline uint64_t rexprb(uint64_t op, Register r, Register b) {
         int shift = 64 - 8*oplen(op) + 8;
-        uint64_t rex = (op >> shift) & 255 | (r&8)>>1 | (b&8)>>3;
+        uint64_t rex = ((op >> shift) & 255) | ((r&8)>>1) | ((b&8)>>3);
         // to drop rex, we replace rex with manditory prefix, and decrement length
         return rex != 0x40 ? op | rex << shift :
             ((op & ~(255LL<<shift)) | (op>>(shift-8)&255) << shift) - 1;
@@ -345,7 +345,7 @@ namespace nanojit
     }
 
     static bool isImm32(LIns *ins) {
-        return ins->isconst() || ins->isconstq() && isS32(ins->constvalq());
+        return ins->isconst() || (ins->isconstq() && isS32(ins->constvalq()));
     }
     static int32_t getImm32(LIns *ins) {
         return ins->isconst() ? ins->constval() : int32_t(ins->constvalq());

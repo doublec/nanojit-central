@@ -510,7 +510,7 @@ namespace nanojit
 	}
 
 	bool FASTCALL isCmp(LOpcode c) {
-		return (c&~LIR64) >= LIR_eq && (c&~LIR64) <= LIR_uge || c >= LIR_feq && c <= LIR_fge;
+		return ((c&~LIR64) >= LIR_eq && (c&~LIR64) <= LIR_uge ) || (c >= LIR_feq && c <= LIR_fge);
 	}
     
 	bool FASTCALL isCond(LOpcode c) {
@@ -544,7 +544,7 @@ namespace nanojit
 	bool LIns::isQuad() const {
 		LOpcode op = u.code;
 		#ifdef NANOJIT_64BIT
-			return !(op >= LIR_qeq && op <= LIR_quge) && (op & LIR64) != 0 || op == LIR_param;
+			return !(op >= LIR_qeq && op <= LIR_quge) && ((op & LIR64) != 0 || op == LIR_param);
 		#else
 			return (op & LIR64) != 0;
 		#endif
@@ -576,7 +576,7 @@ namespace nanojit
 
     bool LIns::isCse() const
     { 
-		return nanojit::isCse(u.code) || isCall() && callInfo()->_cse;
+		return nanojit::isCse(u.code) || (isCall() && callInfo()->_cse);
     }
 
 	void LIns::setimm16(int32_t x)
@@ -972,7 +972,7 @@ namespace nanojit
 					return insImm(0);
 				}
 			}
-			else if (c == -1 || c == 1 && oprnd1->isCmp()) {
+			else if (c == -1 || (c == 1 && oprnd1->isCmp())) {
 				if (v == LIR_or) {
 					// x | -1 = -1, cmp | 1 = 1
 					return oprnd2;
@@ -998,7 +998,7 @@ namespace nanojit
 	{
 		if (v == LIR_xt || v == LIR_xf) {
 			if (c->isconst()) {
-				if (v == LIR_xt && !c->constval() || v == LIR_xf && c->constval()) {
+				if ((v == LIR_xt && !c->constval()) || (v == LIR_xf && c->constval())) {
 					return 0; // no guard needed
 				}
 				else {
@@ -1604,7 +1604,7 @@ namespace nanojit
 
             // first handle side-effect instructions
 			if (i->isop(LIR_label) || i->isBranch() || i->isStore() || isRet(i->opcode()) ||
-				i->isGuard() || i->isCall() && !i->callInfo()->_cse)
+				i->isGuard() || (i->isCall() && !i->callInfo()->_cse))
 			{
 				live.add(i,0);
                 if (i->isGuard())
