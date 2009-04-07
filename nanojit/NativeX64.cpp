@@ -669,8 +669,8 @@ namespace nanojit
         LIns* iftrue = values->oprnd1();
         LIns* iffalse = values->oprnd2();
 
-        NanoAssert(ins->isop(LIR_qcmov) && iftrue->isQuad() && iffalse->isQuad() ||
-                   ins->isop(LIR_cmov) && !iftrue->isQuad() && !iffalse->isQuad());
+        NanoAssert((ins->isop(LIR_qcmov) && iftrue->isQuad() && iffalse->isQuad()) ||
+                   (ins->isop(LIR_cmov) && !iftrue->isQuad() && !iffalse->isQuad()));
         
         // this code assumes that neither LD nor MR nor MRcc set any of the condition flags.
         // (This is true on Intel, is it true on all architectures?)
