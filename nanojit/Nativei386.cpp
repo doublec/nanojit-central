@@ -382,7 +382,7 @@ namespace nanojit
             if (i->imm8() < max_regs)
     			prefer &= rmask(argRegs[i->imm8()]);
         }
-        else if (op == LIR_callh || op == LIR_rsh && i->oprnd1()->opcode()==LIR_callh) {
+        else if (op == LIR_callh || (op == LIR_rsh && i->oprnd1()->opcode()==LIR_callh)) {
             prefer &= rmask(retRegs[1]);
         }
         else if (i->isCmp()) {
