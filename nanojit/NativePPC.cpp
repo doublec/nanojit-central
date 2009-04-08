@@ -124,16 +124,6 @@ namespace nanojit
 		STP(R0, lr_offset, SP); // save LR in linkage.lr
 		MFLR(R0);
 
-		// pad start addr to 8byte
-		if (intptr_t(_nIns) & 7) {
-		#if PEDANTIC && defined NANOJIT_64BIT
-			// br_size == 7, 7+nop = 8, so we need 2 nops
-			underrunProtect(8);
-			NOP();
-		#endif
-			NOP();
-		}
-
 		return patchEntry;
 	}
 

@@ -1197,17 +1197,6 @@ namespace nanojit
         MR(FP, RSP);            // Establish our own FP.
         emitr(X64_pushr, FP);   // Save caller's FP.
 
-        // align the entry point
-        // todo: the intel optimization guide suggests canonical nop 
-        // instructions for sizes from 1..9; use them!
-        underrunProtect(8);
-        int code_align = (intptr_t)_nIns & 7;
-        if (code_align) {
-            static const uint64_t nops[8] = {
-                0, X64_nop1, X64_nop2, X64_nop3, X64_nop4, X64_nop5, X64_nop6, X64_nop7
-            };
-            emit(nops[code_align]);
-        }
         return patchEntry;
     }
 

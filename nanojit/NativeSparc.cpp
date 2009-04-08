@@ -95,16 +95,7 @@ namespace nanojit
             SETHI(-frameSize, G1);
         }
 
-        // align the entry point
-        asm_align_code();
-
         return patchEntry;
-    }
-
-    void Assembler::asm_align_code() {
-        while(uintptr_t(_nIns) & 15) {
-            NOP();
-        }
     }
 
     void Assembler::nFragExit(LInsp guard)

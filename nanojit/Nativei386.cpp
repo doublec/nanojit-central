@@ -117,19 +117,8 @@ namespace nanojit
 		MR(FP, SP); // Establish our own FP.
         PUSHr(FP); // Save caller's FP.
 
-        // align the entry point
-        asm_align_code();
-
 		return patchEntry;
 	}
-
-    void Assembler::asm_align_code() {
-        // todo: the intel optimization guide suggests canonical nop 
-        // instructions for sizes from 1..9; use them!
-        while(uintptr_t(_nIns) & 7) {
-            NOP();
-        }
-    }
 
 	void Assembler::nFragExit(LInsp guard)
 	{

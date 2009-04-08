@@ -108,10 +108,6 @@ Assembler::genPrologue()
     MOV(FP, SP);
     PUSH_mask(savingMask);
 
-    // ARM instructions are four-byte aligned, but we need the start address
-    // of the code to be eight-byte aligned, so add a NOP if necessary.
-    if ((((int)_nIns) & 7) != 0) NOP();
-
     return patchEntry;
 }
 
@@ -240,7 +236,7 @@ Assembler::asm_call(LInsp ins)
 #if NJ_ARM_ARCH >= NJ_ARM_V5
         if (blx_lr_bug) {
             // workaround for msft device emulator bug (blx lr emulated as no-op)
-	    underrunProtect(8);
+	        underrunProtect(8);
             BLX(IP);
             MOV(IP,LR);
         } else {
@@ -1428,7 +1424,7 @@ bool Assembler::BL_noload(NIns* addr, Register reg)
         NanoAssert(reg != PC);
         if (blx_lr_bug) {
             // workaround for msft device emulator bug (blx lr emulated as no-op)
-	    underrunProtect(8);
+	        underrunProtect(8);
             BLX(IP);
             MOV(IP,LR);
             return true;

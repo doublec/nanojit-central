@@ -184,8 +184,7 @@ namespace nanojit
         void asm_farg(LInsp);\
         void asm_arg(ArgSize, LIns*, Register);\
 		void asm_pusharg(LInsp);\
-		void asm_cmp(LIns *cond);\
-        void asm_align_code();
+		void asm_cmp(LIns *cond);
 		
 	#define swapptrs()  { NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins; }
 		
