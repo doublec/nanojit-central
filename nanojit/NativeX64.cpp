@@ -37,22 +37,11 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#ifdef _MAC
-// for MakeDataExecutable
-#include <CoreServices/CoreServices.h>
-#endif
-
 #include "nanojit.h"
 
 // uncomment this to enable _vprof/_nvprof macros
 //#define DOPROF
 #include "../vprof/vprof.h"
-
-#if defined AVMPLUS_UNIX || defined AVMPLUS_MAC
-#include <sys/mman.h>
-#include <errno.h>
-#include <stdlib.h>
-#endif
 
 #if defined FEATURE_NANOJIT && defined NANOJIT_X64
 

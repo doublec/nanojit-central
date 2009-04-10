@@ -38,22 +38,7 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#ifdef _MAC
-// for MakeDataExecutable
-#include <CoreServices/CoreServices.h>
-#endif
-
 #include "nanojit.h"
-
-#if defined AVMPLUS_UNIX || defined AVMPLUS_MAC
-#include <sys/mman.h>
-#include <errno.h>
-#include <stdlib.h>
-#endif
-
-#if defined AVMPLUS_MAC
-#  include <mach/mach.h> // for vm_protect()
-#endif
 
 #ifdef _MSC_VER
 	// disable some specific warnings which are normally useful, but pervasive in the code-gen macros
