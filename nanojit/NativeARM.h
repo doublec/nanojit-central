@@ -64,7 +64,7 @@ const int NJ_LOG2_PAGE_SIZE = 12;       // 4K
 // is used, and NJ_SOFTFLOAT is defined.
 //#define NJ_ARM_VFP
 
-#if defined AVMPLUS_ARM_OLDABI || defined _MSC_VER
+#if defined VMCFG_DOUBLE_MSW_FIRST || defined _MSC_VER
 #  define NJ_ARM_EABI  0
 #else
 #  define NJ_ARM_EABI  1
