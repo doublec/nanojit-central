@@ -977,12 +977,13 @@ namespace nanojit
         LIns* insGuard(LOpcode op, LInsp cond, SideExit *x);
     };
 
+    typedef avmplus::List<LIns*, avmplus::LIST_GCObjects>   SegmentList;
     class LirBuffer : public GCFinalizedObject
     {
         public:
             static const uint32_t LIR_BUF_THRESHOLD = 1024/sizeof(LIns);  // 1KB prior to running out of space we'll allocate a new page
 
-            LirBuffer(Fragmento* frago);
+            LirBuffer(GC *gc);
             ~LirBuffer();
             void        clear();
             LInsp       next();
@@ -1003,17 +1004,34 @@ namespace nanojit
             AbiKind abi;
             LInsp state,param1,sp,rp;
             LInsp savedParams[NumSavedRegs];
-            DWB(Fragmento*) _frago;
+            GC *gc;
             
         protected:
             friend class LirBufWriter;
 
-            LInsp       commit(size_t count);
-            Page*       pageAlloc();
+            /**
+             * arbitrary segment size, determines allocation size.
+             * Note: this is slightly under a multiple of 4K to avoid getting
+             * a whole page of internal fragmentation.
+             * as of 4/28/09 tamarin/MMgc requires 16-20 bytes of overhead per large alloc
+             */
+            static const uint32_t LIR_BUF_SEGMENT_SIZE = 32*1024-64;
 
-            PageList    _pages;
-            Page*       _thresholdPage; // allocated in preperation of a needing to growing the buffer
-            LInsp       _unused;    // next unused instruction slot
+            /** max # lir instructions that commit can handle, e.g. via skip() */
+            static const uint32_t MAX_LIR_COMMIT = 1024;
+            
+            void        commit(uint32_t count);
+            uint32_t    idx();
+            uint32_t    maxIdx();
+            uint32_t    thresholdIdx();
+            bool        segmentWaiting();
+            uint32_t    segmentsInUse();
+            void        primeNewSegment();
+            void        transitionToNewSegment();
+
+            uint32_t    _idx;
+            LInsp       _currentSegment;
+            SegmentList _segments;          // ptrs to start of segments
             int         _noMem;     // set if ran out of memory when writing to buffer
     };  
 
@@ -1095,7 +1113,7 @@ namespace nanojit
 
     class Assembler;
 
-    void compile(Assembler *assm, Fragment *frag);
+    void compile(Fragmento*, Assembler*, Fragment*);
     verbose_only(void live(GC *gc, LirBuffer *lirbuf, bool showLiveRefs);)
 
     class StackFilter: public LirFilter

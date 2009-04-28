@@ -93,36 +93,28 @@ namespace nanojit
 	#define counter_value(x)		x
 #endif /* NJ_PROFILE */
 
-	//static int32_t buffer_count = 0;
-	
-	// LCompressedBuffer
-	LirBuffer::LirBuffer(Fragmento* frago)
-		: abi(ABI_FASTCALL), _frago(frago), _pages(frago->core()->GetGC())
+	LirBuffer::LirBuffer(GC *gc)
+		: abi(ABI_FASTCALL), gc(gc), _segments(gc)
 	{
 		clear();
-		Page* start = pageAlloc();
-		if (start)
-			_unused = &start->lir[0];
-		//buffer_count++;
-		//fprintf(stderr, "LirBuffer %x unused %x\n", (int)this, (int)_unused);
+        primeNewSegment();
+        if (!outOMem()) transitionToNewSegment();
 	}
 
 	LirBuffer::~LirBuffer()
 	{
-		//buffer_count--;
-		//fprintf(stderr, "~LirBuffer %x start %x\n", (int)this, (int)_start);
 		clear();
 		verbose_only(if (names) NJ_DELETE(names);)
-		_frago = 0;
 	}
 	
 	void LirBuffer::clear()
 	{
 		// free all the memory and clear the stats
-		_frago->pagesRelease(_pages);
-		NanoAssert(!_pages.size());
-		_thresholdPage = 0;
-		_unused = 0;
+		while(_segments.size()>0)
+            gc->Free( _segments.removeLast() );
+		NanoAssert(!_segments.size());
+        _currentSegment = 0;
+        _idx = 0;
 		_stats.lir = 0;
 		_noMem = 0;
 	}
@@ -135,54 +127,60 @@ namespace nanojit
 
 	size_t LirBuffer::byteCount() 
 	{
-		return ((_pages.size() ? _pages.size()-1 : 0) * sizeof(Page)) +
-			((size_t)_unused - (size_t)pageTop(_unused));
+        size_t sz = (segmentsInUse()-1)*LIR_BUF_SEGMENT_SIZE;
+        sz += idx()*sizeof(LIns);
+        return sz;
 	}
 
-	Page* LirBuffer::pageAlloc()
-	{
-		Page* page = _frago->pageAlloc();
-		if (page)
-			_pages.add(page);
-		else
-			_noMem = 1;
-		return page;
-	}
-	
-	LInsp LirBuffer::next()
-	{
-		return _unused;
-	}
-
+    void LirBuffer::primeNewSegment()
+    {
+        NanoAssert(!segmentWaiting());
+        LInsp segment = (LIns*)gc->Alloc(LIR_BUF_SEGMENT_SIZE);
+        if (segment) 
+            _segments.add(segment);
+        else
+            _noMem = true;
+    }
+    
+    void LirBuffer::transitionToNewSegment()
+    {
+        NanoAssert(segmentWaiting());
+        _currentSegment = _segments.last();
+        _idx = 0;
+    }
+    
+    LInsp       LirBuffer::next()           { return &_currentSegment[_idx];  }
+    uint32_t    LirBuffer::idx()            { return _idx; }
+    uint32_t    LirBuffer::maxIdx()         { return LIR_BUF_SEGMENT_SIZE/sizeof(LIns); }
+    uint32_t    LirBuffer::thresholdIdx()   { NanoAssert(maxIdx()>MAX_LIR_COMMIT); return maxIdx()-MAX_LIR_COMMIT; }
+    bool        LirBuffer::segmentWaiting() { return (_segments.size()>0 && _currentSegment!=_segments.last()); }
+    uint32_t    LirBuffer::segmentsInUse() { return segmentWaiting() ? _segments.size()-1 : _segments.size(); }
+	void        LirBuffer::commit(uint32_t count) { _idx+=count; NanoAssert(count<MAX_LIR_COMMIT && _idx<maxIdx()); }
+	    
 	void LirBufWriter::ensureRoom(size_t count)
 	{
-		LInsp before = _buf->next();
-		LInsp after = before+count+LIR_FAR_SLOTS;
-		if (!samepage(before,after+LirBuffer::LIR_BUF_THRESHOLD))
-		{
-			// transition to the next page?
-			if (!samepage(before,after))
-			{
-				NanoAssert(_buf->_thresholdPage);
-				_buf->_unused = &_buf->_thresholdPage->lir[0];	
-				_buf->_thresholdPage = 0;  // pageAlloc() stored it in _pages already			
-
-				// link LIR stream back to prior instruction (careful insLink relies on _unused...)
-				insLinkTo(LIR_skip, before-1);
-			}
-			else if (!_buf->_thresholdPage)
-			{
-				// LIR_BUF_THRESHOLD away from a new page but pre-alloc it, setting noMem for early OOM detection
-				_buf->_thresholdPage = _buf->pageAlloc();
-				NanoAssert(_buf->_thresholdPage || _buf->_noMem);
-			}
-		}
-	}
+		size_t after = _buf->idx()+count+LIR_FAR_SLOTS;
+        if (after > _buf->maxIdx())
+        {
+            // we need to transition to threshold list
+            LInsp before = _buf->next();
+            _buf->transitionToNewSegment();
+            NanoAssert(!_buf->outOMem() && !_buf->segmentWaiting());
+            
+            insLinkTo(LIR_skip,before-1);
+        }
+        else if (after > _buf->thresholdIdx())
+        {
+            // not overflowing yet , but prime the new list (OOM set if not able to)
+            if (!_buf->segmentWaiting())  // <= if this shows up in profiling , then use a flag(?) rather than _segments.last()
+                _buf->primeNewSegment();
+            NanoAssert(_buf->outOMem() || _buf->segmentWaiting());
+        }
+    }
 
 	LInsp LirBufWriter::insLinkTo(LOpcode op, LInsp to)
 	{
 		LInsp l = _buf->next();
-		NanoAssert(samepage(l,l+LIR_FAR_SLOTS)); // must have called ensureRoom()
         if (can24bReach(l,to))
 		{
             l->initOpcode(LOpcode(op-1)); // nearskip or neartramp
@@ -224,7 +222,7 @@ namespace nanojit
 
 			// need a trampoline to get to from
 			LInsp tramp = insLinkTo(LIR_tramp, o);  // will produce neartramp if possible
-			NanoAssert( tramp->ref() == o && samepage(from,tramp) );
+			NanoAssert( tramp->ref() == o );
 			if (o == _buf->sp)
 				spref = tramp;
 			else if (o == _buf->rp)
@@ -242,7 +240,6 @@ namespace nanojit
 		
 		uint32_t count = (LIR_FAR_SLOTS*i)+1;  // count of LIns if all operands require tramp
 		ensureRoom(count);
-		NanoAssert( samepage(_buf->next()+count,_buf->next()) );
 		
 		// guaranteed space for far tramps if necc.
 		LInsp from = _buf->next()+count;
@@ -252,12 +249,6 @@ namespace nanojit
 		NanoAssert(from>i1 && from>i2 && from>i3);
 	}
 
-	LInsp LirBuffer::commit(size_t count)
-	{
-		NanoAssertMsg( samepage(_unused, _unused+count), "You need to call ensureRoom first!" );
-		return _unused += count;
-	}
-	
 	uint32_t LIns::reference(LIns *r) const
 	{
 		ptrdiff_t delta = this-r-1;
@@ -449,8 +440,8 @@ namespace nanojit
         const size_t n = (size+sizeof(LIns)-1)/sizeof(LIns);
 		ensureRoom(n); // make room for it
  		LInsp last = _buf->next()-1;  // safe, next()-1+n guaranteed to be on same page
-		_buf->commit(n);
-		NanoAssert(samepage(last,_buf->next()));
+        NanoAssert(uint32_t(n) == n);
+		_buf->commit((uint32_t)n);
 		ensureRoom(LIR_FAR_SLOTS);
 		return insLinkTo(LIR_skip, last);
 	}
@@ -473,7 +464,6 @@ namespace nanojit
 				case LIR_icall:
 				case LIR_qcall:
 				case LIR_fcall:
-					NanoAssert( samepage(i,i+1-i->callInsWords()) );
 					i -= i->callInsWords();
 					break;
 
@@ -484,17 +474,14 @@ namespace nanojit
 					break;
 
                 case LIR_tramp:
-                    NanoAssert(samepage(i,i+1-LIR_FAR_SLOTS));
 					i -= LIR_FAR_SLOTS;
                     break;
 
 				case LIR_int:
-                    NanoAssert(samepage(i,i+1-LIR_IMM32_SLOTS));
 					i -= LIR_IMM32_SLOTS;					
 					break;
 
 				case LIR_quad:
-                    NanoAssert(samepage(i,i+1-LIR_IMM64_SLOTS));
 					i -= LIR_IMM64_SLOTS;					
 					break;
 
@@ -2029,9 +2016,8 @@ namespace nanojit
 		return i->arg(i->argc()-n-1);
 	}
 
-    void compile(Assembler* assm, Fragment* triggerFrag)
+    void compile(Fragmento* frago, Assembler* assm, Fragment* triggerFrag)
     {
-        Fragmento *frago = triggerFrag->lirbuf->_frago;
         AvmCore *core = frago->core();
         GC *gc = core->gc;
 
