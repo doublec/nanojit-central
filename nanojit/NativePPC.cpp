@@ -1034,15 +1034,15 @@ namespace nanojit
 	}
 
 	void Assembler::br(NIns* addr, int link) {
+        // destination unknown, then use maximum branch possible
+        if (!addr) {
+            br_far(addr,link);
+            return;
+        }
+
 		// powerpc offsets are based on the address of the branch instruction
-		ptrdiff_t offset;
-		if (!addr) {
-			// will patch later
-			offset = 0;
-		} else {
-			underrunProtect(4);       // ensure _nIns is addr of Bx
-			offset = addr - (_nIns-1); // we want ptr diff's implicit >>2 here
-		}
+		underrunProtect(4);       // ensure _nIns is addr of Bx
+        ptrdiff_t offset = addr - (_nIns-1); // we want ptr diff's implicit >>2 here
 
 		#if !PEDANTIC
 		if (isS24(offset)) {
@@ -1056,6 +1056,10 @@ namespace nanojit
 		}
 		#endif // !PEDANTIC
 
+        br_far(addr,link);
+    }
+    
+    void Assembler::br_far(NIns* addr, int link) {
 		// far jump.
 		// can't have a page break in this sequence, because the break
 		// would also clobber ctr and r2.  We use R2 here because it's not available
