@@ -1066,7 +1066,7 @@ namespace nanojit
 		// to the register allocator, and we use R0 everywhere else as scratch, so using
 		// R2 here avoids clobbering anything else besides CTR.
 	#ifdef NANOJIT_64BIT
-		if (!isU32(uintptr_t(addr))) {
+		if (addr==0 || !isU32(uintptr_t(addr))) {
 			// really far jump to 64bit abs addr
 			underrunProtect(28); // 7 instructions
 			BCTR(link);
