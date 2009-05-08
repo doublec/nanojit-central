@@ -192,8 +192,10 @@ namespace nanojit
 	_nIns -= 4;		\
 	*((int32_t*)_nIns) = (int32_t)(i)
 
+// XXX rearrange NanoAssert() expression to workaround apparent gcc 4.3 bug:
+// XXX "error: logical && with non-zero constant will always evaluate as true"
 #define MODRMs(r,d,b,l,i) \
-		NanoAssert(unsigned(r)<8 && unsigned(b)<8 && unsigned(i)<8); \
+		NanoAssert(unsigned(i)<8 && unsigned(b)<8 && unsigned(r)<8); \
  		if ((d) == 0 && (b) != EBP) { \
 			_nIns -= 2; \
  			_nIns[0] = (uint8_t)     ( 0<<6 |   (r)<<3 | 4); \

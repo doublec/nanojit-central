@@ -1478,17 +1478,17 @@ Assembler::asm_ldr_chk(Register d, Register b, int32_t off, bool chk)
     if (off < 0) {
         if (chk) underrunProtect(4);
         NanoAssert(off > -4096);
-        *(--_nIns) = NIns(COND_AL | 0x51<<20 | b<<16 | d<<12 | (-off) & 0xFFF);
+        *(--_nIns) = NIns(COND_AL | (0x51<<20) | (b<<16) | (d<<12) | ((-off) & 0xFFF));
         asm_output("ldr %s, [%s, #-0x%X]", gpn(d), gpn(b), -off);
     } else {
         if (isS16(off) || isU16(off)) {
             if (chk) underrunProtect(4);
             NanoAssert(off < 4096);
-            *(--_nIns) = NIns(COND_AL | 0x59<<20 | b<<16 | d<<12 | off & 0xFFF);
+            *(--_nIns) = NIns(COND_AL | (0x59<<20) | (b<<16) | (d<<12) | (off & 0xFFF));
             asm_output("ldr %s, [%s, #0x%X]", gpn(d), gpn(b), off);
         } else {
             if (chk) underrunProtect(4 + LD32_size);
-            *(--_nIns) = NIns(COND_AL | 0x79<<20 | b<<16 | d<<12 | IP);
+            *(--_nIns) = NIns(COND_AL | (0x79<<20) | (b<<16) | (d<<12) | IP);
             LD32_nochk(IP, off);
         }
     }
@@ -1542,7 +1542,7 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
     } else {
         if(_chk) underrunProtect(12);
         *(--_nIns) = (NIns)(_t);
-        *(--_nIns) = (NIns)( COND_AL | (0xA<<24) | (0>>2) & 0xFFFFFF );
+        *(--_nIns) = (NIns)( COND_AL | (0xA<<24) | ((0>>2) & 0xFFFFFF) );
         *(--_nIns) = (NIns)( ((_c)<<28) | (0x51<<20) | (PC<<16) | (PC<<12) | 0x0 );
         asm_output("b%s %p", _c == AL ? "" : condNames[_c], (void*)(_t));
     }
