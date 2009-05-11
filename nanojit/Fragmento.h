@@ -51,24 +51,6 @@ namespace nanojit
 	struct GuardRecord;
 	class Assembler;
 	
-    struct PageHeader
-    {
-        struct Page *next;
-    };
-    struct Page: public PageHeader
-    {
-        union {
-            LIns lir[(NJ_PAGE_SIZE-sizeof(PageHeader))/sizeof(LIns)];
-            NIns code[(NJ_PAGE_SIZE-sizeof(PageHeader))/sizeof(NIns)];
-        };
-    };
-    struct AllocEntry : public GCObject
-    {
-        Page *page;
-        uint32_t allocSize;
-    };
-	typedef avmplus::List<AllocEntry*,avmplus::LIST_GCObjects>	AllocList;
-
 	typedef avmplus::GCSortedMap<const void*, uint32_t, avmplus::LIST_NonGCObjects> BlockSortedMap;
 	class BlockHist: public BlockSortedMap
 	{
@@ -94,16 +76,10 @@ namespace nanojit
 			
 			enum { MAX_CACHE_SIZE_LOG2 = 30 }; // 640KB^H^H^H^H^H 1GB should be enough for anybody...
 			
-			Fragmento(AvmCore* core, uint32_t cacheSizeLog2);
+			Fragmento(AvmCore* core, uint32_t cacheSizeLog2, CodeAlloc *codeAlloc);
 			~Fragmento();
 
-			void		addMemory(void* firstPage, uint32_t pageCount);  // gives memory to the Assembler
-			Assembler*	assm();
 			AvmCore*	core();
-			Page*		pageAlloc();
-			void		pageFree(Page* page);
-			void		pagesRelease(PageList& list);
-			
             Fragment*   getLoop(const void* ip);
             Fragment*   getAnchor(const void* ip);
 			void        clearFrags();	// clear all fragments from the cache
@@ -111,19 +87,12 @@ namespace nanojit
             Fragment*   createBranch(GuardRecord *lr, const void* ip);
             Fragment*   newFrag(const void* ip);
             Fragment*   newBranch(Fragment *from, const void* ip);
-
-			verbose_only ( void dumpStats(); )
-			verbose_only ( void dumpRatio(const char*, BlockHist*);)
-			verbose_only ( void dumpFragStats(Fragment*, int level, fragstats&); )
-			verbose_only ( void countBlock(BlockHist*, const void* pc); )
-			verbose_only ( void countIL(uint32_t il, uint32_t abc); )
 			verbose_only( void addLabel(Fragment* f, const char *prefix, int id); )
 			
 			// stats
 			struct 
 			{
 				uint32_t	pages;					// pages consumed
-				uint32_t	maxPageUse;				// highwater mark of (pages-freePages)
 				uint32_t	flushes, ilsize, abcsize, compiles, totalCompiles;
 			}
 			_stats;
@@ -136,20 +105,10 @@ namespace nanojit
     		void	drawTrees(char *fileName);
             #endif
 			
-			uint32_t cacheUsed() const { return (_stats.pages-_freePages.size())<<NJ_LOG2_PAGE_SIZE; }
-			uint32_t cacheUsedMax() const { return (_stats.maxPageUse)<<NJ_LOG2_PAGE_SIZE; }
 		private:
-			void		pagesGrow(int32_t count);
-			void		trackPages();
-
-			AvmCore*		_core;
-			DWB(Assembler*)	_assm;
+			AvmCore*		 _core;
+			DWB(CodeAlloc*) _codeAlloc;
 			FragmentMap 	_frags;		/* map from ip -> Fragment ptr  */
-			PageList		_freePages;
-
-			/* unmanaged mem */
-			AllocList	_allocList;
-			GCHeap*		_gcHeap;
 
 			const uint32_t _max_pages;
 			const uint32_t _pagesGrowth;
@@ -175,7 +134,7 @@ namespace nanojit
 			~Fragment();
 
 			NIns*			code()							{ return _code; }
-			void			setCode(NIns* codee, Page* pages) { _code = codee; _pages = pages; }
+			void			setCode(NIns* codee)			{ _code = codee; }
 			GuardRecord*	links()							{ return _links; }
 			int32_t&		hits()							{ return _hits; }
             void            blacklist();
@@ -190,8 +149,8 @@ namespace nanojit
 			debug_only( bool hasOnlyTreeLinks(); )
 			void			removeIntraLinks();
 			void			releaseLirBuffer();
-			void			releaseCode(Fragmento* frago);
-			void			releaseTreeMem(Fragmento* frago);
+			void			releaseCode(CodeAlloc *alloc);
+			void			releaseTreeMem(CodeAlloc *alloc);
 			bool			isAnchor() { return anchor == this; }
 			bool			isRoot() { return root == this; }
             void            onDestroy();
@@ -231,12 +190,12 @@ namespace nanojit
             NIns* fragEntry;
 			int32_t calldepth;
 			void* vmprivate;
+			CodeList* codeList;
 			
 		private:
 			NIns*			_code;		// ptr to start of code
 			GuardRecord*	_links;		// code which is linked (or pending to be) to this fragment
 			int32_t			_hits;
-			Page*			_pages;		// native code pages 
 	};
 }
 #endif // __nanojit_Fragmento__

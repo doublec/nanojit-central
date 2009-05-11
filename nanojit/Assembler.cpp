@@ -44,27 +44,6 @@
 #include "portapi_nanojit.h"
 #endif
 
-#if defined(AVMPLUS_UNIX) && defined(NANOJIT_ARM)
-#include <asm/unistd.h>
-extern "C" void __clear_cache(char *BEG, char *END);
-#endif
-
-#ifdef AVMPLUS_SPARC
-extern  "C"	void sync_instruction_memory(caddr_t v, u_int len);
-#endif
-
-
-#if defined AVMPLUS_MAC && defined NANOJIT_PPC && defined NANOJIT_64BIT
-// 10.5 only
-extern "C" void sys_icache_invalidate(const void*, size_t len);
-extern "C" void sys_dcache_flush(const void*, size_t len);
-#endif
-
-#if defined AVMPLUS_MAC && defined NANOJIT_PPC
-// for MakeDataExecutable
-#include <Carbon/Carbon.h>
-#endif
-
 #ifdef VTUNE
 #include "../core/CodegenLIR.h"
 #define vtune_only(...) __VA_ARGS__
@@ -169,16 +148,17 @@ namespace nanojit
 	 *
 	 *	- merging paths ( build a graph? ), possibly use external rep to drive code gen
 	 */
-    Assembler::Assembler(Fragmento* frago)
+    Assembler::Assembler(CodeAlloc* codeAlloc, AvmCore *core)
         : hasLoop(0)
-        , _frago(frago)
-        , _gc(frago->core()->gc)
+		, codeList(0)
+		, core(core)
+		, _codeAlloc(codeAlloc)
+        , _gc(core->gc)
         , _labels(_gc)
         , _patches(_gc)
         , pending_lives(_gc)
-		, config(frago->core()->config)
+		, config(core->config)
 	{
-        AvmCore *core = frago->core();
 		nInit(core);
 		verbose_only( _verbose = !core->quiet_opt() && core->verbose() );
 		verbose_only( _outputCache = 0);
@@ -303,125 +283,73 @@ namespace nanojit
         pending_lives.clear();
 	}
 
-	NIns* Assembler::pageAlloc(bool exitPage)
+	void Assembler::codeAlloc(bool inExit)
 	{
-		Page*& list = (exitPage) ? _nativeExitPages : _nativePages;
-		Page* page = _frago->pageAlloc();
-		if (page)
-		{
-			#ifdef VTUNE
-			if (_nIns && _nExitIns) {
-				//cgen->jitAddRecord((uintptr_t)list->code, 0, 0, true); // add placeholder record for top of page
-				cgen->jitCodePosUpdate((uintptr_t)list->code);
-				cgen->jitPushInfo(); // new page requires new entry
+		NIns* start;
+		NIns* end;
+
+		// save the block we just filled
+		if (inExit && exitStart) {
+			CodeAlloc::add(codeList, exitStart, exitEnd);
+		} else if (!inExit && codeStart) {
+			CodeAlloc::add(codeList, codeStart, codeEnd);
+		}
+
+		for (;;) {
+			// CodeAlloc contract: allocations never fail
+			_codeAlloc->alloc(start, end);
+			if (uintptr_t(end) - uintptr_t(start) < (size_t)LARGEST_UNDERRUN_PROT) {
+				// too small to use, just keep it and ask again
+				CodeAlloc::add(codeList, start, end);
+				continue;
 			}
+			#ifdef NANOJIT_ARM
+			// arm assembler counts on code blocks being 4K or less,
+			// so that it can generate constant pools near code.  If allocator
+			// can give larger blocks, change the api to let the mutator request
+			// a maximum amount, and internally split the block in CodeAlloc.
+			NanoAssert(uintptr_t(end) - uintptr_t(start) <= 0x1000);
 			#endif
-			page->next = list;
-			list = page;
-			nMarkExecute(page, PAGE_READ|PAGE_WRITE|PAGE_EXEC);
-			_stats.pages++;
+			break;
 		}
-		else
-		{
-			// return a location that is 'safe' to write to while we are out of mem
-			setError(OutOMem);
-			return _startingIns;
+		#ifdef VTUNE
+		if (_nIns && _nExitIns) {
+			//cgen->jitAddRecord((uintptr_t)list->code, 0, 0, true); // add placeholder record for top of page
+			cgen->jitCodePosUpdate((uintptr_t)list->code);
+			cgen->jitPushInfo(); // new page requires new entry
 		}
-		return &page->code[sizeof(page->code)/sizeof(NIns)]; // just past the end
+		#endif
+		// update pointers with new allocated block.
+		if (inExit) {
+			exitStart = start;
+			exitEnd = end;
+			_nExitIns = end;
+		} else {
+			codeStart = start;
+			codeEnd = end;
+			_nIns = end;
+		}
 	}
 	
 	void Assembler::pageReset()
 	{
-		pagesFree(_nativePages);		
-		pagesFree(_nativeExitPages);
-		
 		_nIns = 0;
 		_nExitIns = 0;
 		_startingIns = 0;
+		codeStart = codeEnd = 0;
+		exitStart = exitEnd = 0;
 		_stats.pages = 0;
-
 		nativePageReset();
-	}
-	
-	void Assembler::pagesFree(Page*& page)
-	{
-		while(page)
-		{
-			Page *next = page->next;  // pull next ptr prior to free
-			_frago->pageFree(page);
-			page = next;
-		}
-	}
-
-	#define bytesFromTop(x)		( (size_t)(x) - (size_t)pageTop(x) )
-	#define bytesToBottom(x)	( (size_t)pageBottom(x) - (size_t)(x) )
-	#define bytesBetween(x,y)	( (size_t)(x) - (size_t)(y) )
-	
-	size_t Assembler::codeBytes()
-	{
-		// start and end on same page?
-		size_t exit = 0;
-		int32_t pages = _stats.pages;
-		if (_nExitIns-1 == _stats.codeExitStart)
-			;
-		else if (samepage(_nExitIns,_stats.codeExitStart))
-			exit = bytesBetween(_stats.codeExitStart, _nExitIns);
-		else
-		{
-			pages--;
-			exit = ((intptr_t)_stats.codeExitStart & (NJ_PAGE_SIZE-1)) ? bytesFromTop(_stats.codeExitStart)+1 : 0;
-			exit += bytesToBottom(_nExitIns)+1;
-		}
-
-		size_t main = 0;
-		if (_nIns-1 == _stats.codeStart)
-			;
-		else if (samepage(_nIns,_stats.codeStart))
-			main = bytesBetween(_stats.codeStart, _nIns);
-		else
-		{
-			pages--;
-			main = ((intptr_t)_stats.codeStart & (NJ_PAGE_SIZE-1)) ? bytesFromTop(_stats.codeStart)+1 : 0;
-			main += bytesToBottom(_nIns)+1;
-		}
-		//fprintf(stderr,"size %d, exit is %d, main is %d, page count %d, sizeof %d\n", (int)((pages) * NJ_PAGE_SIZE + main + exit),(int)exit, (int)main, (int)_stats.pages, (int)sizeof(Page));
-		return (pages) * NJ_PAGE_SIZE + main + exit;		
-	}
-
-	#undef bytesFromTop
-	#undef bytesToBottom
-	#undef byteBetween
-	
-	Page* Assembler::handoverPages(bool exitPages)
-	{
-		Page*& list = (exitPages) ? _nativeExitPages : _nativePages;
-		NIns*& ins =  (exitPages) ? _nExitIns : _nIns;
-		Page* start = list;
-		list = 0;
-		ins = 0;
-		return start;
 	}
 
 	#ifdef _DEBUG
-	bool Assembler::onPage(NIns* where, bool exitPages)
-	{
-		Page* page = (exitPages) ? _nativeExitPages : _nativePages;
-		bool on = false;
-		while(page)
-		{
-			if (samepage(where-1,page))
-				on = true;
-			page = page->next;
-		}
-		return on;
-	}
-	
 	void Assembler::pageValidate()
 	{
 		if (error()) return;
 		// _nIns and _nExitIns need to be at least on
 		// one of these pages
-		NanoAssertMsg( onPage(_nIns)&& onPage(_nExitIns,true), "Native instruction pointer overstep paging bounds; check overrideProtect for last instruction");
+		NanoAssertMsg(_inExit ? containsPtr(exitStart, exitEnd, _nIns) : containsPtr(codeStart, codeEnd, _nIns),
+					 "Native instruction pointer overstep paging bounds; check overrideProtect for last instruction");
 	}
 	#endif
 
@@ -722,11 +650,6 @@ namespace nanojit
 		{
 			RegAlloc* captured = _branchStateMap->get(exit);
 			intersectRegisterState(*captured);
-			verbose_only(
-				verbose_outputf("        merging trunk with %s",
-					_frago->labels->format(exit->target));
-				verbose_outputf("        %p:",_nIns);
-			)			
 			at = exit->target->fragEntry;
 			NanoAssert(at != 0);
 			_branchStateMap->remove(exit);
@@ -737,7 +660,7 @@ namespace nanojit
 	NIns* Assembler::asm_leave_trace(LInsp guard)
 	{
         verbose_only(bool priorVerbose = _verbose; )
-		verbose_only( _verbose = verbose_enabled() && _frago->core()->config.verbose_exits; )
+		verbose_only( _verbose = verbose_enabled() && config.verbose_exits; )
         verbose_only( int32_t nativeSave = _stats.native );
 		verbose_only(verbose_outputf("--------------------------------------- end exit block SID %d", guard->exit()->sid);)
 
@@ -844,7 +767,6 @@ namespace nanojit
 	void Assembler::assemble(Fragment* frag,  NInsList& loopJumps)
 	{
 		if (error()) return;	
-		AvmCore *core = _frago->core();
         _thisfrag = frag;
 
 		// set up backwards pipeline: assembler -> StackFilter -> LirReader
@@ -861,13 +783,11 @@ namespace nanojit
 		)
 
 		verbose_only(_thisfrag->compileNbr++; )
-		verbose_only(_frago->_stats.compiles++; )
-		verbose_only(_frago->_stats.totalCompiles++; )
 		_latestGuard = 0;
 		_inExit = false;		
 		gen(rdr, loopJumps);
 		frag->fragEntry = _nIns;
-		frag->outbound = core->config.tree_opt? _latestGuard : 0;
+		frag->outbound = config.tree_opt? _latestGuard : 0;
 		//fprintf(stderr, "assemble frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
 
         if (!error()) {
@@ -896,45 +816,6 @@ namespace nanojit
 		}
 	}
 
-	void Assembler::flush_icache(Page *pages) {
-#if defined NANOJIT_IA32 || defined NANOJIT_X64
-		(void) pages;
-#elif defined NANOJIT_ARM && defined UNDER_CE
-		(void) pages;
-		// just flush all of it
-		FlushInstructionCache(GetCurrentProcess(), NULL, NULL);
-#elif defined AVMPLUS_SPARC
-		Page *next;
-		for (Page *p = pages; p != 0; p = next) {
-			next = p->next;
-			sync_instruction_memory((char*)p, sizeof(Page));
-		}
-#elif defined NANOJIT_UNIX
-		Page *p = pages;
-		Page *first = p;
-		while (p) {
-			if (!p->next || p->next != p+1) {
-				__clear_cache((char*)first, (char*)(p+1));
-				first = p->next;
-			}
-			p = p->next;
-		}
-#elif defined AVMPLUS_MAC && defined NANOJIT_PPC
-		Page *next;
-		for (Page *p = pages; p != 0; p = next) {
-			next = p->next;
-			#ifdef NANOJIT_64BIT
-				// 10.5 only
-				sys_dcache_flush(p, sizeof(Page));
-				sys_icache_invalidate(p, sizeof(Page));
-			#else
-				// carbon api depreciated, but we need it on 10.4
-				MakeDataExecutable(p, sizeof(Page));
-			#endif
-		}
-#endif
-	}
-
 	void Assembler::endAssembly(Fragment* frag, NInsList& loopJumps)
 	{
 		while(!loopJumps.isEmpty())
@@ -961,38 +842,38 @@ namespace nanojit
 				}
 			)
 
+			// save used parts of current block on fragment's code list, free the rest
+#ifdef NANOJIT_ARM
+			_codeAlloc->addRemainder(codeList, exitStart, exitEnd, _nExitSlot, _nExitIns);
+			_codeAlloc->addRemainder(codeList, codeStart, codeEnd, _nSlot, _nIns);
+#else
+			_codeAlloc->addRemainder(codeList, exitStart, exitEnd, exitStart, _nExitIns);
+			_codeAlloc->addRemainder(codeList, codeStart, codeEnd, codeStart, _nIns);
+#endif
+
+			// at this point all our new code is in the d-cache and not the i-cache,
+			// so flush the i-cache on cpu's that need it.
+			_codeAlloc->flushICache(codeList);
+
+			// save entry point pointers
             frag->fragEntry = patchEntry;
-			NIns* code = _nIns;
-
-            PERFM_NVPROF("code", codeBytes()); // requires that all pages are released between begin/endAssembly()otherwise we double count
-
-            // let the fragment manage the pages if we're using trees and there are branches
-			Page* manage = (_frago->core()->config.tree_opt) ? handoverPages() : 0;			
-			frag->setCode(code, manage); // root of tree should manage all pages
-			//fprintf(stderr, "endAssembly frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
+			frag->setCode(_nIns);
+            PERFM_NVPROF("code", CodeAlloc::size(frag->codeList));
 		}
 		else
 		{
-			_nIns = _startingIns;  // in case of failure reset nIns ready for the next assembly run
-#ifdef NANOJIT_ARM
-            _nSlot = _startingSlot;  // in case of failure reset nSlot ready for the next assembly run
-#endif
+			// something went wrong, release all allocated memory
+			_codeAlloc->freeAll(codeList);
+			_codeAlloc->free(exitStart, exitEnd);
+			_codeAlloc->free(codeStart, codeEnd);
 		}
-		
+
 		NanoAssertMsgf(error() || _fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
 
 		internalReset();  // clear the reservation tables and regalloc
+		pageReset();
 		NanoAssert( !_branchStateMap || _branchStateMap->isEmpty());
 		_branchStateMap = 0;
-
-
-#ifdef AVMPLUS_PORTING_API
-		NanoJIT_PortAPI_FlushInstructionCache((char*)_nIns, (char*)_startingIns);
-		NanoJIT_PortAPI_FlushInstructionCache((char*)_nExitIns, (char*)_endJit2Addr);
-#else
-		flush_icache(_nativePages);
-		flush_icache(_nativeExitPages);
-#endif
 	}
 	
 	void Assembler::copyRegisters(RegAlloc* copyTo)
@@ -1901,61 +1782,58 @@ namespace nanojit
 		_functions = functions;
 	}
 
-	#ifdef NJ_VERBOSE
-		char Assembler::outline[8192];
-		char Assembler::outlineEOL[512];
+#ifdef NJ_VERBOSE
+	char Assembler::outline[8192];
+	char Assembler::outlineEOL[512];
 
-		void Assembler::outputForEOL(const char* format, ...)
+	void Assembler::outputForEOL(const char* format, ...)
+	{
+		va_list args;
+		va_start(args, format);
+		outlineEOL[0] = '\0';
+		vsprintf(outlineEOL, format, args);
+	}
+
+	void Assembler::outputf(const char* format, ...)
+	{
+		va_list args;
+		va_start(args, format);
+		outline[0] = '\0';
+		vsprintf(outline, format, args);
+		output(outline);
+	}
+
+	void Assembler::output(const char* s)
+	{
+		if (_outputCache)
 		{
-			va_list args;
-			va_start(args, format);
-			outlineEOL[0] = '\0';
-			vsprintf(outlineEOL, format, args);
+			char* str = (char*)_gc->Alloc(VMPI_strlen(s)+1);
+			VMPI_strcpy(str, s);
+			_outputCache->add(str);
 		}
-
-		void Assembler::outputf(const char* format, ...)
+		else
 		{
-			va_list args;
-			va_start(args, format);
-			outline[0] = '\0';
-			vsprintf(outline, format, args);
-			output(outline);
+			core->console << s << "\n";
 		}
+	}
 
-		void Assembler::output(const char* s)
-		{
-			if (_outputCache)
-			{
-				char* str = (char*)_gc->Alloc(VMPI_strlen(s)+1);
-				VMPI_strcpy(str, s);
-				_outputCache->add(str);
-			}
-			else
-			{
-				_frago->core()->console << s << "\n";
-			}
-		}
+	void Assembler::output_asm(const char* s)
+	{
+		if (!verbose_enabled())
+			return;
+			output(s);
+	}
 
-		void Assembler::output_asm(const char* s)
-		{
-			if (!verbose_enabled())
-				return;
-				output(s);
-		}
+	char* Assembler::outputAlign(char *s, int col) 
+	{
+		int len = (int)VMPI_strlen(s);
+		int add = ((col-len)>0) ? col-len : 1;
+		VMPI_memset(&s[len], ' ', add);
+		s[col] = '\0';
+		return &s[col];
+	}
+#endif // NJ_VERBOSE
 
-		char* Assembler::outputAlign(char *s, int col) 
-		{
-			int len = (int)VMPI_strlen(s);
-			int add = ((col-len)>0) ? col-len : 1;
-			VMPI_memset(&s[len], ' ', add);
-			s[col] = '\0';
-			return &s[col];
-		}
-	#endif // verbose
-
-	#endif /* FEATURE_NANOJIT */
-
-#if defined(FEATURE_NANOJIT) || defined(NJ_VERBOSE)
 	uint32_t CallInfo::_count_args(uint32_t mask) const
 	{
 		uint32_t argc = 0;
@@ -1994,4 +1872,4 @@ namespace nanojit
         return labels.get(label);
     }
 }
-#endif // FEATURE_NANOJIT
+#endif /* FEATURE_NANOJIT */

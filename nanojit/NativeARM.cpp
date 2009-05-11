@@ -137,7 +137,7 @@ Assembler::nFragExit(LInsp guard)
     MOV(SP, FP);
 
 #ifdef NJ_VERBOSE
-    if (_frago->core()->config.show_stats) {
+    if (config.show_stats) {
         // load R1 with Fragment *fromFrag, target fragment
         // will make use of this when calling fragenter().
         int fromfrag = int((Fragment*)_thisfrag);
@@ -468,7 +468,7 @@ Assembler::asm_call(LInsp ins)
 
         #ifdef NJ_VERBOSE
         // branching from this frag to ourself.
-        if (_frago->core()->config.show_stats)
+        if (config.show_stats)
         LDi(argRegs[1], int((Fragment*)_thisfrag));
         #endif
 
@@ -747,7 +747,8 @@ Assembler::asm_call(LInsp ins)
         {
             // arg goes in specific register
             if (p->isconst()) {
-                LDi(r, p->constval());
+                int c = p->constval();
+                LDi(r, c);
             } else {
                 Reservation* rA = getresv(p);
                 if (rA) {
@@ -783,35 +784,6 @@ Assembler::asm_call(LInsp ins)
             NanoAssert(false);
         }
     }
-    
-void
-Assembler::nMarkExecute(Page* page, int flags)
-{
-    (void) page;
-    (void) flags;
-    NanoAssert(sizeof(Page) == NJ_PAGE_SIZE);
-#ifdef UNDER_CE
-    static const DWORD kProtFlags[4] = 
-    {
-        PAGE_READONLY,          // 0
-        PAGE_READWRITE,         // PAGE_WRITE
-        PAGE_EXECUTE_READ,      // PAGE_EXEC
-        PAGE_EXECUTE_READWRITE  // PAGE_EXEC|PAGE_WRITE
-    };
-    DWORD prot = kProtFlags[flags & (PAGE_WRITE|PAGE_EXEC)];
-    DWORD dwOld;
-    BOOL res = VirtualProtect(page, NJ_PAGE_SIZE, prot, &dwOld);
-    if (!res)
-    {
-        // todo: we can't abort or assert here, we have to fail gracefully.
-        NanoAssertMsg(false, "FATAL ERROR: VirtualProtect() failed\n");
-    }
-#endif
-#ifdef AVMPLUS_PORTING_API
-    NanoJIT_PortAPI_MarkExecutable((char*)page, (char*)((char*)page+NJ_PAGE_SIZE), flags);
-    // todo, must add error-handling to the portapi
-#endif
-}
             
 Register
 Assembler::nRegisterAllocFromSet(int set)
@@ -1245,21 +1217,17 @@ Assembler::nativePageReset()
 void
 Assembler::nativePageSetup()
 {
-    if (!_nIns)      _nIns     = pageAlloc();
-    if (!_nExitIns)  _nExitIns = pageAlloc(true);
-    //fprintf(stderr, "assemble onto %x exits into %x\n", (int)_nIns, (int)_nExitIns);
+    if (!_nIns)
+		codeAlloc();
+    if (!_nExitIns)
+		codeAlloc(true);
     
+    // constpool starts at top of page and goes down,
+    // code starts at bottom of page and moves up
     if (!_nSlot)
-    {
-        // This needs to be done or the samepage macro gets confused; pageAlloc
-        // gives us a pointer to just past the end of the page.
-        _nIns--;
-        _nExitIns--;
-
-        // constpool starts at top of page and goes down,
-        // code starts at bottom of page and moves up
-        _nSlot = pageDataStart(_nIns); //(int*)(&((Page*)pageTop(_nIns))->lir[0]);
-    }
+		_nSlot = codeStart;
+    if (!_nExitSlot)
+		_nExitSlot = exitStart;
 }
 
 NIns*
@@ -1295,26 +1263,22 @@ void
 Assembler::underrunProtect(int bytes)
 {
 	NanoAssertMsg(bytes<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small"); 
-    if (!_nSlot) {
-        _nSlot = pageDataStart(_nIns);
-    }
-    uintptr_t top = uintptr_t(_nSlot + 1); // +1 == +4 bytes
+    NanoAssert(_nSlot != 0 && int(_nIns)-int(_nSlot) <= 4096);
+    uintptr_t top = uintptr_t(_nSlot);
     uintptr_t pc = uintptr_t(_nIns);
     if (pc - bytes < top)
     {
         verbose_only(if (_verbose) outputf("        %p:", _nIns);)
         NIns* target = _nIns;
-        _nIns = pageAlloc(_inExit);
-        _nSlot = pageDataStart(_nIns-1);
+        codeAlloc(_inExit);
+        _nSlot = _inExit ? exitStart : codeStart;
 
-        // If samepage() is used on _nIns and _nSlot, it'll fail, since _nIns
-        // points to one past the end of the page right now.  Assume that 
-        // B_nochk won't ever try to write to _nSlot, and so won't ever
-        // check samepage().  See B_cond_chk macro.
+		// _nSlot points to the first empty position in the new code block
+		// _nIns points just past the last empty position.  
+        // Assume B_nochk won't ever try to write to _nSlot. See B_cond_chk macro.
         B_nochk(target);
     }
 }
-
 
 /* Emits a call sequence to the given address.
  * If the address is in range, a BL[X] to the address is generated,
@@ -1439,32 +1403,30 @@ bool Assembler::BL_noload(NIns* addr, Register reg)
 void
 Assembler::LD32_nochk(Register r, int32_t imm)
 {
-    // We should always reach the const pool, since it's on the same page (<4096);
+    // We should always reach the const pool, since it's on the same 4K code block (<4096);
     // if we can't, someone didn't underrunProtect enough.
-
-    *(++_nSlot) = (int)imm;
 
     //fprintf (stderr, "wrote slot(2) %p with %08x, jmp @ %p\n", _nSlot, (intptr_t)imm, _nIns-1);
 
     int offset = PC_OFFSET_FROM(_nSlot,_nIns-1);
-
     NanoAssert(offset > -0x1008);
     while (offset <= -0x1000) {
-        // _nSlot and _nIns are in the same page but pc is 8 bytes ahead of _nIns, so
-        // _nSlot may not be in "pc load range" (4k):
-        // If _nSlot is at page+0, and _nIns is at page+0xFFC, then PC is at page+0x1004,
+        // _nSlot and _nIns are in the same 4k range but pc is 8 bytes ahead of _nIns, so
+        // _nSlot may not be in "pc load range" (4k): (assume offsets relative to this->codeStart)
+        // If _nSlot is at +0, and _nIns is at +0xFFC, then PC is at +0x1004,
         // so offset is -0x1004, which is just over the 4K allowed range.
         // We simply increment _nSlot to come within range and waste a small amount of
         // constant pool space.
-        ++_nSlot;
+        _nSlot++;
         offset += 4;
     }
 
     NanoAssert(isS12(offset) && (offset < 0));
-
+    *(_nSlot++) = (int)imm;
     asm_output("  (%d(PC) = 0x%x)", offset, imm);
-
     LDR_nochk(r,PC,offset);
+    NanoAssert(uintptr_t(_nIns) + 8 + offset == uintptr_t(_nSlot-1));
+    NanoAssert(*((int32_t*)_nSlot-1) == imm);
 }
 
 void
@@ -1532,13 +1494,14 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
         *(--_nIns) = (NIns)(_t);
         *(--_nIns) = (NIns)( COND_AL | (0x51<<20) | (PC<<16) | (PC<<12) | 0x4 );
         asm_output("b%s %p", _c == AL ? "" : condNames[_c], (void*)(_t));
-    } else if (samepage(_nIns-1,_nSlot)) {
+	} else if (PC_OFFSET_FROM(_nSlot, _nIns-1) > -0x1000) {
         if(_chk) underrunProtect(8);
-        *(++_nSlot) = (NIns)(_t);
-        offs = PC_OFFSET_FROM(_nSlot,_nIns-1);
+        *(_nSlot++) = (NIns)(_t);
+        offs = PC_OFFSET_FROM(_nSlot-1,_nIns-1);
         NanoAssert(offs < 0);
         *(--_nIns) = (NIns)( ((_c)<<28) | (0x51<<20) | (PC<<16) | (PC<<12) | ((-offs) & 0xFFF) );
         asm_output("ldr%s %s, [%s, #-0x%X]", condNames[_c], gpn(PC), gpn(PC), -offs);
+        NanoAssert(uintptr_t(_nIns)+8+offs == uintptr_t(_nSlot-1));
     } else {
         if(_chk) underrunProtect(12);
         *(--_nIns) = (NIns)(_t);

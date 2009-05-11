@@ -1200,55 +1200,6 @@ namespace nanojit
         return _nIns;
     }
 
-    void Assembler::nMarkExecute(Page* page, int flags)
-    {
-        NanoAssert(sizeof(Page) == NJ_PAGE_SIZE);
-        #if defined WIN32 || defined WIN64
-            DWORD dwIgnore;
-            static const DWORD kProtFlags[4] = 
-            {
-                PAGE_READONLY,          // 0
-                PAGE_READWRITE,         // PAGE_WRITE
-                PAGE_EXECUTE_READ,      // PAGE_EXEC
-                PAGE_EXECUTE_READWRITE  // PAGE_EXEC|PAGE_WRITE
-            };
-            DWORD prot = kProtFlags[flags & (PAGE_WRITE|PAGE_EXEC)];
-            BOOL res = VirtualProtect(page, NJ_PAGE_SIZE, prot, &dwIgnore);
-            if (!res)
-            {
-                // todo: we can't abort or assert here, we have to fail gracefully.
-                NanoAssertMsg(false, "FATAL ERROR: VirtualProtect() failed\n");
-            }
-        #elif defined AVMPLUS_UNIX || defined AVMPLUS_MAC
-            static const int kProtFlags[4] = 
-            {
-                PROT_READ,                      // 0
-                PROT_READ|PROT_WRITE,           // PAGE_WRITE
-                PROT_READ|PROT_EXEC,            // PAGE_EXEC
-                PROT_READ|PROT_WRITE|PROT_EXEC  // PAGE_EXEC|PAGE_WRITE
-            };
-            int prot = kProtFlags[flags & (PAGE_WRITE|PAGE_EXEC)];
-            intptr_t addr = (intptr_t)page;
-            addr &= ~((uintptr_t)NJ_PAGE_SIZE - 1);
-            NanoAssert(addr == (intptr_t)page);
-            //#if defined SOLARIS
-            //if (mprotect((char *)addr, NJ_PAGE_SIZE, prot) == -1) 
-            //#elif defined AVMPLUS_MAC
-            //task_t task = mach_task_self();
-            //if (vm_protect(task, addr, NJ_PAGE_SIZE, true, prot) == -1)
-            //#else
-            if (mprotect((void *)addr, NJ_PAGE_SIZE, prot) == -1) 
-            //#endif
-            {
-                // todo: we can't abort or assert here, we have to fail gracefully.
-                NanoAssertMsg(false, "FATAL ERROR: mprotect(PROT_EXEC) failed\n");
-                abort();
-            }
-        #else
-            (void)page;
-        #endif
-    }
-
     void Assembler::nRegisterResetAll(RegAlloc &a) {
         // add scratch registers to our free list for the allocator
         a.clear();
@@ -1314,7 +1265,7 @@ namespace nanojit
     void Assembler::underrunProtect(ptrdiff_t bytes) {
         NanoAssertMsg(bytes<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small"); 
         NIns *pc = _nIns;
-        NIns *top = (NIns*) &((Page*)pageTop(pc-1))->code[0];
+        NIns *top = _inExit ? this->exitStart : this->codeStart;
 
     #if PEDANTIC
         // pedanticTop is based on the last call to underrunProtect; any time we call
@@ -1329,7 +1280,7 @@ namespace nanojit
             if (pc - bytes - br_size < top) {
                 // really do need a page break
                 verbose_only(if (_verbose) outputf("newpage %p:", pc);)
-                _nIns = pageAlloc(_inExit);
+                codeAlloc();
             }
             // now emit the jump, but make sure we won't need another page break. 
             // we're pedantic, but not *that* pedantic.
@@ -1340,7 +1291,7 @@ namespace nanojit
     #else
         if (pc - bytes < top) {
             verbose_only(if (_verbose) outputf("newpage %p:", pc);)
-            _nIns = pageAlloc(_inExit);
+            codeAlloc();
             // this jump will call underrunProtect again, but since we're on a new
             // page, nothing will happen.
             JMP(pc);
@@ -1354,11 +1305,11 @@ namespace nanojit
 
     void Assembler::nativePageSetup() {
         if (!_nIns) {
-            _nIns = pageAlloc();
+            codeAlloc();
             IF_PEDANTIC( pedanticTop = _nIns; )
         }
         if (!_nExitIns) {
-            _nExitIns = pageAlloc(true);
+            codeAlloc(true);
         }
     }
 

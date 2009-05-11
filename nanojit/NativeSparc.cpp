@@ -69,7 +69,7 @@ namespace nanojit
 #define BIT_ROUND_UP(v,q)      ( (((uintptr_t)v)+(q)-1) & ~((q)-1) )
 #define TODO(x) do{ verbose_only(outputf(#x);) NanoAssertMsgf(false, "%s", #x); } while(0)
 
-    void Assembler::nInit(AvmCore* core)
+    void Assembler::nInit(AvmCore*)
     {
         has_cmov = true;
     }
@@ -193,23 +193,6 @@ namespace nanojit
             }
     }
 
-    void Assembler::nMarkExecute(Page* page, int flags)
-    {
-        static const int kProtFlags[4] = {
-            PROT_READ,                        // 0
-            PROT_READ|PROT_WRITE,            // PAGE_WRITE
-            PROT_READ|PROT_EXEC,            // PAGE_EXEC
-            PROT_READ|PROT_WRITE|PROT_EXEC    // PAGE_EXEC|PAGE_WRITE
-        };
-        int prot = kProtFlags[flags & (PAGE_WRITE|PAGE_EXEC)];
-        intptr_t addr = (intptr_t)page;
-        addr &= ~((uintptr_t)NJ_PAGE_SIZE_SPARC - 1);
-        if (mprotect((char *)addr, NJ_PAGE_SIZE_SPARC, prot) == -1) {
-            // todo: we can't abort or assert here, we have to fail gracefully.
-            NanoAssertMsg(false, "FATAL ERROR: mprotect(PROT_EXEC) failed\n");
-        }
-    }
-            
     Register Assembler::nRegisterAllocFromSet(int set)
     {
         // need to implement faster way
@@ -1072,17 +1055,21 @@ namespace nanojit
 
     void Assembler::nativePageSetup()
     {
-        if (!_nIns)         _nIns       = pageAlloc();
-        if (!_nExitIns)  _nExitIns = pageAlloc(true);
+        if (!_nIns)
+			codeAlloc();
+        if (!_nExitIns)
+			codeAlloc(true);
     }
 
     void
     Assembler::underrunProtect(int bytes)
     {
-        intptr_t u = bytes + sizeof(PageHeader)/sizeof(NIns) + 16;
-        if (!samepage((intptr_t)_nIns-u,_nIns)) {
+        int u = bytes + 16;
+               uintptr_t top = (uintptr_t) (_inExit ? exitStart : codeStart);
+               uintptr_t pc = (uintptr_t) _nIns;
+		if (pc-bytes < top) {
             NIns* target = _nIns;
-            _nIns = pageAlloc(_inExit);
+            codeAlloc(_inExit);
             JMP_long_nocheck((intptr_t)target);
         }
     }

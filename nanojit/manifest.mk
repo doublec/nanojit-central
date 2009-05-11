@@ -63,6 +63,7 @@ endif
 
 avmplus_CXXSRCS := $(avmplus_CXXSRCS) \
   $(curdir)/Assembler.cpp \
+  $(curdir)/CodeAlloc.cpp \
   $(curdir)/Fragmento.cpp \
   $(curdir)/LIR.cpp \
   $(curdir)/RegAlloc.cpp \

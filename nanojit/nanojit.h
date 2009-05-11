@@ -123,7 +123,6 @@ namespace nanojit
 	class Fragment;
 	class LIns;
 	struct SideExit;
-	struct Page;
 	class RegAlloc;
 	class BBNode;
 	typedef avmplus::AvmCore AvmCore;
@@ -134,7 +133,6 @@ namespace nanojit
 	typedef avmplus::SortedMap<LIns*,BBNode*,avmplus::LIST_GCObjects> BBMap;
 	typedef avmplus::List<char*, avmplus::LIST_GCObjects> StringList;
 	typedef avmplus::List<BBNode*,avmplus::LIST_GCObjects>	BBList;
-	typedef avmplus::List<Page*,avmplus::LIST_NonGCObjects>	PageList;
 
     const uint32_t MAXARGS = 8;
 
@@ -232,12 +230,8 @@ static inline bool isU32(uintptr_t i) {
 #define alignTo(x,s)		((((uintptr_t)(x)))&~(((uintptr_t)s)-1))
 #define alignUp(x,s)		((((uintptr_t)(x))+(((uintptr_t)s)-1))&~(((uintptr_t)s)-1))
 
-#define pageTop(x)			( (int*)alignTo(x,NJ_PAGE_SIZE) )
-#define pageDataStart(x)    ( (int*)(alignTo(x,NJ_PAGE_SIZE) + sizeof(PageHeader)) )
-#define pageBottom(x)		( (int*)(alignTo(x,NJ_PAGE_SIZE)+NJ_PAGE_SIZE)-1 )
-#define samepage(x,y)		(pageTop(x) == pageTop(y))
-
 #include "Native.h"
+#include "CodeAlloc.h"
 #include "LIR.h"
 #include "RegAlloc.h"
 #include "Fragmento.h"

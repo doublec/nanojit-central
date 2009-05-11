@@ -2019,6 +2019,9 @@ namespace nanojit
     void compile(Fragmento* frago, Assembler* assm, Fragment* triggerFrag)
     {
         AvmCore *core = frago->core();
+#ifdef NJ_VERBOSE
+		LabelMap* labels = frago->labels;
+#endif
         GC *gc = core->gc;
 
 		verbose_only( StringList asmOutput(gc); )
@@ -2045,8 +2048,7 @@ namespace nanojit
 			root->unlink(assm);			// unlink all incoming jumps ; since the compile() can fail
 			root->unlinkBranches(assm); // no one jumps into a branch (except from within the tree) so safe to clear the links table
 			root->fragEntry = 0;
-			root->releaseCode(frago);
-			
+
 			// do the tree branches
 			Fragment* frag = root->treeBranches;
 			while(frag)
@@ -2054,11 +2056,13 @@ namespace nanojit
 				// compile til no more frags
 				if (frag->lastIns)
 				{
-					assm->assemble(frag, loopJumps);
+					if (!assm->error()) {
+						assm->assemble(frag, loopJumps);
+						verbose_only(frago->_stats.compiles++);
+						verbose_only(frago->_stats.totalCompiles++);
+					}
 					verbose_only(if (assm->_verbose) 
-						assm->outputf("compiling branch %s ip %s",
-							frago->labels->format(frag),
-							frago->labels->format(frag->ip)); )
+						assm->outputf("compiling branch %s ip %s", labels->format(frag), labels->format(frag->ip)); )
 					
 					NanoAssert(frag->kind == BranchTrace);
 					RegAlloc* regs = NJ_NEW(gc, RegAlloc)();
@@ -2074,9 +2078,8 @@ namespace nanojit
 		// now the the main trunk
 		assm->assemble(root, loopJumps);
 		verbose_only(if (assm->_verbose) 
-			assm->outputf("compiling trunk %s",
-				frago->labels->format(root));)
-		NanoAssert(!frago->core()->config.tree_opt || root == root->anchor || root->kind == MergeTrace);			
+			assm->outputf("compiling trunk %s", labels->format(root));)
+		NanoAssert(!core->config.tree_opt || root == root->anchor || root->kind == MergeTrace);			
 		assm->endAssembly(root, loopJumps);
 			
 		// reverse output so that assembly is displayed low-to-high
@@ -2089,6 +2092,7 @@ namespace nanojit
 		}
 		else
 		{
+			CodeAlloc::moveAll(root->codeList, assm->codeList);
 			root->link(assm);
 			if (treeCompile) root->linkBranches(assm);
 		}

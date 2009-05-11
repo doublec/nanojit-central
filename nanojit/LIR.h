@@ -478,7 +478,6 @@ namespace nanojit
         int32_t imm32()  const;
         inline uint8_t  resv()   const  { return g.resv; }
         void*   payload() const;
-        inline Page*    page()          { return (Page*) alignTo(this,NJ_PAGE_SIZE); }
         inline int32_t  size() const {
             NanoAssert(isop(LIR_alloc));
             return i.imm16<<2;

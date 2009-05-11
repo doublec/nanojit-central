@@ -285,14 +285,10 @@ namespace nanojit
 		NIns* asm_branch_far(bool onfalse, LIns *cond, NIns * const targ);  \
 		NIns* asm_branch_near(bool onfalse, LIns *cond, NIns * const targ); \
 		int  max_param_size; /* bytes */                                    \
-		int  *_nSlot, *_nExitSlot;                                          \
 		DECL_PPC64()
 
 	#define swapptrs()  do {                                                \
 			NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins;          \
-			int* _nslot = _nSlot;                                           \
-			_nSlot = _nExitSlot;                                            \
-			_nExitSlot = _nslot;                                            \
 		} while (0) /* no semi */
 
 	const int LARGEST_UNDERRUN_PROT = 32;  // largest value passed to underrunProtect

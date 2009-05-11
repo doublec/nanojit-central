@@ -1083,11 +1083,8 @@ namespace nanojit
 
 	void Assembler::underrunProtect(int bytes) {
 		NanoAssertMsg(bytes<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small"); 
-		if (!_nSlot) {
-			_nSlot = pageDataStart(_nIns);
-		}
         int instr = (bytes + sizeof(NIns) - 1) / sizeof(NIns);
-		NIns *top = (NIns*)(_nSlot + 1);
+		NIns *top = _inExit ? this->exitStart : this->codeStart;
 		NIns *pc = _nIns;
 
 	#if PEDANTIC
@@ -1107,8 +1104,7 @@ namespace nanojit
 			if (pc - instr - br_size < top) {
 				// really do need a page break
 				verbose_only(if (_verbose) outputf("newpage %p:", pc);)
-				_nIns = pageAlloc(_inExit);
-				_nSlot = pageDataStart(_nIns-1);
+				codeAlloc();
 			}
 			// now emit the jump, but make sure we won't need another page break. 
 			// we're pedantic, but not *that* pedantic.
@@ -1119,8 +1115,7 @@ namespace nanojit
 	#else
 		if (pc - instr < top) {
 			verbose_only(if (_verbose) outputf("newpage %p:", pc);)
-			_nIns = pageAlloc(_inExit);
-			_nSlot = pageDataStart(_nIns-1);
+			codeAlloc();
 			// this jump will call underrunProtect again, but since we're on a new
 			// page, nothing will happen.
 			br(pc, 0);
@@ -1191,32 +1186,18 @@ namespace nanojit
 	void Assembler::nInit(AvmCore*) {
 	}
 
-	void Assembler::nativePageSetup() {
-		_nSlot = 0;
-		_nExitSlot = 0;
-	}
+    void Assembler::nativePageSetup() {
+        if (!_nIns) {
+            codeAlloc();
+            IF_PEDANTIC( pedanticTop = _nIns; )
+        }
+        if (!_nExitIns) {
+            codeAlloc(true);
+        }
+    }
 
-	void Assembler::nativePageReset() {
-		if (!_nIns) {
-			_nIns     = pageAlloc();
-			IF_PEDANTIC( pedanticTop = _nIns; )
-		}
-		if (!_nExitIns) {
-			_nExitIns = pageAlloc(true);
-		}
-		
-		if (!_nSlot)
-		{
-			// This needs to be done or the samepage macro gets confused; pageAlloc
-			// gives us a pointer to just past the end of the page.
-			_nIns--;
-			_nExitIns--;
-
-			// constpool starts at top of page and goes down,
-			// code starts at bottom of page and moves up
-			_nSlot = pageDataStart(_nIns);
-		}
-	}
+	void Assembler::nativePageReset()
+	{}
 
 	void Assembler::nPatchBranch(NIns *branch, NIns *target) {
 		// ppc relative offsets are based on the addr of the branch instruction
@@ -1299,26 +1280,6 @@ namespace nanojit
 		regs.used = 0;
 		regs.free = SavedRegs | 0x1ff8 /* R3-12 */ | 0x3ffe00000000LL /* F1-13 */;
 		debug_only(regs.managed = regs.free);
-	}
-
-	void Assembler::nMarkExecute(Page* page, int flags) {
-		static const int kProtFlags[4] = 
-		{
-			PROT_READ,						// 0
-			PROT_READ|PROT_WRITE,			// PAGE_WRITE
-			PROT_READ|PROT_EXEC,			// PAGE_EXEC
-			PROT_READ|PROT_WRITE|PROT_EXEC	// PAGE_EXEC|PAGE_WRITE
-		};
-		int prot = kProtFlags[flags & (PAGE_WRITE|PAGE_EXEC)];
-		intptr_t addr = (intptr_t)page;
-		addr &= ~((uintptr_t)NJ_PAGE_SIZE - 1);
-		NanoAssert(addr == (intptr_t)page);
-		if (mprotect((void *)addr, NJ_PAGE_SIZE, prot) == -1) 
-		{
-			// todo: we can't abort or assert here, we have to fail gracefully.
-			NanoAssertMsg(false, "FATAL ERROR: mprotect(PROT_EXEC) failed\n");
-			abort();
-		}
 	}
 
 #ifdef NANOJIT_64BIT

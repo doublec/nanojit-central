@@ -108,7 +108,7 @@ namespace nanojit
 	void Assembler::nFragExit(LInsp guard)
 	{
 		SideExit *exit = guard->exit();
-		bool trees = _frago->core()->config.tree_opt;
+		bool trees = config.tree_opt;
         Fragment *frag = exit->target;
         GuardRecord *lr = 0;
 		bool destKnown = (frag && frag->fragEntry);
@@ -129,7 +129,7 @@ namespace nanojit
         MR(SP,FP);
 
         #ifdef NJ_VERBOSE
-        if (_frago->core()->config.show_stats) {
+        if (config.show_stats) {
 			// load EDX (arg1) with Fragment *fromFrag, target fragment
 			// will make use of this when calling fragenter().
             int fromfrag = int((Fragment*)_thisfrag);
@@ -244,55 +244,6 @@ namespace nanojit
 			SUBi(SP, extra);
 	}
 
-	void Assembler::nMarkExecute(Page* page, int flags)
-	{
-		NanoAssert(sizeof(Page) == NJ_PAGE_SIZE);
-		#if defined WIN32 || defined WIN64
-			DWORD dwIgnore;
-			static const DWORD kProtFlags[4] = 
-			{
-				PAGE_READONLY,			// 0
-				PAGE_READWRITE,			// PAGE_WRITE
-				PAGE_EXECUTE_READ,		// PAGE_EXEC
-				PAGE_EXECUTE_READWRITE	// PAGE_EXEC|PAGE_WRITE
-			};
-			DWORD prot = kProtFlags[flags & (PAGE_WRITE|PAGE_EXEC)];
-			BOOL res = VirtualProtect(page, NJ_PAGE_SIZE, prot, &dwIgnore);
-			if (!res)
-			{
-				// todo: we can't abort or assert here, we have to fail gracefully.
-				NanoAssertMsg(false, "FATAL ERROR: VirtualProtect() failed\n");
-			}
-		#elif defined AVMPLUS_UNIX || defined AVMPLUS_MAC
-			static const int kProtFlags[4] = 
-			{
-				PROT_READ,						// 0
-				PROT_READ|PROT_WRITE,			// PAGE_WRITE
-				PROT_READ|PROT_EXEC,			// PAGE_EXEC
-				PROT_READ|PROT_WRITE|PROT_EXEC	// PAGE_EXEC|PAGE_WRITE
-			};
-			int prot = kProtFlags[flags & (PAGE_WRITE|PAGE_EXEC)];
-			intptr_t addr = (intptr_t)page;
-			addr &= ~((uintptr_t)NJ_PAGE_SIZE - 1);
-			NanoAssert(addr == (intptr_t)page);
-			#if defined SOLARIS
-			if (mprotect((char *)addr, NJ_PAGE_SIZE, prot) == -1) 
-			#elif defined AVMPLUS_MAC
-			task_t task = mach_task_self();
-			if (vm_protect(task, addr, NJ_PAGE_SIZE, true, prot) == -1)
-			#else
-			if (mprotect((void *)addr, NJ_PAGE_SIZE, prot) == -1) 
-			#endif
-			{
-				// todo: we can't abort or assert here, we have to fail gracefully.
-				NanoAssertMsg(false, "FATAL ERROR: mprotect(PROT_EXEC) failed\n");
-                abort();
-            }
-        #else
-			(void)page;
-		#endif
-	}
-			
 	Register Assembler::nRegisterAllocFromSet(int set)
 	{
 		Register r;
@@ -775,7 +726,7 @@ namespace nanojit
 
 		#ifdef NJ_VERBOSE
 		// branching from this frag to ourself.
-		if (_frago->core()->config.show_stats)
+		if (config.show_stats)
 			LDi(argRegs[1], int((Fragment*)_thisfrag));
 		#endif
 
@@ -1685,8 +1636,8 @@ namespace nanojit
 
 	void Assembler::nativePageSetup()
 	{
-		if (!_nIns)		 _nIns	   = pageAlloc();
-		if (!_nExitIns)  _nExitIns = pageAlloc(true);
+		if (!_nIns)		 codeAlloc(); // sets _nIns
+		if (!_nExitIns)  codeAlloc(true); // sets _nExitIns
 	}
 	
 	// enough room for n bytes
@@ -1694,10 +1645,9 @@ namespace nanojit
     {
 		NanoAssertMsg(n<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small"); 
         NIns *eip = this->_nIns;
-        Page *p = (Page*)pageTop(eip-1);
-        NIns *top = (NIns*) &p->code[0];
+		NIns *top = this->codeStart;
         if (eip - n < top) {
-			_nIns = pageAlloc(_inExit);
+			codeAlloc();
             JMP(eip);
         }
     }
