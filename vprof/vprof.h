@@ -87,6 +87,8 @@
 
 #include "VMPI.h"
 
+// Note, this is not supported in configurations with more than one AvmCore running
+// in the same process.
 
 // portable align macro
 #if defined(_MSC_VER)
