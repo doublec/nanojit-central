@@ -275,14 +275,9 @@ extern  "C"	void sync_instruction_memory(caddr_t v, u_int len);
         return kUnknown;
     }    
 
-#if defined AVMPLUS_MAC || defined AVMPLUS_UNIX || defined SOLARIS
-    // use mprotect generic unix api (posix?)
+#if defined AVMPLUS_MAC || defined AVMPLUS_UNIX
 	void CodeAlloc::markExecutable(void *mem, size_t bytes) {
-        if (mprotect((char*)mem, bytes, PROT_READ|PROT_WRITE|PROT_EXEC) == -1) {
-            // todo: we can't abort or assert here, we have to fail gracefully.
-            NanoAssertMsg(false, "FATAL ERROR: mprotect(PROT_EXEC) failed\n");
-            abort();
-        }
+        VMPI_setPageProtection(mem, bytes, true, true);
 	}
 
 #elif defined WIN32
