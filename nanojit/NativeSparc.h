@@ -517,16 +517,16 @@ namespace nanojit
     Format_3_1I(3, rd, 0x20, rs1, simm13); \
     } while (0)
 
-#define LDSB(rs1, rs2, rd) \
+#define LDUB(rs1, rs2, rd) \
     do { \
     asm_output("ld [%s + %s], %s", gpn(rs1), gpn(rs2), gpn(rd)); \
-    Format_3_1(3, rd, 0x9, rs1, 0, rs2); \
+    Format_3_1(3, rd, 0x1, rs1, 0, rs2); \
     } while (0)
 
-#define LDSBI(rs1, simm13, rd) \
+#define LDUBI(rs1, simm13, rd) \
     do { \
     asm_output("ld [%s + %d], %s", gpn(rs1), simm13, gpn(rd)); \
-    Format_3_1I(3, rd, 0x9, rs1, simm13); \
+    Format_3_1I(3, rd, 0x1, rs1, simm13); \
     } while (0)
 
 #define LDSW(rs1, rs2, rd) \
@@ -871,11 +871,11 @@ namespace nanojit
       SET32(imm32, L0); \
     }
 
-#define LDSB32(rs1, imm32, rd) \
+#define LDUB32(rs1, imm32, rd) \
     if(isIMM13(imm32)) { \
-      LDSBI(rs1, imm32, rd); \
+      LDUBI(rs1, imm32, rd); \
     } else { \
-      LDSB(rs1, L0, rd); \
+      LDUB(rs1, L0, rd); \
       SET32(imm32, L0); \
     }
 
