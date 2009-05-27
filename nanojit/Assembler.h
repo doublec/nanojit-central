@@ -241,8 +241,7 @@ namespace nanojit
 			void		freeRsrcOf(LIns *i, bool pop);
 			void		evict(Register r);
 			RegisterMask hint(LIns*i, RegisterMask allow);
-
-			void		codeAlloc(bool inExit=false);
+			void		codeAlloc(bool exitPage=false);
 			void		internalReset();
             bool        canRemat(LIns*);
 

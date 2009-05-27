@@ -56,15 +56,23 @@ namespace nanojit
     {
         friend class CodeAlloc;
 
-        CodeList* next;
-        NIns* end;    // points just past the end
+        CodeList* next;         // for making linked lists of non-adjacent blocks.
+        CodeList* lower;        // adjacent block at lower address
+        bool isFree;
+        union {
+            CodeList* higher;   // adjacent block at higher address
+            NIns* end;          // points just past the end
+        };
         NIns  code[1]; // more follows
 
         /** return the starting address for this block only */
         NIns* start() { return &code[0]; }
 
-        /** return just the size of this block */
+        /** return just the usable size of this block */
         size_t size() const { return uintptr_t(end) - uintptr_t(&code[0]); }
+
+        /** return the whole size of this block including overhead */
+        size_t blockSize() const { return uintptr_t(end) - uintptr_t(this); }
 
         /** return true if just this block contains p */
         bool contains(NIns* p) const  { return containsPtr(&code[0], end, p); }
@@ -82,10 +90,10 @@ namespace nanojit
 	class CodeAlloc : public GCFinalizedObject
 	{
         static const size_t sizeofMinBlock = offsetof(CodeList, code);
+        static const size_t minAllocSize = LARGEST_UNDERRUN_PROT;
 
 		GCHeap* heap;
-        CodeList* freelist;      // smaller blocks we can return from alloc()
-        avmplus::List<void*, avmplus::LIST_NonGCObjects> heapblocks;
+        CodeList* heapblocks;
 
         /** remove one block from a list */
         static CodeList* removeBlock(CodeList* &list);
@@ -96,14 +104,17 @@ namespace nanojit
         /** compute the CodeList pointer from a [start, end) range */
         static CodeList* getBlock(NIns* start, NIns* end);
 
-        /** add raw memory to a list */
-        static void addMem(CodeList* &blocks, void* mem, size_t bytes);
+        /** add raw memory to the free list */
+        CodeList* addMem(void* mem, size_t bytes);
 
-        /** mark raw memory executable */
-        static void markExecutable(void *mem, size_t bytes);
+        /** make sure all the higher/lower pointers are correct for every block */
+        void sanity_check();
+
+        /** find the beginning of the heapblock terminated by term */
+        static CodeList* firstBlock(CodeList* term);
 
 	public:
-		CodeAlloc(GC*);
+		CodeAlloc(GCHeap*);
         ~CodeAlloc();
 
         /** allocate some memory for code, return pointers to the region. */
@@ -118,7 +129,8 @@ namespace nanojit
         /** flush the icache for all code in the list, before executing */
         void flushICache(CodeList* &blocks);
 
-        /** add the ranges [start, holeStart) and [holeEnd, end) to code, and free [holeStart, holeEnd) */
+        /** add the ranges [start, holeStart) and [holeEnd, end) to code, and
+            free [holeStart, holeEnd) if the hole is >= minsize */
         void addRemainder(CodeList* &code, NIns* start, NIns* end, NIns* holeStart, NIns* holeEnd);
 
         /** add a block previously returned by alloc(), to code */
@@ -130,11 +142,11 @@ namespace nanojit
         /** return true if any block in list "code" contains the code pointer p */
         static bool contains(const CodeList* code, NIns* p);
 
-        /** return the number of bytes in all the code blocks in "code" */
+        /** return the number of bytes in all the code blocks in "code", including block overhead */
         static size_t size(const CodeList* code);
 
-        /** return the total size of the allocator */
-        int totalSize();
+        /** print out stats about heap usage */
+        void logStats();
 
         enum CodePointerKind {
             kUnknown, kFree, kUsed

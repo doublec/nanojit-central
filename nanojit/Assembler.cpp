@@ -283,35 +283,22 @@ namespace nanojit
         pending_lives.clear();
 	}
 
-	void Assembler::codeAlloc(bool inExit)
+	void Assembler::codeAlloc(bool exitPage)
 	{
 		NIns* start;
 		NIns* end;
 
 		// save the block we just filled
-		if (inExit && exitStart) {
+		if (exitPage && exitStart) {
 			CodeAlloc::add(codeList, exitStart, exitEnd);
-		} else if (!inExit && codeStart) {
+		} else if (!exitPage && codeStart) {
 			CodeAlloc::add(codeList, codeStart, codeEnd);
 		}
 
-		for (;;) {
-			// CodeAlloc contract: allocations never fail
-			_codeAlloc->alloc(start, end);
-			if (uintptr_t(end) - uintptr_t(start) < (size_t)LARGEST_UNDERRUN_PROT) {
-				// too small to use, just keep it and ask again
-				CodeAlloc::add(codeList, start, end);
-				continue;
-			}
-			#ifdef NANOJIT_ARM
-			// arm assembler counts on code blocks being 4K or less,
-			// so that it can generate constant pools near code.  If allocator
-			// can give larger blocks, change the api to let the mutator request
-			// a maximum amount, and internally split the block in CodeAlloc.
-			NanoAssert(uintptr_t(end) - uintptr_t(start) <= 0x1000);
-			#endif
-			break;
-		}
+		// CodeAlloc contract: allocations never fail
+		_codeAlloc->alloc(start, end);
+		NanoAssert(uintptr_t(end) - uintptr_t(start) >= (size_t)LARGEST_UNDERRUN_PROT);
+
 		#ifdef VTUNE
 		if (_nIns && _nExitIns) {
 			//cgen->jitAddRecord((uintptr_t)list->code, 0, 0, true); // add placeholder record for top of page
@@ -320,7 +307,7 @@ namespace nanojit
 		}
 		#endif
 		// update pointers with new allocated block.
-		if (inExit) {
+		if (exitPage) {
 			exitStart = start;
 			exitEnd = end;
 			_nExitIns = end;
