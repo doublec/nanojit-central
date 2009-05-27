@@ -39,6 +39,9 @@
 
 #include "nanojit.h"
 
+//#define DOPROF
+#include "../vprof/vprof.h"
+
 #ifdef FEATURE_NANOJIT
 
 namespace nanojit
@@ -55,8 +58,11 @@ namespace nanojit
         // give all memory back to gcheap.  Assumption is that all
         // code is done being used by now.
         for (CodeList* b = heapblocks; b != 0; ) {
+            _nvprof("free page",1);
             CodeList* next = b->next;
-            heap->Free(firstBlock(b));
+            void *mem = firstBlock(b);
+            VMPI_setPageProtection(mem, bytesPerAlloc, false /* executable */, true /* writable */);
+            heap->Free(mem);
             b = next;
         }
     }
@@ -67,7 +73,7 @@ namespace nanojit
     }
 
     int round(size_t x) {
-        return (x + 512) >> 10;
+        return (int)((x + 512) >> 10);
     }
     void CodeAlloc::logStats() {
         size_t total = 0;
@@ -85,9 +91,8 @@ namespace nanojit
                 }
             }
         }
-        avmplus::AvmLog("code-heap: %dk free %dk fragmented %d (%d%%) free blocks %d\n",
-            round(total), round(free_size), frag_size,
-            100*frag_size/total, free_count);
+        avmplus::AvmLog("code-heap: %dk free %dk fragmented %d\n",
+            round(total), round(free_size), frag_size);
     }
 
     void CodeAlloc::alloc(NIns* &start, NIns* &end) {
@@ -108,6 +113,7 @@ namespace nanojit
         }
         // no suitable block found, get more memory
         void *mem = heap->Alloc(pagesPerAlloc, /* expand */ true);  // allocations never fail
+        _nvprof("alloc page", uintptr_t(mem)>>12);
         VMPI_setPageProtection(mem, bytesPerAlloc, true/*executable*/, true/*writable*/);
         CodeList* b = addMem(mem, bytesPerAlloc);
         b->isFree = false;
@@ -143,12 +149,25 @@ namespace nanojit
         blk->isFree = true;
         NanoAssert(!blk->lower || !blk->lower->isFree);
         NanoAssert(blk->higher && !blk->higher->isFree);
-        if (blk->lower == 0 && blk->higher->end == 0) {
-            // whole page is now free
-            if (verbose)
-                avmplus::AvmLog("heap block %p became free\n", blk);
-        }
         //memset(blk->start(), 0xCC, blk->size()); // INT 3 instruction
+    }
+
+    void CodeAlloc::sweep() {
+        debug_only(sanity_check();)
+        CodeList** prev = &heapblocks;
+        for (CodeList* hb = heapblocks; hb != 0; hb = *prev) {
+            NanoAssert(hb->lower != 0);
+            if (!hb->lower->lower && hb->lower->isFree) {
+                // whole page is unused
+                void* mem = hb->lower;
+                *prev = hb->next;
+                _nvprof("free page",1);
+                VMPI_setPageProtection(mem, bytesPerAlloc, false /* executable */, true /* writable */);
+                heap->Free(mem);
+            } else {
+                prev = &hb->next;
+            }
+        }
     }
 
     void CodeAlloc::freeAll(CodeList* &code) {
@@ -336,6 +355,7 @@ extern  "C"	void sync_instruction_memory(caddr_t v, u_int len);
 
     bool CodeAlloc::contains(const CodeList* blocks, NIns* p) {
         for (const CodeList *b = blocks; b != 0; b = b->next) {
+            _nvprof("block contains",1);
             if (b->contains(p))
                 return true;
         }

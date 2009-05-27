@@ -154,6 +154,9 @@ namespace nanojit
 
         /** determine whether the given address is not code, or is allocated or free */
         CodePointerKind classifyPtr(NIns *p);
+
+        /** return any completely empty pages */
+        void sweep();
 	};
 }
 
