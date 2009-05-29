@@ -112,7 +112,7 @@ namespace nanojit
             }
         }
         // no suitable block found, get more memory
-        void *mem = heap->Alloc(pagesPerAlloc, /* expand */ true);  // allocations never fail
+        void *mem = heap->Alloc(pagesPerAlloc);  // allocations never fail
         _nvprof("alloc page", uintptr_t(mem)>>12);
         VMPI_setPageProtection(mem, bytesPerAlloc, true/*executable*/, true/*writable*/);
         CodeList* b = addMem(mem, bytesPerAlloc);
