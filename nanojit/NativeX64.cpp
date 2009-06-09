@@ -1117,7 +1117,8 @@ namespace nanojit
             } else {
                 // jit code is within +/-2GB of builtin code, use rip-relative
                 underrunProtect(4+8);
-                *((int32_t*)(_nIns -= 4)) = (int32_t)((NIns*)negateMask - _nIns);
+                int32_t d = (NIns*)negateMask - _nIns;
+                *((int32_t*)(_nIns -= 4)) = d;
                 _nvprof("x64-bytes", 4);
                 emitrr(X64_xorpsm, rr, (Register)0);
             }
