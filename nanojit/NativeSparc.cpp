@@ -149,13 +149,6 @@ namespace nanojit
             JMPL(G0, I0, 15);
         }
 
-        bool imt = call->isInterface();
-
-        if(imt) {
-            argc--;
-            findSpecificRegFor(ins->arg(argc), O3);
-        }
-
         uint32_t GPRIndex = O0;
         uint32_t offset = kLinkageAreaSize; // start of parameters stack postion.
 

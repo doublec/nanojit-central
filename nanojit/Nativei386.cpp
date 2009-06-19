@@ -156,12 +156,6 @@ namespace nanojit
 		uint32_t iargs = call->count_iargs();
 		int32_t fargs = call->count_args() - iargs;
 
-        bool imt = call->isInterface();
-        if (imt) {
-			// iid arg is passed via register
-            iargs --;
-		}
-
 		bool indirect = call->isIndirect();
 		if (indirect) {
 			// target arg isn't pushed, its consumed in the call
@@ -220,13 +214,6 @@ namespace nanojit
         if (indirect) {
             argc--;
             asm_arg(ARGSIZE_P, ins->arg(argc), EAX);
-        }
-
-        if (imt) {
-            // interface thunk calling convention: put iid in EDX
-            NanoAssert(call->_abi == ABI_CDECL);
-            argc--;
-            asm_arg(ARGSIZE_P, ins->arg(argc), EDX);
         }
 
 		for(uint32_t i=0; i < argc; i++)

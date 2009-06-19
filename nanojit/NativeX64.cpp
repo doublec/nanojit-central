@@ -519,12 +519,6 @@ namespace nanojit
             emit(X64_callrax);
         }
 
-        int param_size = 0;
-        if (call->isInterface()) {
-            asm_regarg(ARGSIZE_P, ins->arg(--argc), argRegs[3]);
-            param_size += sizeof(void*);
-        }
-
     #ifdef _MSC_VER
         int stk_used = 32; // always reserve 32byte shadow area
     #else

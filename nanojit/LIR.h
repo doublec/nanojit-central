@@ -323,8 +323,7 @@ namespace nanojit
     };
 
     enum IndirectCall {
-        CALL_INDIRECT = 0,
-        CALL_IMT = 1
+        CALL_INDIRECT = 0
     };
 
     struct CallInfo
@@ -339,9 +338,6 @@ namespace nanojit
         uint32_t FASTCALL _count_args(uint32_t mask) const;
         uint32_t get_sizes(ArgSize*) const;
 
-        inline bool isInterface() const {
-            return _address == CALL_IMT;
-        }
         inline bool isIndirect() const {
             return _address < 256;
         }

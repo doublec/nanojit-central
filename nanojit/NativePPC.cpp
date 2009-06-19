@@ -670,12 +670,6 @@ namespace nanojit
 		}
 
 		int param_size = 0;
-		if (call->isInterface()) {
-			// interface thunk calling convention: put iid in R6 (4th param)
-			argc--;
-			asm_regarg(ARGSIZE_P, ins->arg(argc), R6);
-			param_size += sizeof(void*);
-		}
 
 		Register r = R3;
 		Register fr = F1;

@@ -253,10 +253,6 @@ Assembler::asm_call(LInsp ins)
         MOV(IP,LR);
 #endif
         asm_regarg(ARGSIZE_LO, ins->arg(--argc), LR);
-
-        // interface thunk calling convention: put iid in R3
-        if (call->isInterface())
-            asm_regarg(ARGSIZE_LO, ins->arg(--argc), R3);
     }
 
     Register r = R0;
