@@ -128,6 +128,8 @@ namespace nanojit
         if (verbose)
             avmplus::AvmLog("free %p-%p %d\n", start, end, (int)blk->size());
 
+		AvmAssert(!blk->isFree); 
+
         // coalesce
         if (blk->lower && blk->lower->isFree) {
             // combine blk into blk->lower (destroy blk)
@@ -313,7 +315,7 @@ extern  "C"	void sync_instruction_memory(caddr_t v, u_int len);
             // b1 b2
             CodeList* b1 = getBlock(start, end);
             CodeList* b2 = (CodeList*) (uintptr_t(holeEnd) - offsetof(CodeList, code));
-            b2->isFree = 0;
+            b2->isFree = false;
             b2->next = 0;
             b2->higher = b1->higher;
             b2->lower = b1;
@@ -334,8 +336,10 @@ extern  "C"	void sync_instruction_memory(caddr_t v, u_int len);
             b1->higher = b2;
             b2->lower = b1;
             b2->higher = b3;
+            b2->isFree = false; // redundant, since we're about to free, but good hygiene
             b3->lower = b2;
             b3->end = end;
+            b3->isFree = false;
             b3->higher->lower = b3;
             b2->next = 0;
             b3->next = 0;
