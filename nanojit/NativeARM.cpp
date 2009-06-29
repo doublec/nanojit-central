@@ -995,12 +995,12 @@ Assembler::asm_load64(LInsp ins)
     Register rb = findRegFor(base, GpRegs);
     // *(FP+dr) <- *(rb+db)
     asm_mmq(FP, d, rb, offset);
-#endif
 
     // bug https://bugzilla.mozilla.org/show_bug.cgi?id=477228
     // make sure we release the instruction's stack slot *after* 
     // any findRegFor() since that call can trigger a spill
     freeRsrcOf(ins, false);
+#endif
 
     //asm_output(">>> load64");
 }
