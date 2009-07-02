@@ -233,18 +233,11 @@ extern  "C"	void sync_instruction_memory(caddr_t v, u_int len);
 			sync_instruction_memory((char*)b->start(), b->size());
     }
 
-#elif defined NANOJIT_UNIX
+#elif defined AVMPLUS_UNIX
     // fixme: __clear_cache is a libgcc feature, test for libgcc or gcc 
 	void CodeAlloc::flushICache(CodeList* &blocks) {
-        FIXME
-		Page *p = pages;
-		Page *first = p;
-		while (p) {
-			if (!p->next || p->next != p+1) {
-				__clear_cache((char*)first, (char*)(p+1));
-				first = p->next;
-			}
-			p = p->next;
+        for (CodeList *b = blocks; b != 0; b = b->next) {
+			__clear_cache((char*)b->start(), (char*)b->start()+b->size());
 		}
     }
 #endif // AVMPLUS_MAC && NANOJIT_PPC

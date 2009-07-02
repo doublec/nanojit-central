@@ -1123,7 +1123,7 @@ namespace nanojit
 		uint8_t* offs = (uint8_t*)l;
 		for (int32_t i=0; i < argc; i++)
 			*--offs = (uint8_t) l->i.reference(args[i]);
-		NanoAssert((LInsp)offs>=_buf->next());
+		NanoAssert(offs>=(uint8_t*)_buf->next());
 
         LOpcode op = k_callmap[argt & ARGSIZE_MASK];
 #if defined NJ_SOFTFLOAT
