@@ -188,6 +188,7 @@ static const int NumSavedRegs = 7;
 #endif
 static const RegisterMask FpRegs = 1<<D0 | 1<<D1 | 1<<D2 | 1<<D3 | 1<<D4 | 1<<D5 | 1<<D6; // no D7; S14-S15 are used for i2f/u2f.
 static const RegisterMask GpRegs = 0xFFFF;
+static const bool CalleeRegsNeedExplicitSaving = false;  // genPrologue() does it for us
 
 #define IsFpReg(_r)     ((rmask((Register)(_r)) & FpRegs) != 0)
 #define IsGpReg(_r)     ((rmask((Register)(_r)) & GpRegs) != 0)

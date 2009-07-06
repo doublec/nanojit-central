@@ -244,6 +244,7 @@ namespace nanojit
 
 	static const RegisterMask GpRegs = 0xffffffff;
 	static const RegisterMask FpRegs = 0xffffffff00000000LL;
+    static const bool CalleeRegsNeedExplicitSaving = true;
 	// R31 is a saved reg too, but we use it as our Frame ptr FP
 #ifdef NANOJIT_64BIT
 	// R13 reserved for thread-specific storage on ppc64-darwin

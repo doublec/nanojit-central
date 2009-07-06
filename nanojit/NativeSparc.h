@@ -175,6 +175,7 @@ namespace nanojit
 	typedef int RegisterMask;
 #define _rmask_(r)        (1<<(r))
 
+    static const bool CalleeRegsNeedExplicitSaving = true;    
 	static const int NumSavedRegs = 6;
 	static const RegisterMask SavedRegs = 1<<L1 | 1<<L3 | 1<<L5 | 1<<L7 |
 	1<<I0 | 1<<I1 | 1<<I2 | 1<<I3 |
@@ -185,7 +186,7 @@ namespace nanojit
 	1<<F14 | 1<<F16 | 1<<F18 | 1<<F20 |
 	1<<F22;
 	static const RegisterMask AllowableFlagRegs = GpRegs;
-
+    
 #define nextreg(r)        Register(r+1)
 #define prevreg(r)        Register(r-1)
 
