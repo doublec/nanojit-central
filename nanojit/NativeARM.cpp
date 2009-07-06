@@ -1437,13 +1437,13 @@ Assembler::asm_ldr_chk(Register d, Register b, int32_t off, bool chk)
         if (chk) underrunProtect(4);
         NanoAssert(off > -4096);
         *(--_nIns) = NIns(COND_AL | (0x51<<20) | (b<<16) | (d<<12) | ((-off) & 0xFFF));
-        asm_output("ldr %s, [%s, #-0x%X]", gpn(d), gpn(b), -off);
+        asm_output("ldr %s, [%s, #-%d]", gpn(d), gpn(b), -off);
     } else {
         if (isS16(off) || isU16(off)) {
             if (chk) underrunProtect(4);
             NanoAssert(off < 4096);
             *(--_nIns) = NIns(COND_AL | (0x59<<20) | (b<<16) | (d<<12) | (off & 0xFFF));
-            asm_output("ldr %s, [%s, #0x%X]", gpn(d), gpn(b), off);
+            asm_output("ldr %s, [%s, #%d]", gpn(d), gpn(b), off);
         } else {
             if (chk) underrunProtect(4 + LD32_size);
             *(--_nIns) = NIns(COND_AL | (0x79<<20) | (b<<16) | (d<<12) | IP);
@@ -1496,7 +1496,7 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
         offs = PC_OFFSET_FROM(_nSlot-1,_nIns-1);
         NanoAssert(offs < 0);
         *(--_nIns) = (NIns)( ((_c)<<28) | (0x51<<20) | (PC<<16) | (PC<<12) | ((-offs) & 0xFFF) );
-        asm_output("ldr%s %s, [%s, #-0x%X]", condNames[_c], gpn(PC), gpn(PC), -offs);
+        asm_output("ldr%s %s, [%s, #-%d]", condNames[_c], gpn(PC), gpn(PC), -offs);
         NanoAssert(uintptr_t(_nIns)+8+offs == uintptr_t(_nSlot-1));
     } else {
         if(_chk) underrunProtect(12);

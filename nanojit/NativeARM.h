@@ -310,13 +310,16 @@ enum {
         NanoAssert(isU8(imm));\
         *(--_nIns) = (NIns) ((cond)<<28 | OP_IMM | (ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (imm));\
         if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
-            asm_output("%s%s%s %s, #0x%X", #op, condNames[cond], (S)?"s":"", gpn(rd), (imm));\
+            asm_output("%s%s%s %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), (imm));\
         else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {\
             NanoAssert(S==1);\
-            asm_output("%s%s %s, #0x%X", #op, condNames[cond], gpn(rl), (imm));\
-        } else\
-            asm_output("%s%s%s %s, %s, #0x%X", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), (imm));\
+            asm_output("%s%s %s, #%d", #op, condNames[cond], gpn(rl), (imm));\
+        } else {                                                        \
+            asm_output("%s%s%s %s, %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), (imm));\
+        } \
     } while (0)
+
+#define rot_as_lshift(r)  (((r)==0)?0:32-2*(r)) 
 
 #define ALUi_rot(cond, op, S, rd, rl, imm, rot) do {\
         underrunProtect(4);\
@@ -327,13 +330,14 @@ enum {
         NanoAssert(((rot)>=0) && ((rot)<=15));\
         NanoAssert(isU8(imm));\
         *(--_nIns) = (NIns) ((cond)<<28 | OP_IMM | (ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (rot)<<8 | (imm));\
-        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
-            asm_output("%s%s%s %s, #0x%X, %d", #op, condNames[cond], (S)?"s":"", gpn(rd), (imm), (rot)*2);\
-        else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {\
+        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn) {               \
+            asm_output("%s%s%s %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), (imm)<<rot_as_lshift(rot)); \
+        } else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {         \
             NanoAssert(S==1);\
-            asm_output("%s%s %s, #0x%X, %d", #op, condNames[cond], gpn(rl), (imm), (rot)*2);\
-        } else\
-            asm_output("%s%s%s %s, %s, #0x%X, %d", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), (imm), (rot)*2);\
+            asm_output("%s%s %s, #%d", #op, condNames[cond], gpn(rl), (imm)<<rot_as_lshift(rot)); \
+        } else {                                                        \
+            asm_output("%s%s%s %s, %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), (imm)<<rot_as_lshift(rot)); \
+        } \
     } while (0)
 
 #define ALUr(cond, op, S, rd, rl, rr) do {\
@@ -343,13 +347,14 @@ enum {
         NanoAssert(((S)==0) || ((S)==1));\
         NanoAssert(IsGpReg(rd) && IsGpReg(rl) && IsGpReg(rr));\
         *(--_nIns) = (NIns) ((cond)<<28 |(ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (rr));\
-        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
+        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn) {               \
             asm_output("%s%s%s %s, %s", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rr));\
-        else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {\
+        } else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {         \
             NanoAssert(S==1);\
             asm_output("%s%s  %s, %s", #op, condNames[cond], gpn(rl), gpn(rr));\
-        } else\
+        } else {                                                         \
             asm_output("%s%s%s %s, %s, %s", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), gpn(rr));\
+        } \
     } while (0)
 
 #define ALUr_shi(cond, op, S, rd, rl, rr, sh, imm) do {\
@@ -361,13 +366,14 @@ enum {
         NanoAssert(IsShift(sh));\
         NanoAssert((imm)>=0 && (imm)<32);\
         *(--_nIns) = (NIns) ((cond)<<28 |(ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (imm)<<7 | (sh)<<4 | (rr));\
-        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
+        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn) {               \
             asm_output("%s%s%s %s, %s, %s #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rr), shiftNames[sh], (imm));\
-        else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {\
+        } else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {         \
             NanoAssert(S==1);\
             asm_output("%s%s  %s, %s, %s #%d", #op, condNames[cond], gpn(rl), gpn(rr), shiftNames[sh], (imm));\
-        } else\
+        } else {                                                        \
             asm_output("%s%s%s %s, %s, %s, %s #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), gpn(rr), shiftNames[sh], (imm));\
+        } \
     } while (0)
 
 #define ALUr_shr(cond, op, S, rd, rl, rr, sh, rs) do {\
@@ -378,13 +384,14 @@ enum {
         NanoAssert(IsGpReg(rd) && IsGpReg(rl) && IsGpReg(rr) && IsGpReg(rs));\
         NanoAssert(IsShift(sh));\
         *(--_nIns) = (NIns) ((cond)<<28 |(ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (rs)<<8 | (sh)<<4 | (rr));\
-        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
+        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn) {               \
             asm_output("%s%s%s %s, %s, %s %s", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rr), shiftNames[sh], gpn(rs));\
-        else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {\
+        } else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {         \
             NanoAssert(S==1);\
             asm_output("%s%s  %s, %s, %s %s", #op, condNames[cond], gpn(rl), gpn(rr), shiftNames[sh], gpn(rs));\
-        } else\
+        } else {                                                        \
             asm_output("%s%s%s %s, %s, %s, %s %s", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), gpn(rr), shiftNames[sh], gpn(rs));\
+        } \
     } while (0)
 
 // _d = _r OR _l
@@ -519,7 +526,7 @@ enum {
         NanoAssert((_off)>=0&&(_off)<=31);                                    \
         underrunProtect(4);                                             \
         *(--_nIns) = (NIns)( COND_AL | (0x5D<<20) | ((_n)<<16) | ((_d)<<12) |  ((_off)&0xfff)  ); \
-        asm_output("ldrb %s, [%s, #0x%X]", gpn(_d),gpn(_n),(_off));          \
+        asm_output("ldrb %s, [%s, #%d]", gpn(_d),gpn(_n),(_off));          \
     } while(0)
 
 #define STR(_d,_n,_off) do {                                            \
@@ -528,10 +535,10 @@ enum {
         underrunProtect(4);                                             \
         if ((_off)<0) {\
             *(--_nIns) = (NIns)( COND_AL | (0x50<<20) | ((_n)<<16) | ((_d)<<12) | ((-(_off))&0xFFF) ); \
-            asm_output("str %s, [%s, -#0x%X]", gpn(_d), gpn(_n), -(_off)); \
+            asm_output("str %s, [%s, #-%d]", gpn(_d), gpn(_n), -(_off)); \
         } else {\
             *(--_nIns) = (NIns)( COND_AL | (0x58<<20) | ((_n)<<16) | ((_d)<<12) | ((_off)&0xFFF) ); \
-            asm_output("str %s, [%s, #0x%X]", gpn(_d), gpn(_n), (_off)); \
+            asm_output("str %s, [%s, #%d]", gpn(_d), gpn(_n), (_off)); \
         }\
     } while(0)
 
@@ -542,10 +549,10 @@ enum {
         underrunProtect(4);                                             \
         if ((_off)<0) {\
             *(--_nIns) = (NIns)( COND_AL | (0x52<<20) | ((_n)<<16) | ((_d)<<12) | ((-(_off))&0xFFF) ); \
-            asm_output("str %s, [%s, #-0x%X]!", gpn(_d), gpn(_n), -(_off));      \
+            asm_output("str %s, [%s, #-%d]!", gpn(_d), gpn(_n), -(_off));      \
         } else {\
             *(--_nIns) = (NIns)( COND_AL | (0x5A<<20) | ((_n)<<16) | ((_d)<<12) | ((_off)&0xFFF) ); \
-            asm_output("str %s, [%s, #0x%X]!", gpn(_d), gpn(_n), (_off));      \
+            asm_output("str %s, [%s, #%d]!", gpn(_d), gpn(_n), (_off));      \
         }\
     } while(0)
 
