@@ -56,13 +56,25 @@ namespace nanojit
     {
         friend class CodeAlloc;
 
-        CodeList* next;         // for making linked lists of non-adjacent blocks.
-        CodeList* lower;        // adjacent block at lower address
+        /** for making singly linked lists of blocks in any order */
+        CodeList* next;
+
+        /** adjacent block at lower address.  This field plus higher
+            form a doubly linked list of blocks in address order, used
+            for splitting and coalescing blocks. */
+        CodeList* lower;
+
+        /** true if block is free, false otherwise */
         bool isFree;
         union {
+            // this union is used in leu of pointer punning in code
+            // the end of this block is always the address of the next higher block
             CodeList* higher;   // adjacent block at higher address
             NIns* end;          // points just past the end
         };
+
+        /** code holds this block's payload of binary code, from
+            here to this->end */
         NIns  code[1]; // more follows
 
         /** return the starting address for this block only */
