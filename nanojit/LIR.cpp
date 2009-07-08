@@ -1147,8 +1147,8 @@ namespace nanojit
 
     using namespace avmplus;
 
-	StackFilter::StackFilter(LirFilter *in, GC *gc, LirBuffer *lirbuf, LInsp sp) 
-		: LirFilter(in), gc(gc), lirbuf(lirbuf), sp(sp), top(0)
+	StackFilter::StackFilter(LirFilter *in, LirBuffer *lirbuf, LInsp sp) 
+		: LirFilter(in), lirbuf(lirbuf), sp(sp), stk(), top(0)
 	{}
 
 	LInsp StackFilter::read() 
@@ -1174,8 +1174,8 @@ namespace nanojit
 							if (stk.get(d) && stk.get(d-1)) {
 								continue;
 							} else {
-								stk.set(gc, d);
-								stk.set(gc, d-1);
+								stk.set(d);
+								stk.set(d-1);
 							}
 						}
 						else {
@@ -1183,7 +1183,7 @@ namespace nanojit
 							if (stk.get(d))
 								continue;
 							else
-								stk.set(gc, d);
+								stk.set(d);
 						}
 					}
 				}
