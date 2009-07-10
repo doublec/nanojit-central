@@ -1,4 +1,5 @@
-/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: t; tab-width: 4 -*- */
+/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 4 -*- */
+/* vi: set ts=4 sw=4 expandtab: (add to ~/.vimrc: set modeline modelines=5) */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -68,37 +69,37 @@
 #endif
 
 namespace nanojit {
-	const uint32_t NJ_PAGE_SIZE = 1 << NJ_LOG2_PAGE_SIZE;
+    const uint32_t NJ_PAGE_SIZE = 1 << NJ_LOG2_PAGE_SIZE;
 }
 
-	#ifdef NJ_STACK_GROWTH_UP
-		#define stack_direction(n)   n
-	#else
-		#define stack_direction(n)  -n
-	#endif
-	
-	#define isSPorFP(r)		( (r)==SP || (r)==FP )
+    #ifdef NJ_STACK_GROWTH_UP
+        #define stack_direction(n)   n
+    #else
+        #define stack_direction(n)  -n
+    #endif
 
-	#ifdef NJ_VERBOSE
-		#define asm_output(...) do {\
-			counter_increment(native);\
-			if (verbose_enabled()) {\
-				outline[0]='\0';\
-				if (outputAddr) VMPI_sprintf(outline, "  %10p  ",_nIns);\
-				else VMPI_sprintf(outline, "              ");\
-				VMPI_sprintf(&outline[14], ##__VA_ARGS__);\
-				Assembler::outputAlign(outline, 45);\
-				RegAlloc::formatRegisters(_allocator, outline, _thisfrag);\
-				Assembler::output_asm(outline);\
-				outputAddr=false; /* set =true if you like to see addresses for each native instruction */ \
-			}\
-		} while (0) /* no semi */ 
-		#define gpn(r)					regNames[(r)] 
-		#define fpn(r)					regNames[(r)] 
-	#else
-		#define asm_output(...)
-		#define gpn(r)		
-		#define fpn(r)		
-	#endif /* NJ_VERBOSE */
+    #define isSPorFP(r)     ( (r)==SP || (r)==FP )
+
+    #ifdef NJ_VERBOSE
+        #define asm_output(...) do {\
+            counter_increment(native);\
+            if (verbose_enabled()) {\
+                outline[0]='\0';\
+                if (outputAddr) VMPI_sprintf(outline, "  %10p  ",_nIns);\
+                else VMPI_sprintf(outline, "              ");\
+                VMPI_sprintf(&outline[14], ##__VA_ARGS__);\
+                Assembler::outputAlign(outline, 45);\
+                RegAlloc::formatRegisters(_allocator, outline, _thisfrag);\
+                Assembler::output_asm(outline);\
+                outputAddr=false; /* set =true if you like to see addresses for each native instruction */ \
+            }\
+        } while (0) /* no semi */
+        #define gpn(r)                  regNames[(r)]
+        #define fpn(r)                  regNames[(r)]
+    #else
+        #define asm_output(...)
+        #define gpn(r)
+        #define fpn(r)
+    #endif /* NJ_VERBOSE */
 
 #endif // __nanojit_Native__

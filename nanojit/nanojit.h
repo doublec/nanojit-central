@@ -1,4 +1,5 @@
-/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: t; tab-width: 4 -*- */
+/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 4 -*- */
+/* vi: set ts=4 sw=4 expandtab: (add to ~/.vimrc: set modeline modelines=5) */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -44,17 +45,17 @@
 #ifdef FEATURE_NANOJIT
 
 #if defined AVMPLUS_IA32
-	#define NANOJIT_IA32
+    #define NANOJIT_IA32
 #elif defined AVMPLUS_ARM
-	#define NANOJIT_ARM
+    #define NANOJIT_ARM
 #elif defined AVMPLUS_PPC
-	#define NANOJIT_PPC
+    #define NANOJIT_PPC
 #elif defined AVMPLUS_SPARC
-	#define NANOJIT_SPARC
+    #define NANOJIT_SPARC
 #elif defined AVMPLUS_AMD64
-	#define NANOJIT_X64
+    #define NANOJIT_X64
 #else
-	#error "unknown nanojit architecture"
+    #error "unknown nanojit architecture"
 #endif
 
 #ifdef AVMPLUS_64BIT
@@ -62,108 +63,108 @@
 #endif
 
 #if defined NANOJIT_64BIT
-	#define IF_64BIT(...) __VA_ARGS__
-	#define UNLESS_64BIT(...)
+    #define IF_64BIT(...) __VA_ARGS__
+    #define UNLESS_64BIT(...)
 #else
-	#define IF_64BIT(...)
-	#define UNLESS_64BIT(...) __VA_ARGS__
+    #define IF_64BIT(...)
+    #define UNLESS_64BIT(...) __VA_ARGS__
 #endif
 
 /*
-	If we're using MMGC, using operator delete on a GCFinalizedObject is problematic:
-	in particular, calling it from inside a dtor is risky because the dtor for the sub-object
-	might already have been called, wrecking its vtable and ending up in the wrong version
-	of operator delete (the global version rather than the class-specific one). Calling GC::Free
-	directly is fine (since it ignores the vtable), so we macro-ize to make the distinction.
-	
-	macro-ization of operator new isn't strictly necessary, but is done to bottleneck both
-	sides of the new/delete pair to forestall future needs.
+    If we're using MMGC, using operator delete on a GCFinalizedObject is problematic:
+    in particular, calling it from inside a dtor is risky because the dtor for the sub-object
+    might already have been called, wrecking its vtable and ending up in the wrong version
+    of operator delete (the global version rather than the class-specific one). Calling GC::Free
+    directly is fine (since it ignores the vtable), so we macro-ize to make the distinction.
+
+    macro-ization of operator new isn't strictly necessary, but is done to bottleneck both
+    sides of the new/delete pair to forestall future needs.
 */
 #ifdef VMCFG_NANOJIT_STANDALONE
 
-	#define NJ_NEW(gc, cls)			new (gc) cls
-	#define NJ_DELETE(obj)			do { delete obj; } while (0)
+    #define NJ_NEW(gc, cls)         new (gc) cls
+    #define NJ_DELETE(obj)          do { delete obj; } while (0)
 
 #else
 
-	using namespace MMgc;
-	
-	// separate overloads because GCObject and GCFinalizedObjects have different dtors 
-	// (GCFinalizedObject's is virtual, GCObject's is not)
-	inline void mmgc_delete(GCObject* o)
-	{
-		GC* g = GC::GetGC(o); 
-		if (g->Collecting()) 
-			g->Free(o); 
-		else 
-			delete o; 
-	}
+    using namespace MMgc;
 
-	inline void mmgc_delete(GCFinalizedObject* o)
-	{
-		GC* g = GC::GetGC(o); 
-		if (g->Collecting()) 
-			g->Free(o); 
-		else 
-			delete o; 
-	}
+    // separate overloads because GCObject and GCFinalizedObjects have different dtors
+    // (GCFinalizedObject's is virtual, GCObject's is not)
+    inline void mmgc_delete(GCObject* o)
+    {
+        GC* g = GC::GetGC(o);
+        if (g->Collecting())
+            g->Free(o);
+        else
+            delete o;
+    }
 
-	#define NJ_NEW(gc, cls)			new (gc) cls
-	#define NJ_DELETE(obj)			do { mmgc_delete(obj); } while (0)
+    inline void mmgc_delete(GCFinalizedObject* o)
+    {
+        GC* g = GC::GetGC(o);
+        if (g->Collecting())
+            g->Free(o);
+        else
+            delete o;
+    }
+
+    #define NJ_NEW(gc, cls)         new (gc) cls
+    #define NJ_DELETE(obj)          do { mmgc_delete(obj); } while (0)
 
 #endif
 
 namespace nanojit
 {
-	/**
-	 * -------------------------------------------
-	 * START AVM bridging definitions
-	 * -------------------------------------------
-	 */
-	class Fragment;
-	class LIns;
-	struct SideExit;
-	class RegAlloc;
-	class BBNode;
-	typedef avmplus::AvmCore AvmCore;
-	typedef avmplus::OSDep OSDep;
-	typedef avmplus::SortedMap<const void*, Fragment*, avmplus::LIST_GCObjects> FragmentMap;
-	typedef avmplus::SortedMap<SideExit*, RegAlloc*, avmplus::LIST_GCObjects> RegAllocMap;
-	typedef avmplus::List<LIns*, avmplus::LIST_NonGCObjects>	InsList;
-	typedef avmplus::SortedMap<LIns*,BBNode*,avmplus::LIST_GCObjects> BBMap;
-	typedef avmplus::List<char*, avmplus::LIST_GCObjects> StringList;
-	typedef avmplus::List<BBNode*,avmplus::LIST_GCObjects>	BBList;
+    /**
+     * -------------------------------------------
+     * START AVM bridging definitions
+     * -------------------------------------------
+     */
+    class Fragment;
+    class LIns;
+    struct SideExit;
+    class RegAlloc;
+    class BBNode;
+    typedef avmplus::AvmCore AvmCore;
+    typedef avmplus::OSDep OSDep;
+    typedef avmplus::SortedMap<const void*, Fragment*, avmplus::LIST_GCObjects> FragmentMap;
+    typedef avmplus::SortedMap<SideExit*, RegAlloc*, avmplus::LIST_GCObjects> RegAllocMap;
+    typedef avmplus::List<LIns*, avmplus::LIST_NonGCObjects>    InsList;
+    typedef avmplus::SortedMap<LIns*,BBNode*,avmplus::LIST_GCObjects> BBMap;
+    typedef avmplus::List<char*, avmplus::LIST_GCObjects> StringList;
+    typedef avmplus::List<BBNode*,avmplus::LIST_GCObjects>  BBList;
 
     const uint32_t MAXARGS = 8;
 
-	#if defined(_MSC_VER) && _MSC_VER < 1400
-		inline void NanoAssertMsgf(bool a,const char *f,...) {}
-		inline void NanoAssertMsg(bool a,const char *m) {}
-		inline void NanoAssert(bool a) {}
-	#elif defined(_DEBUG)
-		
-		#define __NanoAssertMsgf(a, file_, line_, f, ...)  \
-			if (!(a)) { \
-			avmplus::AvmLog("Assertion failed: " f "%s (%s:%d)\n", __VA_ARGS__, #a, file_, line_); \
-				NanoAssertFail(); \
-			}
-			
-		#define _NanoAssertMsgf(a, file_, line_, f, ...)   __NanoAssertMsgf(a, file_, line_, f, __VA_ARGS__)
+    #if defined(_MSC_VER) && _MSC_VER < 1400
+        inline void NanoAssertMsgf(bool a,const char *f,...) {}
+        inline void NanoAssertMsg(bool a,const char *m) {}
+        inline void NanoAssert(bool a) {}
+    #elif defined(_DEBUG)
 
-		#define NanoAssertMsgf(a,f,...)   do { __NanoAssertMsgf(a, __FILE__, __LINE__, f ": ", __VA_ARGS__); } while (0)
-		#define NanoAssertMsg(a,m)        do { __NanoAssertMsgf(a, __FILE__, __LINE__, "\"%s\": ", m); } while (0)
-		#define NanoAssert(a)             do { __NanoAssertMsgf(a, __FILE__, __LINE__, "%s", ""); } while (0)
-	#else
-		#define NanoAssertMsgf(a,f,...)   do { } while (0) /* no semi */
-		#define NanoAssertMsg(a,m)        do { } while (0) /* no semi */
-		#define NanoAssert(a)             do { } while (0) /* no semi */
-	#endif
+        #define __NanoAssertMsgf(a, file_, line_, f, ...)  \
+            if (!(a)) { \
+            avmplus::AvmLog("Assertion failed: " f "%s (%s:%d)\n", __VA_ARGS__, #a, file_, line_); \
+                NanoAssertFail(); \
+            }
 
-	/**
-	 * -------------------------------------------
-	 * END AVM bridging definitions
-	 * -------------------------------------------
-	 */
+        #define _NanoAssertMsgf(a, file_, line_, f, ...)   __NanoAssertMsgf(a, file_, line_, f, __VA_ARGS__)
+
+        #define NanoAssertMsgf(a,f,...)   do { __NanoAssertMsgf(a, __FILE__, __LINE__, f ": ", __VA_ARGS__); } while (0)
+        #define NanoAssertMsg(a,m)        do { __NanoAssertMsgf(a, __FILE__, __LINE__, "\"%s\": ", m); } while (0)
+        #define NanoAssert(a)             do { __NanoAssertMsgf(a, __FILE__, __LINE__, "%s", ""); } while (0)
+    #else
+        #define NanoAssertMsgf(a,f,...)   do { } while (0) /* no semi */
+        #define NanoAssertMsg(a,m)        do { } while (0) /* no semi */
+        #define NanoAssert(a)             do { } while (0) /* no semi */
+    #endif
+
+    /**
+     * -------------------------------------------
+     * END AVM bridging definitions
+     * -------------------------------------------
+     */
 }
 
 #ifdef AVMPLUS_VERBOSE
@@ -172,45 +173,45 @@ namespace nanojit
 #endif
 
 #ifdef NJ_VERBOSE
-	#define verbose_output						if (verbose_enabled()) Assembler::output
-	#define verbose_outputf						if (verbose_enabled()) Assembler::outputf
-	#define verbose_enabled()					(_verbose)
-	#define verbose_only(...)					__VA_ARGS__
+    #define verbose_output                      if (verbose_enabled()) Assembler::output
+    #define verbose_outputf                     if (verbose_enabled()) Assembler::outputf
+    #define verbose_enabled()                   (_verbose)
+    #define verbose_only(...)                   __VA_ARGS__
 #else
-	#define verbose_output
-	#define verbose_outputf
-	#define verbose_enabled()
-	#define verbose_only(...)
+    #define verbose_output
+    #define verbose_outputf
+    #define verbose_enabled()
+    #define verbose_only(...)
 #endif /*NJ_VERBOSE*/
 
 #ifdef _DEBUG
-	#define debug_only(x)			x
+    #define debug_only(x)           x
 #else
-	#define debug_only(x)
+    #define debug_only(x)
 #endif /* DEBUG */
 
 #ifdef NJ_PROFILE
-	#define counter_struct_begin()  struct {
-	#define counter_struct_end()	} _stats;
-	#define counter_define(x) 		int32_t x
-	#define counter_value(x)		_stats.x
-	#define counter_set(x,v)		(counter_value(x)=(v))
-	#define counter_adjust(x,i)		(counter_value(x)+=(int32_t)(i))
-	#define counter_reset(x)		counter_set(x,0)
-	#define counter_increment(x)	counter_adjust(x,1)
-	#define counter_decrement(x)	counter_adjust(x,-1)
-	#define profile_only(x)			x
+    #define counter_struct_begin()  struct {
+    #define counter_struct_end()    } _stats;
+    #define counter_define(x)       int32_t x
+    #define counter_value(x)        _stats.x
+    #define counter_set(x,v)        (counter_value(x)=(v))
+    #define counter_adjust(x,i)     (counter_value(x)+=(int32_t)(i))
+    #define counter_reset(x)        counter_set(x,0)
+    #define counter_increment(x)    counter_adjust(x,1)
+    #define counter_decrement(x)    counter_adjust(x,-1)
+    #define profile_only(x)         x
 #else
-	#define counter_struct_begin()
-	#define counter_struct_end()
-	#define counter_define(x) 		
-	#define counter_value(x)
-	#define counter_set(x,v)
-	#define counter_adjust(x,i)
-	#define counter_reset(x)
-	#define counter_increment(x)	
-	#define counter_decrement(x)	
-	#define profile_only(x)	
+    #define counter_struct_begin()
+    #define counter_struct_end()
+    #define counter_define(x)
+    #define counter_value(x)
+    #define counter_set(x,v)
+    #define counter_adjust(x,i)
+    #define counter_reset(x)
+    #define counter_increment(x)
+    #define counter_decrement(x)
+    #define profile_only(x)
 #endif /* NJ_PROFILE */
 
 #define isS8(i)  ( int32_t(i) == int8_t(i) )
@@ -220,15 +221,15 @@ namespace nanojit
 #define isS24(i) ( (int32_t((i)<<8)>>8) == (i) )
 
 static inline bool isS32(intptr_t i) {
-	return int32_t(i) == i;
+    return int32_t(i) == i;
 }
 
 static inline bool isU32(uintptr_t i) {
-	return uint32_t(i) == i;
+    return uint32_t(i) == i;
 }
 
-#define alignTo(x,s)		((((uintptr_t)(x)))&~(((uintptr_t)s)-1))
-#define alignUp(x,s)		((((uintptr_t)(x))+(((uintptr_t)s)-1))&~(((uintptr_t)s)-1))
+#define alignTo(x,s)        ((((uintptr_t)(x)))&~(((uintptr_t)s)-1))
+#define alignUp(x,s)        ((((uintptr_t)(x))+(((uintptr_t)s)-1))&~(((uintptr_t)s)-1))
 
 #include "Native.h"
 #include "CodeAlloc.h"

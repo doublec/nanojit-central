@@ -1,4 +1,5 @@
-/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: t; tab-width: 4 -*- */
+/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 4 -*- */
+/* vi: set ts=4 sw=4 expandtab: (add to ~/.vimrc: set modeline modelines=5) */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -128,7 +129,7 @@ namespace nanojit
         ORI(O0, 0, I0);
         return  _nIns;
     }
-    
+
     void Assembler::asm_call(LInsp ins)
     {
         const CallInfo* call = ins->callInfo();
@@ -518,11 +519,11 @@ namespace nanojit
     {
         underrunProtect(12);
         LOpcode condop = cond->opcode();
-        
+
         // LIR_ov and LIR_cs recycle the flags set by arithmetic ops
         if ((condop == LIR_ov) || (condop == LIR_cs))
             return;
-        
+
         LInsp lhs = cond->oprnd1();
         LInsp rhs = cond->oprnd2();
         Reservation *rA, *rB;
@@ -557,30 +558,30 @@ namespace nanojit
     void Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
     {
         (void)ins;
-        JMP_long_placeholder(); // jump to SOT    
+        JMP_long_placeholder(); // jump to SOT
         verbose_only( if (_verbose && _outputCache) { _outputCache->removeLast(); outputf("         jmp   SOT"); } );
-        
+
         loopJumps.add(_nIns);
 
         assignSavedParams();
 
         // restore first parameter, the only one we use
         LInsp state = _thisfrag->lirbuf->state;
-        findSpecificRegFor(state, argRegs[state->imm8()]); 
-    }    
+        findSpecificRegFor(state, argRegs[state->imm8()]);
+    }
 
     void Assembler::asm_fcond(LInsp ins)
     {
-        // only want certain regs 
+        // only want certain regs
         Register r = prepResultReg(ins, AllowableFlagRegs);
         asm_setcc(r, ins);
     }
-                
+
     void Assembler::asm_cond(LInsp ins)
     {
         underrunProtect(8);
-        // only want certain regs 
-        LOpcode op = ins->opcode();            
+        // only want certain regs
+        LOpcode op = ins->opcode();
         Register r = prepResultReg(ins, AllowableFlagRegs);
 
         if (op == LIR_eq)
@@ -608,11 +609,11 @@ namespace nanojit
         ORI(G0, 0, r);
         asm_cmp(ins);
     }
-    
+
     void Assembler::asm_arith(LInsp ins)
     {
         underrunProtect(28);
-        LOpcode op = ins->opcode();            
+        LOpcode op = ins->opcode();
         LInsp lhs = ins->oprnd1();
         LInsp rhs = ins->oprnd2();
 
@@ -673,9 +674,9 @@ namespace nanojit
             {
                 int c = rhs->constval();
                 if (op == LIR_add || op == LIR_addp) {
-                    ADDCC(rr, L2, rr); 
+                    ADDCC(rr, L2, rr);
                 } else if (op == LIR_sub) {
-                    SUBCC(rr, L2, rr); 
+                    SUBCC(rr, L2, rr);
                 } else if (op == LIR_and)
                     AND(rr, L2, rr);
                 else if (op == LIR_or)
@@ -693,14 +694,14 @@ namespace nanojit
                 SET32(c, L2);
             }
 
-        if ( rr != ra ) 
+        if ( rr != ra )
             ORI(ra, 0, rr);
     }
-    
+
     void Assembler::asm_neg_not(LInsp ins)
     {
         underrunProtect(8);
-        LOpcode op = ins->opcode();            
+        LOpcode op = ins->opcode();
         Register rr = prepResultReg(ins, GpRegs);
 
         LIns* lhs = ins->oprnd1();
@@ -712,18 +713,18 @@ namespace nanojit
         // else, rA already has a register assigned.
 
         if (op == LIR_not)
-            ORN(G0, rr, rr); 
+            ORN(G0, rr, rr);
         else
-            SUB(G0, rr, rr); 
+            SUB(G0, rr, rr);
 
-        if ( rr != ra ) 
+        if ( rr != ra )
             ORI(ra, 0, rr);
     }
-                
+
     void Assembler::asm_ld(LInsp ins)
     {
         underrunProtect(12);
-        LOpcode op = ins->opcode();            
+        LOpcode op = ins->opcode();
         LIns* base = ins->oprnd1();
         LIns* disp = ins->oprnd2();
         Register rr = prepResultReg(ins, GpRegs);
@@ -739,7 +740,7 @@ namespace nanojit
     void Assembler::asm_cmov(LInsp ins)
     {
         underrunProtect(4);
-        LOpcode op = ins->opcode();            
+        LOpcode op = ins->opcode();
         LIns* condval = ins->oprnd1();
         NanoAssert(condval->isCmp());
 
@@ -750,7 +751,7 @@ namespace nanojit
         LIns* iffalse = values->oprnd2();
 
         NanoAssert(op == LIR_qcmov || (!iftrue->isQuad() && !iffalse->isQuad()));
-        
+
         const Register rr = prepResultReg(ins, GpRegs);
 
         // this code assumes that neither LD nor MR nor MRcc set any of the condition flags.
@@ -778,7 +779,7 @@ namespace nanojit
         /*const Register iftruereg =*/ findSpecificRegFor(iftrue, rr);
         asm_cmp(condval);
     }
-                
+
     void Assembler::asm_qhi(LInsp ins)
     {
         underrunProtect(12);
@@ -852,7 +853,7 @@ namespace nanojit
                 SET32(p[1], r);
             }
     }
-    
+
     void Assembler::asm_qlo(LInsp ins)
     {
     }
@@ -1025,7 +1026,7 @@ namespace nanojit
 
         FCMPD(rLhs, rRhs);
     }
-    
+
     NIns* Assembler::asm_adjustBranch(NIns* at, NIns* target)
     {
         NIns* was;
@@ -1036,22 +1037,22 @@ namespace nanojit
         *(uint32_t*)&at[1] |= (intptr_t)target & 0x3FF;
         return was;
     }
-    
+
     void Assembler::nativePageReset()
     {
     }
 
     Register Assembler::asm_binop_rhs_reg(LInsp ins)
     {
-        return UnknownReg;    
+        return UnknownReg;
     }
 
     void Assembler::nativePageSetup()
     {
         if (!_nIns)
-			codeAlloc();
+            codeAlloc();
         if (!_nExitIns)
-			codeAlloc(true);
+            codeAlloc(true);
     }
 
     void
@@ -1060,7 +1061,7 @@ namespace nanojit
         int u = bytes + 16;
                uintptr_t top = (uintptr_t) (_inExit ? exitStart : codeStart);
                uintptr_t pc = (uintptr_t) _nIns;
-		if (pc-bytes < top) {
+        if (pc-bytes < top) {
             NIns* target = _nIns;
             codeAlloc(_inExit);
             JMP_long_nocheck((intptr_t)target);

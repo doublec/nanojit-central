@@ -1,4 +1,5 @@
-/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: t; tab-width: 4 -*- */
+/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 4 -*- */
+/* vi: set ts=4 sw=4 expandtab: (add to ~/.vimrc: set modeline modelines=5) */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -52,195 +53,195 @@
 #endif
 
 #ifdef _MSC_VER
-	// disable some specific warnings which are normally useful, but pervasive in the code-gen macros
-	#pragma warning(disable:4310) // cast truncates constant value
+    // disable some specific warnings which are normally useful, but pervasive in the code-gen macros
+    #pragma warning(disable:4310) // cast truncates constant value
 #endif
-	
+
 namespace nanojit
 {
 
-	class DeadCodeFilter: public LirFilter
-	{
-	    bool ignoreInstruction(LInsp ins)
-	    {
+    class DeadCodeFilter: public LirFilter
+    {
+        bool ignoreInstruction(LInsp ins)
+        {
             LOpcode op = ins->opcode();
             if (ins->isStore() ||
-				vtune_only( op == LIR_line || op == LIR_file || )
+                vtune_only( op == LIR_line || op == LIR_file || )
                 op == LIR_loop ||
                 op == LIR_label ||
                 op == LIR_live ||
                 isRet(op)) {
                 return false;
             }
-	        return ins->resv() == 0;
-	    }
+            return ins->resv() == 0;
+        }
 
-	public:
-		DeadCodeFilter(LirFilter *in) : LirFilter(in) {}
-		LInsp read() {
-			for (;;) {
-				LInsp i = in->read();
-				if (!i || i->isGuard() || i->isBranch()
-					|| (i->isCall() && !i->callInfo()->_cse)
-					|| !ignoreInstruction(i))
-					return i;
-			}
-		}
-	};
+    public:
+        DeadCodeFilter(LirFilter *in) : LirFilter(in) {}
+        LInsp read() {
+            for (;;) {
+                LInsp i = in->read();
+                if (!i || i->isGuard() || i->isBranch()
+                    || (i->isCall() && !i->callInfo()->_cse)
+                    || !ignoreInstruction(i))
+                    return i;
+            }
+        }
+    };
 
 #ifdef NJ_VERBOSE
-	class VerboseBlockReader: public LirFilter
-	{
-		Assembler *assm;
-		LirNameMap *names;
-		InsList block;
+    class VerboseBlockReader: public LirFilter
+    {
+        Assembler *assm;
+        LirNameMap *names;
+        InsList block;
         bool flushnext;
-	public:
-		VerboseBlockReader(LirFilter *in, Assembler *a, LirNameMap *n) 
-			: LirFilter(in), assm(a), names(n), block(a->_gc), flushnext(false)
+    public:
+        VerboseBlockReader(LirFilter *in, Assembler *a, LirNameMap *n)
+            : LirFilter(in), assm(a), names(n), block(a->_gc), flushnext(false)
         {}
 
-		void flush() {
+        void flush() {
             flushnext = false;
             if (!block.isEmpty()) {
-			    for (int j=0,n=block.size(); j < n; j++) {
-					LIns *i = block[j];
-					assm->outputf("    %s", names->formatIns(i));
-				}
-			    block.clear();
+                for (int j=0,n=block.size(); j < n; j++) {
+                    LIns *i = block[j];
+                    assm->outputf("    %s", names->formatIns(i));
+                }
+                block.clear();
             }
-		}
+        }
 
         void flush_add(LInsp i) {
             flush();
             block.add(i);
         }
 
-		LInsp read() {
-			LInsp i = in->read();
-			if (!i) {
-				flush();
-				return i;
-			}
+        LInsp read() {
+            LInsp i = in->read();
+            if (!i) {
+                flush();
+                return i;
+            }
             if (i->isGuard()) {
-				flush_add(i);
-				if (i->oprnd1())
-					block.add(i->oprnd1());
+                flush_add(i);
+                if (i->oprnd1())
+                    block.add(i->oprnd1());
             }
             else if (isRet(i->opcode()) || i->isBranch()) {
                 flush_add(i);
             }
-			else {
+            else {
                 if (flushnext)
                     flush();
-				block.add(i);
+                block.add(i);
                 //flush_add(i);
                 if (i->isop(LIR_label))
                     flushnext = true;
-			}
-			return i;
-		}
-	};
+            }
+            return i;
+        }
+    };
 #endif
-	
-	/**
-	 * Need the following:
-	 *
-	 *	- merging paths ( build a graph? ), possibly use external rep to drive code gen
-	 */
+
+    /**
+     * Need the following:
+     *
+     *  - merging paths ( build a graph? ), possibly use external rep to drive code gen
+     */
     Assembler::Assembler(CodeAlloc* codeAlloc, AvmCore *core)
         : hasLoop(0)
-		, codeList(0)
-		, core(core)
-		, _codeAlloc(codeAlloc)
+        , codeList(0)
+        , core(core)
+        , _codeAlloc(codeAlloc)
         , _gc(core->gc)
         , _labels(_gc)
         , _patches(_gc)
         , pending_lives(_gc)
-		, config(core->config)
-	{
-		nInit(core);
-		verbose_only( _verbose = !core->quiet_opt() && core->verbose() );
-		verbose_only( _outputCache = 0);
-		verbose_only( outlineEOL[0] = '\0');
-		
-		internalReset();
-		pageReset();		
-	}
+        , config(core->config)
+    {
+        nInit(core);
+        verbose_only( _verbose = !core->quiet_opt() && core->verbose() );
+        verbose_only( _outputCache = 0);
+        verbose_only( outlineEOL[0] = '\0');
+
+        internalReset();
+        pageReset();
+    }
 
     void Assembler::arReset()
-	{
-		_activation.highwatermark = 0;
-		_activation.lowwatermark = 0;
-		_activation.tos = 0;
+    {
+        _activation.highwatermark = 0;
+        _activation.lowwatermark = 0;
+        _activation.tos = 0;
 
-		for(uint32_t i=0; i<NJ_MAX_STACK_ENTRY; i++)
-			_activation.entry[i] = 0;
-	}
+        for(uint32_t i=0; i<NJ_MAX_STACK_ENTRY; i++)
+            _activation.entry[i] = 0;
+    }
 
- 	void Assembler::registerResetAll()
-	{
-		nRegisterResetAll(_allocator);
+    void Assembler::registerResetAll()
+    {
+        nRegisterResetAll(_allocator);
 
-		// keep a tally of the registers to check that our allocator works correctly
-		debug_only(_allocator.count = _allocator.countFree(); )
-		debug_only(_allocator.checkCount(); )
-		debug_only(_fpuStkDepth = 0; )
-	}
+        // keep a tally of the registers to check that our allocator works correctly
+        debug_only(_allocator.count = _allocator.countFree(); )
+        debug_only(_allocator.checkCount(); )
+        debug_only(_fpuStkDepth = 0; )
+    }
 
-	Register Assembler::registerAlloc(RegisterMask allow)
-	{
-		RegAlloc &regs = _allocator;
-//		RegisterMask prefer = livePastCall(_ins) ? saved : scratch;
-		RegisterMask prefer = SavedRegs & allow;
-		RegisterMask free = regs.free & allow;
+    Register Assembler::registerAlloc(RegisterMask allow)
+    {
+        RegAlloc &regs = _allocator;
+//      RegisterMask prefer = livePastCall(_ins) ? saved : scratch;
+        RegisterMask prefer = SavedRegs & allow;
+        RegisterMask free = regs.free & allow;
 
-		RegisterMask set = prefer;
-		if (set == 0) set = allow;
+        RegisterMask set = prefer;
+        if (set == 0) set = allow;
 
         if (free)
         {
-    		// at least one is free
-		    set &= free;
+            // at least one is free
+            set &= free;
 
-		    // ok we have at least 1 free register so let's try to pick 
-		    // the best one given the profile of the instruction 
-		    if (!set)
-		    {
-			    // desired register class is not free so pick first of any class
-			    set = free;
-		    }
-		    NanoAssert((set & allow) != 0);
-		    Register r = nRegisterAllocFromSet(set);
-		    regs.used |= rmask(r);
-		    return r;
+            // ok we have at least 1 free register so let's try to pick
+            // the best one given the profile of the instruction
+            if (!set)
+            {
+                // desired register class is not free so pick first of any class
+                set = free;
+            }
+            NanoAssert((set & allow) != 0);
+            Register r = nRegisterAllocFromSet(set);
+            regs.used |= rmask(r);
+            return r;
         }
-		counter_increment(steals);
+        counter_increment(steals);
 
-		// nothing free, steal one 
-		// LSRA says pick the one with the furthest use
-		LIns* vic = findVictim(regs, allow);
-	    Reservation* resv = getresv(vic);
+        // nothing free, steal one
+        // LSRA says pick the one with the furthest use
+        LIns* vic = findVictim(regs, allow);
+        Reservation* resv = getresv(vic);
 
-		// restore vic
-	    Register r = resv->reg;
+        // restore vic
+        Register r = resv->reg;
         regs.removeActive(r);
         resv->reg = UnknownReg;
 
-		asm_restore(vic, resv, r);
-		return r;
-	}
+        asm_restore(vic, resv, r);
+        return r;
+    }
 
-	void Assembler::reserveReset()
-	{
-		_resvTable[0].arIndex = 0;
-		int i;
+    void Assembler::reserveReset()
+    {
+        _resvTable[0].arIndex = 0;
+        int i;
         for(i=1; i<NJ_MAX_STACK_ENTRY; i++) {
-			_resvTable[i].arIndex = i-1;
+            _resvTable[i].arIndex = i-1;
             _resvTable[i].used = 0;
         }
-		_resvFree= i-1;
-	}
+        _resvFree= i-1;
+    }
 
     /**
      * these instructions don't have to be saved & reloaded to spill,
@@ -250,128 +251,128 @@ namespace nanojit
         return i->isconst() || i->isconstq() || i->isop(LIR_alloc);
     }
 
-	Reservation* Assembler::reserveAlloc(LInsp i)
-	{
-		uint32_t item = _resvFree;
+    Reservation* Assembler::reserveAlloc(LInsp i)
+    {
+        uint32_t item = _resvFree;
         Reservation *r = &_resvTable[item];
-		_resvFree = r->arIndex;
-		r->reg = UnknownReg;
-		r->arIndex = 0;
+        _resvFree = r->arIndex;
+        r->reg = UnknownReg;
+        r->arIndex = 0;
         r->used = 1;
-		if (!item) 
-			setError(ResvFull); 
+        if (!item)
+            setError(ResvFull);
         i->setresv(item);
-		return r;
-	}
+        return r;
+    }
 
-	void Assembler::reserveFree(LInsp i)
-	{
+    void Assembler::reserveFree(LInsp i)
+    {
         Reservation *rs = getresv(i);
         NanoAssert(rs == &_resvTable[i->resv()]);
-		rs->arIndex = _resvFree;
+        rs->arIndex = _resvFree;
         rs->used = 0;
-		_resvFree = i->resv();
+        _resvFree = i->resv();
         i->setresv(0);
-	}
+    }
 
-	void Assembler::internalReset()
-	{
-		// readies for a brand spanking new code generation pass.
-		registerResetAll();
-		reserveReset();
-		arReset();
+    void Assembler::internalReset()
+    {
+        // readies for a brand spanking new code generation pass.
+        registerResetAll();
+        reserveReset();
+        arReset();
         pending_lives.clear();
-	}
+    }
 
-	void Assembler::codeAlloc(bool exitPage)
-	{
-		NIns* start;
-		NIns* end;
+    void Assembler::codeAlloc(bool exitPage)
+    {
+        NIns* start;
+        NIns* end;
 
-		// save the block we just filled
-		if (exitPage && exitStart) {
-			CodeAlloc::add(codeList, exitStart, exitEnd);
-		} else if (!exitPage && codeStart) {
-			CodeAlloc::add(codeList, codeStart, codeEnd);
-		}
+        // save the block we just filled
+        if (exitPage && exitStart) {
+            CodeAlloc::add(codeList, exitStart, exitEnd);
+        } else if (!exitPage && codeStart) {
+            CodeAlloc::add(codeList, codeStart, codeEnd);
+        }
 
-		// CodeAlloc contract: allocations never fail
-		_codeAlloc->alloc(start, end);
-		NanoAssert(uintptr_t(end) - uintptr_t(start) >= (size_t)LARGEST_UNDERRUN_PROT);
+        // CodeAlloc contract: allocations never fail
+        _codeAlloc->alloc(start, end);
+        NanoAssert(uintptr_t(end) - uintptr_t(start) >= (size_t)LARGEST_UNDERRUN_PROT);
 
-		#ifdef VTUNE
-		if (_nIns && _nExitIns) {
-			//cgen->jitAddRecord((uintptr_t)list->code, 0, 0, true); // add placeholder record for top of page
-			cgen->jitCodePosUpdate((uintptr_t)list->code);
-			cgen->jitPushInfo(); // new page requires new entry
-		}
-		#endif
-		// update pointers with new allocated block.
-		if (exitPage) {
-			exitStart = start;
-			exitEnd = end;
-			_nExitIns = end;
-		} else {
-			codeStart = start;
-			codeEnd = end;
-			_nIns = end;
-		}
-	}
-	
-	void Assembler::pageReset()
-	{
-		_nIns = 0;
-		_nExitIns = 0;
-		_startingIns = 0;
-		codeStart = codeEnd = 0;
-		exitStart = exitEnd = 0;
-		_stats.pages = 0;
-		nativePageReset();
-	}
+        #ifdef VTUNE
+        if (_nIns && _nExitIns) {
+            //cgen->jitAddRecord((uintptr_t)list->code, 0, 0, true); // add placeholder record for top of page
+            cgen->jitCodePosUpdate((uintptr_t)list->code);
+            cgen->jitPushInfo(); // new page requires new entry
+        }
+        #endif
+        // update pointers with new allocated block.
+        if (exitPage) {
+            exitStart = start;
+            exitEnd = end;
+            _nExitIns = end;
+        } else {
+            codeStart = start;
+            codeEnd = end;
+            _nIns = end;
+        }
+    }
 
-	#ifdef _DEBUG
-	void Assembler::pageValidate()
-	{
-		if (error()) return;
-		// _nIns and _nExitIns need to be at least on
-		// one of these pages
-		NanoAssertMsg(_inExit ? containsPtr(exitStart, exitEnd, _nIns) : containsPtr(codeStart, codeEnd, _nIns),
-					 "Native instruction pointer overstep paging bounds; check overrideProtect for last instruction");
-	}
-	#endif
+    void Assembler::pageReset()
+    {
+        _nIns = 0;
+        _nExitIns = 0;
+        _startingIns = 0;
+        codeStart = codeEnd = 0;
+        exitStart = exitEnd = 0;
+        _stats.pages = 0;
+        nativePageReset();
+    }
 
-	#ifdef _DEBUG
-	
-	void Assembler::resourceConsistencyCheck()
-	{
-		if (error()) return;
+    #ifdef _DEBUG
+    void Assembler::pageValidate()
+    {
+        if (error()) return;
+        // _nIns and _nExitIns need to be at least on
+        // one of these pages
+        NanoAssertMsg(_inExit ? containsPtr(exitStart, exitEnd, _nIns) : containsPtr(codeStart, codeEnd, _nIns),
+                     "Native instruction pointer overstep paging bounds; check overrideProtect for last instruction");
+    }
+    #endif
+
+    #ifdef _DEBUG
+
+    void Assembler::resourceConsistencyCheck()
+    {
+        if (error()) return;
 
 #ifdef NANOJIT_IA32
         NanoAssert((_allocator.active[FST0] && _fpuStkDepth == -1) ||
             (!_allocator.active[FST0] && _fpuStkDepth == 0));
 #endif
-		
+
         AR &ar = _activation;
-		// check AR entries
-		NanoAssert(ar.highwatermark < NJ_MAX_STACK_ENTRY);
-		LIns* ins = 0;
-		RegAlloc* regs = &_allocator;
-		for(uint32_t i = ar.lowwatermark; i < ar.tos; i++)
-		{
-			ins = ar.entry[i];
-			if ( !ins )
-				continue;
-			Reservation *r = getresv(ins);
+        // check AR entries
+        NanoAssert(ar.highwatermark < NJ_MAX_STACK_ENTRY);
+        LIns* ins = 0;
+        RegAlloc* regs = &_allocator;
+        for(uint32_t i = ar.lowwatermark; i < ar.tos; i++)
+        {
+            ins = ar.entry[i];
+            if ( !ins )
+                continue;
+            Reservation *r = getresv(ins);
             NanoAssert(r != 0);
-			ptrdiff_t idx = r - _resvTable;
-			NanoAssertMsg(idx, "MUST have a resource for the instruction for it to have a stack location assigned to it");
+            ptrdiff_t idx = r - _resvTable;
+            NanoAssertMsg(idx, "MUST have a resource for the instruction for it to have a stack location assigned to it");
             if (r->arIndex) {
                 if (ins->isop(LIR_alloc)) {
                     int j=i+1;
                     for (int n = i + (ins->size()>>2); j < n; j++) {
                         NanoAssert(ar.entry[j]==ins);
                     }
-		        	NanoAssert(r->arIndex == (uint32_t)j-1);
+                    NanoAssert(r->arIndex == (uint32_t)j-1);
                     i = j-1;
                 }
                 else if (ins->isQuad()) {
@@ -379,100 +380,100 @@ namespace nanojit
                     i += 1; // skip high word
                 }
                 else {
-        			NanoAssertMsg(r->arIndex == i, "Stack record index mismatch");
+                    NanoAssertMsg(r->arIndex == i, "Stack record index mismatch");
                 }
             }
-			NanoAssertMsg( r->reg==UnknownReg || regs->isConsistent(r->reg,ins), "Register record mismatch");
-		}
-	
-		registerConsistencyCheck();
-				
-		// check resv table
-		int32_t inuseCount = 0;
-		int32_t notInuseCount = 0;
+            NanoAssertMsg( r->reg==UnknownReg || regs->isConsistent(r->reg,ins), "Register record mismatch");
+        }
+
+        registerConsistencyCheck();
+
+        // check resv table
+        int32_t inuseCount = 0;
+        int32_t notInuseCount = 0;
         for(uint32_t i=1; i < sizeof(_resvTable)/sizeof(_resvTable[0]); i++) {
             _resvTable[i].used ? inuseCount++ : notInuseCount++;
         }
 
-		int32_t freeCount = 0;
-		uint32_t free = _resvFree;
+        int32_t freeCount = 0;
+        uint32_t free = _resvFree;
         while(free) {
-			free = _resvTable[free].arIndex;
-			freeCount++;
-		}
-		NanoAssert( ( freeCount==notInuseCount && inuseCount+notInuseCount==(NJ_MAX_STACK_ENTRY-1) ) );
-	}
+            free = _resvTable[free].arIndex;
+            freeCount++;
+        }
+        NanoAssert( ( freeCount==notInuseCount && inuseCount+notInuseCount==(NJ_MAX_STACK_ENTRY-1) ) );
+    }
 
-	void Assembler::registerConsistencyCheck()
-	{	
-		// check registers
-		RegAlloc *regs = &_allocator;
-		RegisterMask managed = regs->managed;
-		Register r = FirstReg;
-		while(managed)
-		{
-			if (managed&1)
-			{
-				if (regs->isFree(r))
-				{
-					NanoAssertMsgf(regs->getActive(r)==0, "register %s is free but assigned to ins", gpn(r));
-				}
-				else
-				{
-					LIns* ins = regs->getActive(r);
-					// @todo we should be able to check across RegAlloc's somehow (to include savedGP...)
-					Reservation *v = getresv(ins);
-					NanoAssert(v != 0);
-					ptrdiff_t idx = v - _resvTable;
-					NanoAssert(idx >= 0 && idx < NJ_MAX_STACK_ENTRY);
-					NanoAssertMsg(idx, "MUST have a resource for the instruction for it to have a register assigned to it");
-					NanoAssertMsg( regs->getActive(v->reg)==ins, "Register record mismatch");
-				}			
-			}
-			
-			// next register in bitfield
-			r = nextreg(r);
-			managed >>= 1;
-		}
-	}
-	#endif /* _DEBUG */
+    void Assembler::registerConsistencyCheck()
+    {
+        // check registers
+        RegAlloc *regs = &_allocator;
+        RegisterMask managed = regs->managed;
+        Register r = FirstReg;
+        while(managed)
+        {
+            if (managed&1)
+            {
+                if (regs->isFree(r))
+                {
+                    NanoAssertMsgf(regs->getActive(r)==0, "register %s is free but assigned to ins", gpn(r));
+                }
+                else
+                {
+                    LIns* ins = regs->getActive(r);
+                    // @todo we should be able to check across RegAlloc's somehow (to include savedGP...)
+                    Reservation *v = getresv(ins);
+                    NanoAssert(v != 0);
+                    ptrdiff_t idx = v - _resvTable;
+                    NanoAssert(idx >= 0 && idx < NJ_MAX_STACK_ENTRY);
+                    NanoAssertMsg(idx, "MUST have a resource for the instruction for it to have a register assigned to it");
+                    NanoAssertMsg( regs->getActive(v->reg)==ins, "Register record mismatch");
+                }
+            }
 
-	void Assembler::findRegFor2(RegisterMask allow, LIns* ia, Reservation* &resva, LIns* ib, Reservation* &resvb)
-	{
-		if (ia == ib) 
-		{
-			findRegFor(ia, allow);
-			resva = resvb = getresv(ia);
-		}
-		else
-		{
-			Register rb = UnknownReg;
-			resvb = getresv(ib);
-			if (resvb && (rb = resvb->reg) != UnknownReg) {
-				if (allow & rmask(rb)) {
-					// ib already assigned to an allowable reg, don't let ia steal it
-					allow &= ~rmask(rb);
-				} else {
-					// ib assigned to not-allowed register, pick another one below
-					rb = UnknownReg;
-				}
-			}
-			Register ra = findRegFor(ia, allow);
-			resva = getresv(ia);
-			NanoAssert(error() || (resva != 0 && ra != UnknownReg));
-			if (rb == UnknownReg)
-			{
-				allow &= ~rmask(ra);
-				findRegFor(ib, allow);
-				resvb = getresv(ib);
-			}
-		}
-	}
+            // next register in bitfield
+            r = nextreg(r);
+            managed >>= 1;
+        }
+    }
+    #endif /* _DEBUG */
 
-	Register Assembler::findSpecificRegFor(LIns* i, Register w)
-	{
-		return findRegFor(i, rmask(w));
-	}
+    void Assembler::findRegFor2(RegisterMask allow, LIns* ia, Reservation* &resva, LIns* ib, Reservation* &resvb)
+    {
+        if (ia == ib)
+        {
+            findRegFor(ia, allow);
+            resva = resvb = getresv(ia);
+        }
+        else
+        {
+            Register rb = UnknownReg;
+            resvb = getresv(ib);
+            if (resvb && (rb = resvb->reg) != UnknownReg) {
+                if (allow & rmask(rb)) {
+                    // ib already assigned to an allowable reg, don't let ia steal it
+                    allow &= ~rmask(rb);
+                } else {
+                    // ib assigned to not-allowed register, pick another one below
+                    rb = UnknownReg;
+                }
+            }
+            Register ra = findRegFor(ia, allow);
+            resva = getresv(ia);
+            NanoAssert(error() || (resva != 0 && ra != UnknownReg));
+            if (rb == UnknownReg)
+            {
+                allow &= ~rmask(ra);
+                findRegFor(ib, allow);
+                resvb = getresv(ib);
+            }
+        }
+    }
+
+    Register Assembler::findSpecificRegFor(LIns* i, Register w)
+    {
+        return findRegFor(i, rmask(w));
+    }
 
     Register Assembler::getBaseReg(LIns *i, int &d, RegisterMask allow)
     {
@@ -486,44 +487,44 @@ namespace nanojit
     #endif
         return findRegFor(i, allow);
     }
-			
-	Register Assembler::findRegFor(LIns* i, RegisterMask allow)
-	{
+
+    Register Assembler::findRegFor(LIns* i, RegisterMask allow)
+    {
         if (i->isop(LIR_alloc)) {
             // never allocate a reg for this w/out stack space too
             findMemFor(i);
         }
 
         Reservation* resv = getresv(i);
-		Register r;
+        Register r;
 
-		// if we have an existing reservation and it has a non-unknown
-		// register allocated, and that register is in our allowed mask,
-		// return it.
+        // if we have an existing reservation and it has a non-unknown
+        // register allocated, and that register is in our allowed mask,
+        // return it.
         if (resv && (r=resv->reg) != UnknownReg && (rmask(r) & allow)) {
             _allocator.useActive(r);
-			return r;
+            return r;
         }
 
-		// figure out what registers are preferred for this instruction
-		RegisterMask prefer = hint(i, allow);
+        // figure out what registers are preferred for this instruction
+        RegisterMask prefer = hint(i, allow);
 
-		// if we didn't have a reservation, allocate one now
+        // if we didn't have a reservation, allocate one now
         if (!resv)
-			resv = reserveAlloc(i);
+            resv = reserveAlloc(i);
 
         r = resv->reg;
 
 #if defined NANOJIT_IA32
-        if (r != UnknownReg && 
+        if (r != UnknownReg &&
             (((rmask(r)&XmmRegs) && !(allow&XmmRegs)) ||
                  ((rmask(r)&x87Regs) && !(allow&x87Regs))))
 #elif defined NANOJIT_PPC
-        if (r != UnknownReg && 
+        if (r != UnknownReg &&
             (((rmask(r)&GpRegs) && !(allow&GpRegs)) ||
                  ((rmask(r)&FpRegs) && !(allow&FpRegs))))
 #else
-		if (false)
+        if (false)
 #endif
         {
             // illegal copy between register classes, go to memory
@@ -532,169 +533,169 @@ namespace nanojit
         }
 
         if (r == UnknownReg)
-		{
-			r = resv->reg = registerAlloc(prefer);
-			_allocator.addActive(r, i);
-			return r;
-		}
-		else
-		{
-			// the already-allocated register isn't in the allowed mask;
-			// we need to grab a new one and then copy over the old
-			// contents to the new.
-			resv->reg = UnknownReg;
-			_allocator.retire(r);
-			Register s = resv->reg = registerAlloc(prefer);
-			_allocator.addActive(s, i);
+        {
+            r = resv->reg = registerAlloc(prefer);
+            _allocator.addActive(r, i);
+            return r;
+        }
+        else
+        {
+            // the already-allocated register isn't in the allowed mask;
+            // we need to grab a new one and then copy over the old
+            // contents to the new.
+            resv->reg = UnknownReg;
+            _allocator.retire(r);
+            Register s = resv->reg = registerAlloc(prefer);
+            _allocator.addActive(s, i);
             if ((rmask(r) & GpRegs) && (rmask(s) & GpRegs)) {
-    			MR(r, s);
-            } 
+                MR(r, s);
+            }
             else {
-				asm_nongp_copy(r, s);
-			}
-			return s;
-		}
-	}
+                asm_nongp_copy(r, s);
+            }
+            return s;
+        }
+    }
 
-	int Assembler::findMemFor(LIns *i)
-	{
-		Reservation* resv = getresv(i);
-		if (!resv)
-			resv = reserveAlloc(i);
+    int Assembler::findMemFor(LIns *i)
+    {
+        Reservation* resv = getresv(i);
+        if (!resv)
+            resv = reserveAlloc(i);
         if (!resv->arIndex) {
-			resv->arIndex = arReserve(i);
+            resv->arIndex = arReserve(i);
             NanoAssert(resv->arIndex <= _activation.highwatermark);
         }
-		return disp(resv);
-	}
+        return disp(resv);
+    }
 
-	Register Assembler::prepResultReg(LIns *i, RegisterMask allow)
-	{
-		Reservation* resv = getresv(i);
-		const bool pop = !resv || resv->reg == UnknownReg;
-		Register rr = findRegFor(i, allow);
-		freeRsrcOf(i, pop);
-		return rr;
-	}
+    Register Assembler::prepResultReg(LIns *i, RegisterMask allow)
+    {
+        Reservation* resv = getresv(i);
+        const bool pop = !resv || resv->reg == UnknownReg;
+        Register rr = findRegFor(i, allow);
+        freeRsrcOf(i, pop);
+        return rr;
+    }
 
-	void Assembler::asm_spilli(LInsp i, Reservation *resv, bool pop)
-	{
-		int d = disp(resv);
-		Register rr = resv->reg;
-		verbose_only( if (d && _verbose) { outputForEOL("  <= spill %s", _thisfrag->lirbuf->names->formatRef(i)); } )
-		asm_spill(rr, d, pop, i->isQuad());
-	}
+    void Assembler::asm_spilli(LInsp i, Reservation *resv, bool pop)
+    {
+        int d = disp(resv);
+        Register rr = resv->reg;
+        verbose_only( if (d && _verbose) { outputForEOL("  <= spill %s", _thisfrag->lirbuf->names->formatRef(i)); } )
+        asm_spill(rr, d, pop, i->isQuad());
+    }
 
-	void Assembler::freeRsrcOf(LIns *i, bool pop)
-	{
-		Reservation* resv = getresv(i);
-		int index = resv->arIndex;
-		Register rr = resv->reg;
+    void Assembler::freeRsrcOf(LIns *i, bool pop)
+    {
+        Reservation* resv = getresv(i);
+        int index = resv->arIndex;
+        Register rr = resv->reg;
 
-		if (rr != UnknownReg)
-		{
-			asm_spilli(i, resv, pop);
-			_allocator.retire(rr);	// free any register associated with entry
-		}
-		if (index)
-            arFree(index);			// free any stack stack space associated with entry
-		reserveFree(i);		// clear fields of entry and add it to free list
-	}
+        if (rr != UnknownReg)
+        {
+            asm_spilli(i, resv, pop);
+            _allocator.retire(rr);  // free any register associated with entry
+        }
+        if (index)
+            arFree(index);          // free any stack stack space associated with entry
+        reserveFree(i);     // clear fields of entry and add it to free list
+    }
 
-	void Assembler::evict(Register r)
-	{
-		registerAlloc(rmask(r));
-		_allocator.addFree(r);
-	}
+    void Assembler::evict(Register r)
+    {
+        registerAlloc(rmask(r));
+        _allocator.addFree(r);
+    }
 
     void Assembler::patch(GuardRecord *lr)
     {
         Fragment *frag = lr->target;
-		NanoAssert(frag->fragEntry != 0);
-		NIns* was = asm_adjustBranch((NIns*)lr->jmp, frag->fragEntry);
-		if (!lr->origTarget) lr->origTarget = was;
-		verbose_only(verbose_outputf("patching jump at %p to target %p (was %p)\n",
-			lr->jmp, frag->fragEntry, was);)
+        NanoAssert(frag->fragEntry != 0);
+        NIns* was = asm_adjustBranch((NIns*)lr->jmp, frag->fragEntry);
+        if (!lr->origTarget) lr->origTarget = was;
+        verbose_only(verbose_outputf("patching jump at %p to target %p (was %p)\n",
+            lr->jmp, frag->fragEntry, was);)
     }
 
     void Assembler::unpatch(GuardRecord *lr)
     {
-		NIns* was = asm_adjustBranch((NIns*)lr->jmp, (NIns*)lr->origTarget);
-		(void)was;
-		verbose_only(verbose_outputf("unpatching jump at %p to original target %p (was %p)\n",
-			lr->jmp, lr->origTarget, was);)
+        NIns* was = asm_adjustBranch((NIns*)lr->jmp, (NIns*)lr->origTarget);
+        (void)was;
+        verbose_only(verbose_outputf("unpatching jump at %p to original target %p (was %p)\n",
+            lr->jmp, lr->origTarget, was);)
     }
 
     NIns* Assembler::asm_exit(LInsp guard)
     {
-		SideExit *exit = guard->exit();
-		NIns* at = 0;
-		if (!_branchStateMap->get(exit))
-		{
-			at = asm_leave_trace(guard);
-		}
-		else
-		{
-			RegAlloc* captured = _branchStateMap->get(exit);
-			intersectRegisterState(*captured);
-			at = exit->target->fragEntry;
-			NanoAssert(at != 0);
-			_branchStateMap->remove(exit);
-		}
-		return at;
-	}
-	
-	NIns* Assembler::asm_leave_trace(LInsp guard)
-	{
-        verbose_only(bool priorVerbose = _verbose; )
-		verbose_only( _verbose = verbose_enabled() && config.verbose_exits; )
-        verbose_only( int32_t nativeSave = _stats.native );
-		verbose_only(verbose_outputf("--------------------------------------- end exit block SID %d", guard->exit()->sid);)
+        SideExit *exit = guard->exit();
+        NIns* at = 0;
+        if (!_branchStateMap->get(exit))
+        {
+            at = asm_leave_trace(guard);
+        }
+        else
+        {
+            RegAlloc* captured = _branchStateMap->get(exit);
+            intersectRegisterState(*captured);
+            at = exit->target->fragEntry;
+            NanoAssert(at != 0);
+            _branchStateMap->remove(exit);
+        }
+        return at;
+    }
 
-		RegAlloc capture = _allocator;
+    NIns* Assembler::asm_leave_trace(LInsp guard)
+    {
+        verbose_only(bool priorVerbose = _verbose; )
+        verbose_only( _verbose = verbose_enabled() && config.verbose_exits; )
+        verbose_only( int32_t nativeSave = _stats.native );
+        verbose_only(verbose_outputf("--------------------------------------- end exit block SID %d", guard->exit()->sid);)
+
+        RegAlloc capture = _allocator;
 
         // this point is unreachable.  so free all the registers.
-		// if an instruction has a stack entry we will leave it alone,
-		// otherwise we free it entirely.  intersectRegisterState will restore.
-		releaseRegisters();
-		
-		swapptrs();
-		_inExit = true;
-		
-		//verbose_only( verbose_outputf("         LIR_xend swapptrs, _nIns is now %08X(%08X), _nExitIns is now %08X(%08X)",_nIns, *_nIns,_nExitIns,*_nExitIns) );
-		debug_only( _sv_fpuStkDepth = _fpuStkDepth; _fpuStkDepth = 0; )
+        // if an instruction has a stack entry we will leave it alone,
+        // otherwise we free it entirely.  intersectRegisterState will restore.
+        releaseRegisters();
 
-		nFragExit(guard);
+        swapptrs();
+        _inExit = true;
 
-		// restore the callee-saved register (aka saved params)
-		assignSavedParams();
+        //verbose_only( verbose_outputf("         LIR_xend swapptrs, _nIns is now %08X(%08X), _nExitIns is now %08X(%08X)",_nIns, *_nIns,_nExitIns,*_nExitIns) );
+        debug_only( _sv_fpuStkDepth = _fpuStkDepth; _fpuStkDepth = 0; )
 
-		// if/when we patch this exit to jump over to another fragment,
-		// that fragment will need its parameters set up just like ours.
+        nFragExit(guard);
+
+        // restore the callee-saved register (aka saved params)
+        assignSavedParams();
+
+        // if/when we patch this exit to jump over to another fragment,
+        // that fragment will need its parameters set up just like ours.
         LInsp stateins = _thisfrag->lirbuf->state;
-		Register state = findSpecificRegFor(stateins, argRegs[stateins->imm8()]);
-		asm_bailout(guard, state);
+        Register state = findSpecificRegFor(stateins, argRegs[stateins->imm8()]);
+        asm_bailout(guard, state);
 
-		intersectRegisterState(capture);
+        intersectRegisterState(capture);
 
-		// this can be useful for breaking whenever an exit is taken
-		//INT3();
-		//NOP();
+        // this can be useful for breaking whenever an exit is taken
+        //INT3();
+        //NOP();
 
-		// we are done producing the exit logic for the guard so demark where our exit block code begins
-		NIns* jmpTarget = _nIns;	 // target in exit path for our mainline conditional jump 
+        // we are done producing the exit logic for the guard so demark where our exit block code begins
+        NIns* jmpTarget = _nIns;     // target in exit path for our mainline conditional jump
 
-		// swap back pointers, effectively storing the last location used in the exit path
-		swapptrs();
-		_inExit = false;
-		
-		//verbose_only( verbose_outputf("         LIR_xt/xf swapptrs, _nIns is now %08X(%08X), _nExitIns is now %08X(%08X)",_nIns, *_nIns,_nExitIns,*_nExitIns) );
-		verbose_only( verbose_outputf("        %p:",jmpTarget);)
-		verbose_only( verbose_outputf("--------------------------------------- exit block (LIR_xt|LIR_xf)") );
+        // swap back pointers, effectively storing the last location used in the exit path
+        swapptrs();
+        _inExit = false;
+
+        //verbose_only( verbose_outputf("         LIR_xt/xf swapptrs, _nIns is now %08X(%08X), _nExitIns is now %08X(%08X)",_nIns, *_nIns,_nExitIns,*_nExitIns) );
+        verbose_only( verbose_outputf("        %p:",jmpTarget);)
+        verbose_only( verbose_outputf("--------------------------------------- exit block (LIR_xt|LIR_xf)") );
 
 #ifdef NANOJIT_IA32
-		NanoAssertMsgf(_fpuStkDepth == _sv_fpuStkDepth, "LIR_xtf, _fpuStkDepth=%d, expect %d\n",_fpuStkDepth, _sv_fpuStkDepth);
-		debug_only( _fpuStkDepth = _sv_fpuStkDepth; _sv_fpuStkDepth = 9999; )
+        NanoAssertMsgf(_fpuStkDepth == _sv_fpuStkDepth, "LIR_xtf, _fpuStkDepth=%d, expect %d\n",_fpuStkDepth, _sv_fpuStkDepth);
+        debug_only( _fpuStkDepth = _sv_fpuStkDepth; _sv_fpuStkDepth = 9999; )
 #endif
 
         verbose_only( _verbose = priorVerbose; )
@@ -702,193 +703,193 @@ namespace nanojit
 
         return jmpTarget;
     }
-	
-	void Assembler::beginAssembly(Fragment *frag, RegAllocMap* branchStateMap)
-	{
+
+    void Assembler::beginAssembly(Fragment *frag, RegAllocMap* branchStateMap)
+    {
         _thisfrag = frag;
-		_activation.lowwatermark = 1;
-		_activation.tos = _activation.lowwatermark;
-		_activation.highwatermark = _activation.tos;
-		
-		counter_reset(native);
-		counter_reset(exitnative);
-		counter_reset(steals);
-		counter_reset(spills);
-		counter_reset(remats);
+        _activation.lowwatermark = 1;
+        _activation.tos = _activation.lowwatermark;
+        _activation.highwatermark = _activation.tos;
 
-		setError(None);
+        counter_reset(native);
+        counter_reset(exitnative);
+        counter_reset(steals);
+        counter_reset(spills);
+        counter_reset(remats);
 
-		// native code gen buffer setup
-		nativePageSetup();
-		
-		// When outOMem, nIns is set to startingIns and we overwrite the region until the error is handled
-		underrunProtect(LARGEST_UNDERRUN_PROT);  // the largest value passed to underrunProtect() 
-		_startingIns = _nIns;
+        setError(None);
+
+        // native code gen buffer setup
+        nativePageSetup();
+
+        // When outOMem, nIns is set to startingIns and we overwrite the region until the error is handled
+        underrunProtect(LARGEST_UNDERRUN_PROT);  // the largest value passed to underrunProtect()
+        _startingIns = _nIns;
 #ifdef NANOJIT_ARM
         _startingSlot = _nSlot;
 #endif
-		
-	#ifdef AVMPLUS_PORTING_API
-		_endJit2Addr = _nExitIns;
-	#endif
 
-		// make sure we got memory at least one page
-		if (error()) return;
-			
+    #ifdef AVMPLUS_PORTING_API
+        _endJit2Addr = _nExitIns;
+    #endif
+
+        // make sure we got memory at least one page
+        if (error()) return;
+
 #ifdef PERFM
-		_stats.pages = 0;
-		_stats.codeStart = _nIns-1;
-		_stats.codeExitStart = _nExitIns-1;		
-		//fprintf(stderr,"pageReset %d start %x exit start %x\n", _stats.pages, (int)_stats.codeStart, (int)_stats.codeExitStart);
+        _stats.pages = 0;
+        _stats.codeStart = _nIns-1;
+        _stats.codeExitStart = _nExitIns-1;
+        //fprintf(stderr,"pageReset %d start %x exit start %x\n", _stats.pages, (int)_stats.codeStart, (int)_stats.codeExitStart);
 #endif /* PERFM */
 
         _epilogue = genEpilogue();
-		_branchStateMap = branchStateMap;
+        _branchStateMap = branchStateMap;
         _labels.clear();
         _patches.clear();
 
-		verbose_only( outputAddr=true; )
-		verbose_only( asm_output("[epilogue]"); )
-	}
-	
-	void Assembler::assemble(Fragment* frag,  NInsList& loopJumps)
-	{
-		if (error()) return;	
+        verbose_only( outputAddr=true; )
+        verbose_only( asm_output("[epilogue]"); )
+    }
+
+    void Assembler::assemble(Fragment* frag,  NInsList& loopJumps)
+    {
+        if (error()) return;
         _thisfrag = frag;
 
-		// set up backwards pipeline: assembler -> StackFilter -> LirReader
-		LirReader bufreader(frag->lastIns);
-		//GC *gc = core->gc;
-		//StackFilter storefilter1(&bufreader, gc, frag->lirbuf, frag->lirbuf->sp);
-		//StackFilter storefilter2(&storefilter1, gc, frag->lirbuf, frag->lirbuf->rp);
-		DeadCodeFilter deadfilter(&bufreader);
-		LirFilter* rdr = &deadfilter;
-		verbose_only(
-			VerboseBlockReader vbr(rdr, this, frag->lirbuf->names);
-			if (verbose_enabled())
-				rdr = &vbr;
-		)
+        // set up backwards pipeline: assembler -> StackFilter -> LirReader
+        LirReader bufreader(frag->lastIns);
+        //GC *gc = core->gc;
+        //StackFilter storefilter1(&bufreader, gc, frag->lirbuf, frag->lirbuf->sp);
+        //StackFilter storefilter2(&storefilter1, gc, frag->lirbuf, frag->lirbuf->rp);
+        DeadCodeFilter deadfilter(&bufreader);
+        LirFilter* rdr = &deadfilter;
+        verbose_only(
+            VerboseBlockReader vbr(rdr, this, frag->lirbuf->names);
+            if (verbose_enabled())
+                rdr = &vbr;
+        )
 
-		verbose_only(_thisfrag->compileNbr++; )
-		_latestGuard = 0;
-		_inExit = false;		
-		gen(rdr, loopJumps);
-		frag->fragEntry = _nIns;
-		frag->outbound = config.tree_opt? _latestGuard : 0;
-		//fprintf(stderr, "assemble frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
+        verbose_only(_thisfrag->compileNbr++; )
+        _latestGuard = 0;
+        _inExit = false;
+        gen(rdr, loopJumps);
+        frag->fragEntry = _nIns;
+        frag->outbound = config.tree_opt? _latestGuard : 0;
+        //fprintf(stderr, "assemble frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
 
         if (!error()) {
-		    // patch all branches
-		    while(!_patches.isEmpty())
-		    {
-			    NIns* where = _patches.lastKey();
-			    LInsp targ = _patches.removeLast();
+            // patch all branches
+            while(!_patches.isEmpty())
+            {
+                NIns* where = _patches.lastKey();
+                LInsp targ = _patches.removeLast();
                 LabelState *label = _labels.get(targ);
-			    NIns* ntarg = label->addr;
+                NIns* ntarg = label->addr;
                 if (ntarg) {
-				    nPatchBranch(where,ntarg);
-			    }
+                    nPatchBranch(where,ntarg);
+                }
                 else {
-				    _err = UnknownBranch;
-				    break;
-			    }
-		    }
+                    _err = UnknownBranch;
+                    break;
+                }
+            }
         }
-		else {
-			_nIns = _startingIns;  // in case of failure reset nIns ready for the next assembly run
+        else {
+            _nIns = _startingIns;  // in case of failure reset nIns ready for the next assembly run
 #ifdef NANOJIT_ARM
             _nSlot = _startingSlot;  // in case of failure reset nSlot ready for the next assembly run
 #endif
-			IF_PEDANTIC( pedanticTop = _nIns;)
-		}
-	}
+            IF_PEDANTIC( pedanticTop = _nIns;)
+        }
+    }
 
-	void Assembler::endAssembly(Fragment* frag, NInsList& loopJumps)
-	{
-		while(!loopJumps.isEmpty())
-		{
-			NIns* loopJump = (NIns*)loopJumps.removeLast();
-			nPatchBranch(loopJump, _nIns);
-		}
+    void Assembler::endAssembly(Fragment* frag, NInsList& loopJumps)
+    {
+        while(!loopJumps.isEmpty())
+        {
+            NIns* loopJump = (NIns*)loopJumps.removeLast();
+            nPatchBranch(loopJump, _nIns);
+        }
 
-		NIns* patchEntry = 0;
-		if (!error())
-		{
-			patchEntry = genPrologue();
-			verbose_only( outputAddr=true; )
-			verbose_only( asm_output("[prologue]"); )
-		}
-		
-		// something bad happened?
-		if (!error())
-		{
-			// check for resource leaks 
-			debug_only( 
-				for(uint32_t i=_activation.lowwatermark;i<_activation.highwatermark; i++) {
-					NanoAssertMsgf(_activation.entry[i] == 0, "frame entry %d wasn't freed\n",-4*i);
-				}
-			)
+        NIns* patchEntry = 0;
+        if (!error())
+        {
+            patchEntry = genPrologue();
+            verbose_only( outputAddr=true; )
+            verbose_only( asm_output("[prologue]"); )
+        }
 
-			// save used parts of current block on fragment's code list, free the rest
+        // something bad happened?
+        if (!error())
+        {
+            // check for resource leaks
+            debug_only(
+                for(uint32_t i=_activation.lowwatermark;i<_activation.highwatermark; i++) {
+                    NanoAssertMsgf(_activation.entry[i] == 0, "frame entry %d wasn't freed\n",-4*i);
+                }
+            )
+
+            // save used parts of current block on fragment's code list, free the rest
 #ifdef NANOJIT_ARM
-			_codeAlloc->addRemainder(codeList, exitStart, exitEnd, _nExitSlot, _nExitIns);
-			_codeAlloc->addRemainder(codeList, codeStart, codeEnd, _nSlot, _nIns);
+            _codeAlloc->addRemainder(codeList, exitStart, exitEnd, _nExitSlot, _nExitIns);
+            _codeAlloc->addRemainder(codeList, codeStart, codeEnd, _nSlot, _nIns);
 #else
-			_codeAlloc->addRemainder(codeList, exitStart, exitEnd, exitStart, _nExitIns);
-			_codeAlloc->addRemainder(codeList, codeStart, codeEnd, codeStart, _nIns);
+            _codeAlloc->addRemainder(codeList, exitStart, exitEnd, exitStart, _nExitIns);
+            _codeAlloc->addRemainder(codeList, codeStart, codeEnd, codeStart, _nIns);
 #endif
 
-			// at this point all our new code is in the d-cache and not the i-cache,
-			// so flush the i-cache on cpu's that need it.
-			_codeAlloc->flushICache(codeList);
+            // at this point all our new code is in the d-cache and not the i-cache,
+            // so flush the i-cache on cpu's that need it.
+            _codeAlloc->flushICache(codeList);
 
-			// save entry point pointers
+            // save entry point pointers
             frag->fragEntry = patchEntry;
-			frag->setCode(_nIns);
+            frag->setCode(_nIns);
             PERFM_NVPROF("code", CodeAlloc::size(frag->codeList));
-		}
-		else
-		{
-			// something went wrong, release all allocated memory
-			_codeAlloc->freeAll(codeList);
-			_codeAlloc->free(exitStart, exitEnd);
-			_codeAlloc->free(codeStart, codeEnd);
-		}
+        }
+        else
+        {
+            // something went wrong, release all allocated memory
+            _codeAlloc->freeAll(codeList);
+            _codeAlloc->free(exitStart, exitEnd);
+            _codeAlloc->free(codeStart, codeEnd);
+        }
 
-		NanoAssertMsgf(error() || _fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
+        NanoAssertMsgf(error() || _fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
 
-		internalReset();  // clear the reservation tables and regalloc
-		pageReset();
-		NanoAssert( !_branchStateMap || _branchStateMap->isEmpty());
-		_branchStateMap = 0;
-	}
-	
-	void Assembler::copyRegisters(RegAlloc* copyTo)
-	{
-		*copyTo = _allocator;
-	}
+        internalReset();  // clear the reservation tables and regalloc
+        pageReset();
+        NanoAssert( !_branchStateMap || _branchStateMap->isEmpty());
+        _branchStateMap = 0;
+    }
 
-	void Assembler::releaseRegisters()
-	{
-		for (Register r = FirstReg; r <= LastReg; r = nextreg(r))
-		{
-			LIns *i = _allocator.getActive(r);
-			if (i)
-			{
-				// clear reg allocation, preserve stack allocation.
-				Reservation* resv = getresv(i);
-				NanoAssert(resv != 0);
-				_allocator.retire(r);
-				if (r == resv->reg)
-					resv->reg = UnknownReg;
+    void Assembler::copyRegisters(RegAlloc* copyTo)
+    {
+        *copyTo = _allocator;
+    }
 
-				if (!resv->arIndex && resv->reg == UnknownReg)
-				{
-					reserveFree(i);
-				}
-			}
-		}
-	}
+    void Assembler::releaseRegisters()
+    {
+        for (Register r = FirstReg; r <= LastReg; r = nextreg(r))
+        {
+            LIns *i = _allocator.getActive(r);
+            if (i)
+            {
+                // clear reg allocation, preserve stack allocation.
+                Reservation* resv = getresv(i);
+                NanoAssert(resv != 0);
+                _allocator.retire(r);
+                if (r == resv->reg)
+                    resv->reg = UnknownReg;
+
+                if (!resv->arIndex && resv->reg == UnknownReg)
+                {
+                    reserveFree(i);
+                }
+            }
+        }
+    }
 
 #ifdef PERFM
 #define countlir_live() _nvprof("lir-live",1)
@@ -944,20 +945,20 @@ namespace nanojit
 #define countlir_call()
 #endif
 
-	void Assembler::gen(LirFilter* reader,  NInsList& loopJumps)
-	{
-		// trace must start with LIR_x or LIR_loop
-		//NanoAssert(reader->pos()->isop(LIR_x) || reader->pos()->isop(LIR_loop));
-		 
-		for (LInsp ins = reader->read(); ins != 0 && !error(); ins = reader->read())
-		{
-			LOpcode op = ins->opcode();			
-			switch(op)
-			{
-				default:
-					NanoAssertMsgf(false, "unsupported LIR instruction: %d (~0x40: %d)\n", op, op&~LIR64);
-					break;
-					
+    void Assembler::gen(LirFilter* reader,  NInsList& loopJumps)
+    {
+        // trace must start with LIR_x or LIR_loop
+        //NanoAssert(reader->pos()->isop(LIR_x) || reader->pos()->isop(LIR_loop));
+
+        for (LInsp ins = reader->read(); ins != 0 && !error(); ins = reader->read())
+        {
+            LOpcode op = ins->opcode();
+            switch(op)
+            {
+                default:
+                    NanoAssertMsgf(false, "unsupported LIR instruction: %d (~0x40: %d)\n", op, op&~LIR64);
+                    break;
+
                 case LIR_live: {
                     countlir_live();
                     LInsp op1 = ins->oprnd1();
@@ -986,192 +987,192 @@ namespace nanojit
                     NanoAssert(resv->arIndex != 0);
                     Register r = resv->reg;
                     if (r != UnknownReg) {
-    			        _allocator.retire(r);
+                        _allocator.retire(r);
                         resv->reg = UnknownReg;
                         asm_restore(ins, resv, r);
                     }
                     freeRsrcOf(ins, 0);
                     break;
                 }
-				case LIR_short:
-				{
+                case LIR_short:
+                {
                     countlir_imm();
-					asm_short(ins);
-					break;
-				}
-				case LIR_int:
-				{
+                    asm_short(ins);
+                    break;
+                }
+                case LIR_int:
+                {
                     countlir_imm();
-					asm_int(ins);
-					break;
-				}
-				case LIR_quad:
-				{
+                    asm_int(ins);
+                    break;
+                }
+                case LIR_quad:
+                {
                     countlir_imm();
-					asm_quad(ins);
-					break;
-				}
+                    asm_quad(ins);
+                    break;
+                }
 #if !defined NANOJIT_64BIT
-				case LIR_callh:
-				{
-					// return result of quad-call in register
-					prepResultReg(ins, rmask(retRegs[1]));
+                case LIR_callh:
+                {
+                    // return result of quad-call in register
+                    prepResultReg(ins, rmask(retRegs[1]));
                     // if hi half was used, we must use the call to ensure it happens
                     findSpecificRegFor(ins->oprnd1(), retRegs[0]);
-					break;
-				}
+                    break;
+                }
 #endif
-				case LIR_param:
-				{
+                case LIR_param:
+                {
                     countlir_param();
-					asm_param(ins);
-					break;
-				}
-				case LIR_qlo:
+                    asm_param(ins);
+                    break;
+                }
+                case LIR_qlo:
                 {
                     countlir_qlo();
-					asm_qlo(ins);
-					break;
-				}
-				case LIR_qhi:
-				{
+                    asm_qlo(ins);
+                    break;
+                }
+                case LIR_qhi:
+                {
                     countlir_qhi();
-					asm_qhi(ins);
-					break;
-				}
-				case LIR_qcmov:
-				case LIR_cmov:
-				{
+                    asm_qhi(ins);
+                    break;
+                }
+                case LIR_qcmov:
+                case LIR_cmov:
+                {
                     countlir_cmov();
-					asm_cmov(ins);
-					break;
-				}				
-				case LIR_ld:
-				case LIR_ldc:
-				case LIR_ldcb:
-				{
+                    asm_cmov(ins);
+                    break;
+                }
+                case LIR_ld:
+                case LIR_ldc:
+                case LIR_ldcb:
+                {
                     countlir_ld();
-					asm_ld(ins);
-					break;
-				}
-				case LIR_ldq:
-				case LIR_ldqc:
-				{
+                    asm_ld(ins);
+                    break;
+                }
+                case LIR_ldq:
+                case LIR_ldqc:
+                {
                     countlir_ldq();
-					asm_load64(ins);
-					break;
-				}
-				case LIR_neg:
-				case LIR_not:
-				{
+                    asm_load64(ins);
+                    break;
+                }
+                case LIR_neg:
+                case LIR_not:
+                {
                     countlir_alu();
-					asm_neg_not(ins);
-					break;
-				}
-				case LIR_qjoin:
-				{
+                    asm_neg_not(ins);
+                    break;
+                }
+                case LIR_qjoin:
+                {
                     countlir_qjoin();
                     asm_qjoin(ins);
-					break;
-				}
+                    break;
+                }
 
 #if defined NANOJIT_64BIT
                 case LIR_qiadd:
                 case LIR_qiand:
                 case LIR_qilsh:
-				case LIR_qursh:
-				case LIR_qirsh:
+                case LIR_qursh:
+                case LIR_qirsh:
                 case LIR_qior:
-				case LIR_qaddp:
-				case LIR_qxor:
+                case LIR_qaddp:
+                case LIR_qxor:
                 {
                     asm_qbinop(ins);
                     break;
                 }
 #endif
 
-				case LIR_iaddp:
-				case LIR_add:
-				case LIR_sub:
-				case LIR_mul:
-				case LIR_and:
-				case LIR_or:
-				case LIR_xor:
-				case LIR_lsh:
-				case LIR_rsh:
-				case LIR_ush:
-				{
+                case LIR_iaddp:
+                case LIR_add:
+                case LIR_sub:
+                case LIR_mul:
+                case LIR_and:
+                case LIR_or:
+                case LIR_xor:
+                case LIR_lsh:
+                case LIR_rsh:
+                case LIR_ush:
+                {
                     countlir_alu();
-					asm_arith(ins);
-					break;
-				}
-#ifndef NJ_SOFTFLOAT
-				case LIR_fneg:
-				{
-                    countlir_fpu();
-					asm_fneg(ins);
-					break;
-				}
-				case LIR_fadd:
-				case LIR_fsub:
-				case LIR_fmul:
-				case LIR_fdiv:
-				{
-                    countlir_fpu();
-					asm_fop(ins);
+                    asm_arith(ins);
                     break;
-				}
-				case LIR_i2f:
-				{
+                }
+#ifndef NJ_SOFTFLOAT
+                case LIR_fneg:
+                {
                     countlir_fpu();
-					asm_i2f(ins);
-					break;
-				}
-				case LIR_u2f:
-				{
+                    asm_fneg(ins);
+                    break;
+                }
+                case LIR_fadd:
+                case LIR_fsub:
+                case LIR_fmul:
+                case LIR_fdiv:
+                {
                     countlir_fpu();
-					asm_u2f(ins);
-					break;
-				}
-				case LIR_i2q:
-				case LIR_u2q:
-				{
+                    asm_fop(ins);
+                    break;
+                }
+                case LIR_i2f:
+                {
+                    countlir_fpu();
+                    asm_i2f(ins);
+                    break;
+                }
+                case LIR_u2f:
+                {
+                    countlir_fpu();
+                    asm_u2f(ins);
+                    break;
+                }
+                case LIR_i2q:
+                case LIR_u2q:
+                {
                     countlir_alu();
-					asm_promote(ins);
-					break;
-				}
+                    asm_promote(ins);
+                    break;
+                }
 #endif // NJ_SOFTFLOAT
-				case LIR_st:
-				case LIR_sti:
-				{
+                case LIR_st:
+                case LIR_sti:
+                {
                     countlir_st();
                     asm_store32(ins->oprnd1(), ins->immdisp(), ins->oprnd2());
                     break;
-				}
-				case LIR_stq:
-				case LIR_stqi:
-				{
+                }
+                case LIR_stq:
+                case LIR_stqi:
+                {
                     countlir_stq();
-					LIns* value = ins->oprnd1();
-					LIns* base = ins->oprnd2();
-					int dr = ins->immdisp();
-					if (value->isop(LIR_qjoin)) 
-					{
-						// this is correct for little-endian only
-						asm_store32(value->oprnd1(), dr, base);
-						asm_store32(value->oprnd2(), dr+4, base);
-					}
-					else 
-					{
-						asm_store64(value, dr, base);
-					}
+                    LIns* value = ins->oprnd1();
+                    LIns* base = ins->oprnd2();
+                    int dr = ins->immdisp();
+                    if (value->isop(LIR_qjoin))
+                    {
+                        // this is correct for little-endian only
+                        asm_store32(value->oprnd1(), dr, base);
+                        asm_store32(value->oprnd2(), dr+4, base);
+                    }
+                    else
+                    {
+                        asm_store64(value, dr, base);
+                    }
                     break;
-				}
+                }
 
-				case LIR_j:
-				{
+                case LIR_j:
+                {
                     countlir_jmp();
-					LInsp to = ins->getTarget();
+                    LInsp to = ins->getTarget();
                     LabelState *label = _labels.get(to);
                     // the jump is always taken so whatever register state we
                     // have from downstream code, is irrelevant to code before
@@ -1195,22 +1196,22 @@ namespace nanojit
                             intersectRegisterState(label->regs);
                         }
                         JMP(0);
-    					_patches.put(_nIns, to);
+                        _patches.put(_nIns, to);
                     }
-					break;
-				}
+                    break;
+                }
 
-				case LIR_jt:
-				case LIR_jf:
-				{
+                case LIR_jt:
+                case LIR_jf:
+                {
                     countlir_jcc();
-					LInsp to = ins->getTarget();
-					LIns* cond = ins->oprnd1();
+                    LInsp to = ins->getTarget();
+                    LIns* cond = ins->oprnd1();
                     LabelState *label = _labels.get(to);
                     if (label && label->addr) {
                         // forward jump to known label.  need to merge with label's register state.
                         unionRegisterState(label->regs);
-    					asm_branch(op == LIR_jf, cond, label->addr);
+                        asm_branch(op == LIR_jf, cond, label->addr);
                     }
                     else {
                         // back edge.
@@ -1220,23 +1221,23 @@ namespace nanojit
                             // evict all registers, most conservative approach.
                             evictRegs(~_allocator.free);
                             _labels.add(to, 0, _allocator);
-                        } 
+                        }
                         else {
                             // evict all registers, most conservative approach.
                             intersectRegisterState(label->regs);
                         }
                         NIns *branch = asm_branch(op == LIR_jf, cond, 0);
-			            _patches.put(branch,to);
+                        _patches.put(branch,to);
                     }
-					break;
-				}					
-				case LIR_label:
-				{
+                    break;
+                }
+                case LIR_label:
+                {
                     countlir_label();
                     LabelState *label = _labels.get(ins);
                     if (!label) {
                         // label seen first, normal target of forward jump, save addr & allocator
-    					_labels.add(ins, _nIns, _allocator);
+                        _labels.add(ins, _nIns, _allocator);
                     }
                     else {
                         // we're at the top of a loop
@@ -1246,152 +1247,152 @@ namespace nanojit
                         intersectRegisterState(label->regs);
                         label->addr = _nIns;
                     }
-					verbose_only( if (_verbose) { outputAddr=true; asm_output("[%s]", _thisfrag->lirbuf->names->formatRef(ins)); } )
-					break;
-				}
+                    verbose_only( if (_verbose) { outputAddr=true; asm_output("[%s]", _thisfrag->lirbuf->names->formatRef(ins)); } )
+                    break;
+                }
 
                 case LIR_xt:
-				case LIR_xf:
-				{
+                case LIR_xf:
+                {
                     countlir_xcc();
-					// we only support cmp with guard right now, also assume it is 'close' and only emit the branch
+                    // we only support cmp with guard right now, also assume it is 'close' and only emit the branch
                     NIns* exit = asm_exit(ins); // does intersectRegisterState()
-					LIns* cond = ins->oprnd1();
-					asm_branch(op == LIR_xf, cond, exit);
-					break;
-				}
-				case LIR_x:
-				{
+                    LIns* cond = ins->oprnd1();
+                    asm_branch(op == LIR_xf, cond, exit);
+                    break;
+                }
+                case LIR_x:
+                {
                     countlir_x();
-		            verbose_only(verbose_output(""));
-					// generate the side exit branch on the main trace.
+                    verbose_only(verbose_output(""));
+                    // generate the side exit branch on the main trace.
                     NIns *exit = asm_exit(ins);
-					JMP( exit ); 
-					break;
-				}
-				case LIR_loop:
-				{
+                    JMP( exit );
+                    break;
+                }
+                case LIR_loop:
+                {
                     countlir_loop();
-					asm_loop(ins, loopJumps);
-					break;
-				}
+                    asm_loop(ins, loopJumps);
+                    break;
+                }
 
 #ifndef NJ_SOFTFLOAT
-				case LIR_feq:
-				case LIR_fle:
-				case LIR_flt:
-				case LIR_fgt:
-				case LIR_fge:
-				{
+                case LIR_feq:
+                case LIR_fle:
+                case LIR_flt:
+                case LIR_fgt:
+                case LIR_fge:
+                {
                     countlir_fpu();
-					asm_fcond(ins);
-					break;
-				}
+                    asm_fcond(ins);
+                    break;
+                }
 #endif
-				case LIR_eq:
+                case LIR_eq:
                 case LIR_ov:
                 case LIR_cs:
-				case LIR_le:
-				case LIR_lt:
-				case LIR_gt:
-				case LIR_ge:
-				case LIR_ult:
-				case LIR_ule:
-				case LIR_ugt:
-				case LIR_uge:
+                case LIR_le:
+                case LIR_lt:
+                case LIR_gt:
+                case LIR_ge:
+                case LIR_ult:
+                case LIR_ule:
+                case LIR_ugt:
+                case LIR_uge:
 #ifdef NANOJIT_64BIT
-				case LIR_qeq:
-				case LIR_qle:
-				case LIR_qlt:
-				case LIR_qgt:
-				case LIR_qge:
-				case LIR_qult:
-				case LIR_qule:
-				case LIR_qugt:
-				case LIR_quge:
+                case LIR_qeq:
+                case LIR_qle:
+                case LIR_qlt:
+                case LIR_qgt:
+                case LIR_qge:
+                case LIR_qult:
+                case LIR_qule:
+                case LIR_qugt:
+                case LIR_quge:
 #endif
-				{
+                {
                     countlir_alu();
-					asm_cond(ins);
-					break;
-				}
+                    asm_cond(ins);
+                    break;
+                }
 
-			#ifndef NJ_SOFTFLOAT
-				case LIR_fcall:
-			#endif
-			#ifdef NANOJIT_64BIT
-				case LIR_qcall:
-			#endif
-				case LIR_icall:
-				{
+            #ifndef NJ_SOFTFLOAT
+                case LIR_fcall:
+            #endif
+            #ifdef NANOJIT_64BIT
+                case LIR_qcall:
+            #endif
+                case LIR_icall:
+                {
                     countlir_call();
                     Register rr = UnknownReg;
 #ifndef NJ_SOFTFLOAT
                     if (op == LIR_fcall)
                     {
                         // fcall
-						Reservation* rR = getresv(ins);
-						rr = asm_prep_fcall(rR, ins);
+                        Reservation* rR = getresv(ins);
+                        rr = asm_prep_fcall(rR, ins);
                     }
                     else
 #endif
                     {
                         rr = retRegs[0];
-						prepResultReg(ins, rmask(rr));
+                        prepResultReg(ins, rmask(rr));
                     }
 
-					// do this after we've handled the call result, so we dont
-					// force the call result to be spilled unnecessarily.
+                    // do this after we've handled the call result, so we dont
+                    // force the call result to be spilled unnecessarily.
 
-					evictScratchRegs();
+                    evictScratchRegs();
 
-					asm_call(ins);
-					break;
-				}
+                    asm_call(ins);
+                    break;
+                }
 
-				#ifdef VTUNE
-				case LIR_file:
-				{
-					// we traverse backwards so we are now hitting the file
-					// that is associated with a bunch of LIR_lines we already have seen
-					uintptr_t currentFile = ins->oprnd1()->constval();
-					cgen->jitFilenameUpdate(currentFile);
-					break;
-				}
-				case LIR_line:
-				{
-					// add a new table entry, we don't yet knwo which file it belongs
-					// to so we need to add it to the update table too
-					// note the alloc, actual act is delayed; see above
-					uint32_t currentLine = (uint32_t) ins->oprnd1()->constval();
-					cgen->jitLineNumUpdate(currentLine);
-					cgen->jitAddRecord((uintptr_t)_nIns, 0, currentLine, true);
-					break;
-				}
-				#endif // VTUNE
-			}
+                #ifdef VTUNE
+                case LIR_file:
+                {
+                    // we traverse backwards so we are now hitting the file
+                    // that is associated with a bunch of LIR_lines we already have seen
+                    uintptr_t currentFile = ins->oprnd1()->constval();
+                    cgen->jitFilenameUpdate(currentFile);
+                    break;
+                }
+                case LIR_line:
+                {
+                    // add a new table entry, we don't yet knwo which file it belongs
+                    // to so we need to add it to the update table too
+                    // note the alloc, actual act is delayed; see above
+                    uint32_t currentLine = (uint32_t) ins->oprnd1()->constval();
+                    cgen->jitLineNumUpdate(currentLine);
+                    cgen->jitAddRecord((uintptr_t)_nIns, 0, currentLine, true);
+                    break;
+                }
+                #endif // VTUNE
+            }
 
-			vtune_only(
-				cgen->jitCodePosUpdate((uintptr_t)_nIns);
-			)
+            vtune_only(
+                cgen->jitCodePosUpdate((uintptr_t)_nIns);
+            )
 
-			// check that all is well (don't check in exit paths since its more complicated)
-			debug_only( pageValidate(); )
-			debug_only( resourceConsistencyCheck();  )
-		}
-	}
+            // check that all is well (don't check in exit paths since its more complicated)
+            debug_only( pageValidate(); )
+            debug_only( resourceConsistencyCheck();  )
+        }
+    }
 
     void Assembler::assignSavedParams()
     {
         // restore saved regs
-		releaseRegisters();
+        releaseRegisters();
         LirBuffer *b = _thisfrag->lirbuf;
         for (int i=0, n = NumSavedRegs; i < n; i++) {
             LIns *p = b->savedParams[i];
             if (p) {
-				Register r = savedRegs[p->imm8()];
+                Register r = savedRegs[p->imm8()];
                 findSpecificRegFor(p, r);
-			}
+            }
         }
     }
 
@@ -1414,8 +1415,8 @@ namespace nanojit
         }
     }
 
-	void Assembler::arFree(uint32_t idx)
-	{
+    void Assembler::arFree(uint32_t idx)
+    {
         verbose_only( printActivationState(" >FP"); )
 
         AR &ar = _activation;
@@ -1425,11 +1426,11 @@ namespace nanojit
             ar.entry[idx] = 0;
             idx--;
         } while (ar.entry[idx] == i);
-	}
+    }
 
 #ifdef NJ_VERBOSE
-	void Assembler::printActivationState(const char* what)
-	{
+    void Assembler::printActivationState(const char* what)
+    {
         bool verbose_activation = false;
         if (!verbose_activation || !verbose_enabled())
             return;
@@ -1476,16 +1477,16 @@ namespace nanojit
         }
         return true;
     }
-	
-	uint32_t Assembler::arReserve(LIns* l)
-	{
-		NanoAssert(!l->isTramp());
+
+    uint32_t Assembler::arReserve(LIns* l)
+    {
+        NanoAssert(!l->isTramp());
         int32_t size = l->isop(LIR_alloc) ? (l->size()>>2) : l->isQuad() ? 2 : 1;
         AR &ar = _activation;
-		const int32_t tos = ar.tos;
-		int32_t start = ar.lowwatermark;
-		int32_t i = 0;
-		NanoAssert(start>0);
+        const int32_t tos = ar.tos;
+        int32_t start = ar.lowwatermark;
+        int32_t i = 0;
+        NanoAssert(start>0);
         verbose_only( printActivationState(" <FP"); )
 
         if (size == 1) {
@@ -1499,25 +1500,25 @@ namespace nanojit
             }
         }
         else if (size == 2) {
-			if ( (start&1)==1 ) start++;  // even 8 boundary
-			for (i=start; i < NJ_MAX_STACK_ENTRY; i+=2) {
+            if ( (start&1)==1 ) start++;  // even 8 boundary
+            for (i=start; i < NJ_MAX_STACK_ENTRY; i+=2) {
                 if ( (ar.entry[i+stack_direction(1)] == 0) && (i==tos || (ar.entry[i] == 0)) ) {
                     // found 2 adjacent aligned slots
                     NanoAssert(_activation.entry[i] == 0);
                     NanoAssert(_activation.entry[i+stack_direction(1)] == 0);
                     ar.entry[i] = l;
                     ar.entry[i+stack_direction(1)] = l;
-                    break;   
+                    break;
                 }
-			}
-		}
+            }
+        }
         else {
             // alloc larger block on 8byte boundary.
             if (start < size) start = size;
             if ((start&1)==1) start++;
             for (i=start; i < NJ_MAX_STACK_ENTRY; i+=2) {
                 if (canfit(size, i, ar)) {
-		            // place the entry in the table and mark the instruction with it
+                    // place the entry in the table and mark the instruction with it
                     for (int32_t j=0; j < size; j++) {
                         NanoAssert(_activation.entry[i+stack_direction(j)] == 0);
                         _activation.entry[i+stack_direction(j)] = l;
@@ -1525,38 +1526,38 @@ namespace nanojit
                     break;
                 }
             }
-		}
+        }
         if (i >= (int32_t)ar.tos) {
             ar.tos = ar.highwatermark = i+1;
         }
-		if (tos+size >= NJ_MAX_STACK_ENTRY) {	
-			setError(StackFull);
-		}
+        if (tos+size >= NJ_MAX_STACK_ENTRY) {
+            setError(StackFull);
+        }
         return i;
-	}
+    }
 
     /**
      * move regs around so the SavedRegs contains the highest priority regs.
      */
     void Assembler::evictScratchRegs()
     {
-		// find the top GpRegs that are candidates to put in SavedRegs
+        // find the top GpRegs that are candidates to put in SavedRegs
 
         // tosave is a binary heap stored in an array.  the root is tosave[0],
-        // left child is at i+1, right child is at i+2.  
+        // left child is at i+1, right child is at i+2.
 
         Register tosave[LastReg-FirstReg+1];
         int len=0;
         RegAlloc *regs = &_allocator;
         for (Register r = FirstReg; r <= LastReg; r = nextreg(r)) {
-			if (rmask(r) & GpRegs) {
-				LIns *i = regs->getActive(r);
-				if (i) {
-					if (canRemat(i)) {
-						evict(r);
-					}
-					else {
-						int32_t pri = regs->getPriority(r);
+            if (rmask(r) & GpRegs) {
+                LIns *i = regs->getActive(r);
+                if (i) {
+                    if (canRemat(i)) {
+                        evict(r);
+                    }
+                    else {
+                        int32_t pri = regs->getPriority(r);
                         // add to heap by adding to end and bubbling up
                         int j = len++;
                         while (j > 0 && pri > regs->getPriority(tosave[j/2])) {
@@ -1565,13 +1566,13 @@ namespace nanojit
                         }
                         NanoAssert(size_t(j) < sizeof(tosave)/sizeof(tosave[0]));
                         tosave[j] = r;
-					}
-				}
+                    }
+                }
             }
         }
 
-        // now primap has the live exprs in priority order.  
-		// allocate each of the top priority exprs to a SavedReg
+        // now primap has the live exprs in priority order.
+        // allocate each of the top priority exprs to a SavedReg
 
         RegisterMask allow = SavedRegs;
         while (allow && len > 0) {
@@ -1580,7 +1581,7 @@ namespace nanojit
             if (!(rmask(hi) & SavedRegs)) {
                 LIns *i = regs->getActive(hi);
                 Register r = findRegFor(i, allow);
-			    allow &= ~rmask(r);
+                allow &= ~rmask(r);
             }
             else {
                 // hi is already in a saved reg, leave it alone.
@@ -1604,249 +1605,249 @@ namespace nanojit
             }
         }
 
-		// now evict everything else.
-		evictRegs(~SavedRegs);
+        // now evict everything else.
+        evictRegs(~SavedRegs);
     }
 
-	void Assembler::evictRegs(RegisterMask regs)
-	{
-		// generate code to restore callee saved registers 
-		// @todo speed this up
+    void Assembler::evictRegs(RegisterMask regs)
+    {
+        // generate code to restore callee saved registers
+        // @todo speed this up
         for (Register r = FirstReg; r <= LastReg; r = nextreg(r)) {
             if ((rmask(r) & regs) && _allocator.getActive(r)) {
-				evict(r);
+                evict(r);
             }
-		}
-	}
-	
-	/**
-	 * Merge the current state of the registers with a previously stored version
+        }
+    }
+
+    /**
+     * Merge the current state of the registers with a previously stored version
      * current == saved    skip
      * current & saved     evict current, keep saved
      * current & !saved    evict current  (unionRegisterState would keep)
      * !current & saved    keep saved
-	 */
-	void Assembler::intersectRegisterState(RegAlloc& saved)
-	{
-		// evictions and pops first
-		RegisterMask skip = 0;
-		verbose_only(bool shouldMention=false; )
-		for (Register r=FirstReg; r <= LastReg; r = nextreg(r))
-		{
-			LIns * curins = _allocator.getActive(r);
-			LIns * savedins = saved.getActive(r);
-			if (curins == savedins)
-			{
-				//verbose_only( if (curins) verbose_outputf("                                              skip %s", regNames[r]); )
-				skip |= rmask(r);
-			}
-			else 
-			{
+     */
+    void Assembler::intersectRegisterState(RegAlloc& saved)
+    {
+        // evictions and pops first
+        RegisterMask skip = 0;
+        verbose_only(bool shouldMention=false; )
+        for (Register r=FirstReg; r <= LastReg; r = nextreg(r))
+        {
+            LIns * curins = _allocator.getActive(r);
+            LIns * savedins = saved.getActive(r);
+            if (curins == savedins)
+            {
+                //verbose_only( if (curins) verbose_outputf("                                              skip %s", regNames[r]); )
+                skip |= rmask(r);
+            }
+            else
+            {
                 if (curins) {
                     //_nvprof("intersect-evict",1);
-					verbose_only( shouldMention=true; )
-					evict(r);
+                    verbose_only( shouldMention=true; )
+                    evict(r);
                 }
-				
-    			#ifdef NANOJIT_IA32
-				if (savedins && (rmask(r) & x87Regs)) {
-					verbose_only( shouldMention=true; )
-					FSTP(r);
-				}
-				#endif
-			}
-		}
-        assignSaved(saved, skip);
-		verbose_only( if (shouldMention) verbose_outputf("                                              merging registers (intersect) with existing edge");  )
-	}
 
-	/**
-	 * Merge the current state of the registers with a previously stored version.
-     * 
+                #ifdef NANOJIT_IA32
+                if (savedins && (rmask(r) & x87Regs)) {
+                    verbose_only( shouldMention=true; )
+                    FSTP(r);
+                }
+                #endif
+            }
+        }
+        assignSaved(saved, skip);
+        verbose_only( if (shouldMention) verbose_outputf("                                              merging registers (intersect) with existing edge");  )
+    }
+
+    /**
+     * Merge the current state of the registers with a previously stored version.
+     *
      * current == saved    skip
      * current & saved     evict current, keep saved
      * current & !saved    keep current (intersectRegisterState would evict)
      * !current & saved    keep saved
-	 */
-	void Assembler::unionRegisterState(RegAlloc& saved)
-	{
-		// evictions and pops first
-		verbose_only(bool shouldMention=false; )
-		RegisterMask skip = 0;
-		for (Register r=FirstReg; r <= LastReg; r = nextreg(r))
-		{
-			LIns * curins = _allocator.getActive(r);
-			LIns * savedins = saved.getActive(r);
-			if (curins == savedins)
-			{
-				//verbose_only( if (curins) verbose_outputf("                                              skip %s", regNames[r]); )
-				skip |= rmask(r);
-			}
-			else 
-			{
+     */
+    void Assembler::unionRegisterState(RegAlloc& saved)
+    {
+        // evictions and pops first
+        verbose_only(bool shouldMention=false; )
+        RegisterMask skip = 0;
+        for (Register r=FirstReg; r <= LastReg; r = nextreg(r))
+        {
+            LIns * curins = _allocator.getActive(r);
+            LIns * savedins = saved.getActive(r);
+            if (curins == savedins)
+            {
+                //verbose_only( if (curins) verbose_outputf("                                              skip %s", regNames[r]); )
+                skip |= rmask(r);
+            }
+            else
+            {
                 if (curins && savedins) {
                     //_nvprof("union-evict",1);
-					verbose_only( shouldMention=true; )
-					evict(r);
+                    verbose_only( shouldMention=true; )
+                    evict(r);
                 }
-				
-    			#ifdef NANOJIT_IA32
-				if (rmask(r) & x87Regs) {
-					if (savedins) {
-						FSTP(r);
-					}
-					else {
-						// saved state did not have fpu reg allocated,
-						// so we must evict here to keep x87 stack balanced.
-						evict(r);
-					}
-					verbose_only( shouldMention=true; )
-				}
-				#endif
-			}
-		}
+
+                #ifdef NANOJIT_IA32
+                if (rmask(r) & x87Regs) {
+                    if (savedins) {
+                        FSTP(r);
+                    }
+                    else {
+                        // saved state did not have fpu reg allocated,
+                        // so we must evict here to keep x87 stack balanced.
+                        evict(r);
+                    }
+                    verbose_only( shouldMention=true; )
+                }
+                #endif
+            }
+        }
         assignSaved(saved, skip);
-		verbose_only( if (shouldMention) verbose_outputf("                                              merging registers (union) with existing edge");  )
+        verbose_only( if (shouldMention) verbose_outputf("                                              merging registers (union) with existing edge");  )
     }
 
     void Assembler::assignSaved(RegAlloc &saved, RegisterMask skip)
     {
-		// now reassign mainline registers
-		for (Register r=FirstReg; r <= LastReg; r = nextreg(r))
-		{
-			LIns *i = saved.getActive(r);
-			if (i && !(skip&rmask(r)))
-				findSpecificRegFor(i, r);
-		}
-		debug_only(saved.used = 0);  // marker that we are no longer in exit path
-	}
-	
-	/**																 
-	 * Guard records are laid out in the exit block buffer (_nInsExit),
-	 * intersperced with the code.   Preceding the record are the native
-	 * instructions associated with the record (i.e. the exit code).
-	 * 
-	 * The layout is as follows:
-	 * 
-	 * [ native code ] [ GuardRecord1 ]
-	 * ...
-	 * [ native code ] [ GuardRecordN ]
-	 * 
-	 * The guard record 'code' field should be used to locate 
-	 * the start of the native code associated with the
-	 * exit block. N.B the code may lie in a different page 
-	 * than the guard record  
-	 * 
-	 * The last guard record is used for the unconditional jump
-	 * at the end of the trace. 
-	 * 
-	 * NOTE:  It is also not guaranteed that the native code 
-	 *        is contained on a single page.
-	 */
-	GuardRecord* Assembler::placeGuardRecord(LInsp guard)
-	{
-		// we align the guards to 4Byte boundary
-		size_t size = GuardRecordSize(guard);
-		SideExit *exit = guard->exit();
-		NIns* ptr = (NIns*)alignTo(_nIns-size, 4);
-		underrunProtect( (intptr_t)_nIns-(intptr_t)ptr );  // either got us a new page or there is enough space for us
-		GuardRecord* rec = (GuardRecord*) alignTo(_nIns-size,4);
-		rec->outgoing = _latestGuard;
-		_latestGuard = rec;
-		_nIns = (NIns*)rec;
-		rec->next = 0;
-		rec->origTarget = 0;		
-		rec->target = exit->target;
-		rec->from = _thisfrag;
-		initGuardRecord(guard,rec);
-		if (exit->target) 
-			exit->target->addLink(rec);
-		return rec;
-	}
+        // now reassign mainline registers
+        for (Register r=FirstReg; r <= LastReg; r = nextreg(r))
+        {
+            LIns *i = saved.getActive(r);
+            if (i && !(skip&rmask(r)))
+                findSpecificRegFor(i, r);
+        }
+        debug_only(saved.used = 0);  // marker that we are no longer in exit path
+    }
 
-	void Assembler::setCallTable(const CallInfo* functions)
-	{
-		_functions = functions;
-	}
+    /**
+     * Guard records are laid out in the exit block buffer (_nInsExit),
+     * intersperced with the code.   Preceding the record are the native
+     * instructions associated with the record (i.e. the exit code).
+     *
+     * The layout is as follows:
+     *
+     * [ native code ] [ GuardRecord1 ]
+     * ...
+     * [ native code ] [ GuardRecordN ]
+     *
+     * The guard record 'code' field should be used to locate
+     * the start of the native code associated with the
+     * exit block. N.B the code may lie in a different page
+     * than the guard record
+     *
+     * The last guard record is used for the unconditional jump
+     * at the end of the trace.
+     *
+     * NOTE:  It is also not guaranteed that the native code
+     *        is contained on a single page.
+     */
+    GuardRecord* Assembler::placeGuardRecord(LInsp guard)
+    {
+        // we align the guards to 4Byte boundary
+        size_t size = GuardRecordSize(guard);
+        SideExit *exit = guard->exit();
+        NIns* ptr = (NIns*)alignTo(_nIns-size, 4);
+        underrunProtect( (intptr_t)_nIns-(intptr_t)ptr );  // either got us a new page or there is enough space for us
+        GuardRecord* rec = (GuardRecord*) alignTo(_nIns-size,4);
+        rec->outgoing = _latestGuard;
+        _latestGuard = rec;
+        _nIns = (NIns*)rec;
+        rec->next = 0;
+        rec->origTarget = 0;
+        rec->target = exit->target;
+        rec->from = _thisfrag;
+        initGuardRecord(guard,rec);
+        if (exit->target)
+            exit->target->addLink(rec);
+        return rec;
+    }
+
+    void Assembler::setCallTable(const CallInfo* functions)
+    {
+        _functions = functions;
+    }
 
 #ifdef NJ_VERBOSE
-	char Assembler::outline[8192];
-	char Assembler::outlineEOL[512];
+    char Assembler::outline[8192];
+    char Assembler::outlineEOL[512];
 
-	void Assembler::outputForEOL(const char* format, ...)
-	{
-		va_list args;
-		va_start(args, format);
-		outlineEOL[0] = '\0';
-		vsprintf(outlineEOL, format, args);
-	}
+    void Assembler::outputForEOL(const char* format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+        outlineEOL[0] = '\0';
+        vsprintf(outlineEOL, format, args);
+    }
 
-	void Assembler::outputf(const char* format, ...)
-	{
-		va_list args;
-		va_start(args, format);
-		outline[0] = '\0';
-		vsprintf(outline, format, args);
-		output(outline);
-	}
+    void Assembler::outputf(const char* format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+        outline[0] = '\0';
+        vsprintf(outline, format, args);
+        output(outline);
+    }
 
-	void Assembler::output(const char* s)
-	{
-		if (_outputCache)
-		{
-			char* str = (char*)_gc->Alloc(VMPI_strlen(s)+1);
-			VMPI_strcpy(str, s);
-			_outputCache->add(str);
-		}
-		else
-		{
-			core->console << s << "\n";
-		}
-	}
+    void Assembler::output(const char* s)
+    {
+        if (_outputCache)
+        {
+            char* str = (char*)_gc->Alloc(VMPI_strlen(s)+1);
+            VMPI_strcpy(str, s);
+            _outputCache->add(str);
+        }
+        else
+        {
+            core->console << s << "\n";
+        }
+    }
 
-	void Assembler::output_asm(const char* s)
-	{
-		if (!verbose_enabled())
-			return;
-			output(s);
-	}
+    void Assembler::output_asm(const char* s)
+    {
+        if (!verbose_enabled())
+            return;
+            output(s);
+    }
 
-	char* Assembler::outputAlign(char *s, int col) 
-	{
-		int len = (int)VMPI_strlen(s);
-		int add = ((col-len)>0) ? col-len : 1;
-		VMPI_memset(&s[len], ' ', add);
-		s[col] = '\0';
-		return &s[col];
-	}
+    char* Assembler::outputAlign(char *s, int col)
+    {
+        int len = (int)VMPI_strlen(s);
+        int add = ((col-len)>0) ? col-len : 1;
+        VMPI_memset(&s[len], ' ', add);
+        s[col] = '\0';
+        return &s[col];
+    }
 #endif // NJ_VERBOSE
 
-	uint32_t CallInfo::_count_args(uint32_t mask) const
-	{
-		uint32_t argc = 0;
-		uint32_t argt = _argtypes;
-		for (uint32_t i = 0; i < MAXARGS; ++i) {
-			argt >>= ARGSIZE_SHIFT;
+    uint32_t CallInfo::_count_args(uint32_t mask) const
+    {
+        uint32_t argc = 0;
+        uint32_t argt = _argtypes;
+        for (uint32_t i = 0; i < MAXARGS; ++i) {
+            argt >>= ARGSIZE_SHIFT;
             if (!argt)
                 break;
-			argc += (argt & mask) != 0;
-		}
-		return argc;
-	}
+            argc += (argt & mask) != 0;
+        }
+        return argc;
+    }
 
     uint32_t CallInfo::get_sizes(ArgSize* sizes) const
     {
-		uint32_t argt = _argtypes;
-		uint32_t argc = 0;
-		for (uint32_t i = 0; i < MAXARGS; i++) {
-			argt >>= ARGSIZE_SHIFT;
-			ArgSize a = ArgSize(argt & ARGSIZE_MASK);
+        uint32_t argt = _argtypes;
+        uint32_t argc = 0;
+        for (uint32_t i = 0; i < MAXARGS; i++) {
+            argt >>= ARGSIZE_SHIFT;
+            ArgSize a = ArgSize(argt & ARGSIZE_MASK);
             if (a != ARGSIZE_NONE) {
                 sizes[argc++] = a;
             } else {
                 break;
             }
-		}
+        }
         return argc;
     }
 

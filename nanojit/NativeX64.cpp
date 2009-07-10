@@ -67,7 +67,7 @@ tracing
 - asm_qhi
 - nFragExit
 
-*/ 
+*/
 
 namespace nanojit
 {
@@ -231,14 +231,14 @@ namespace nanojit
         *((int32_t*)(_nIns -= 4)) = imm;
         _nvprof("x86-bytes", 4);
         emitrr(op, r, b);
-    } 
+    }
 
     // op = [rex][opcode][modrm][imm8]
     void Assembler::emitr_imm8(uint64_t op, Register b, int32_t imm8) {
         NanoAssert(IsGpReg(b) && isS8(imm8));
         op |= uint64_t(imm8)<<56 | uint64_t(b&7)<<48;  // modrm is 2nd to last byte
         emit(rexrb(op, (Register)0, b));
-    } 
+    }
 
     void Assembler::MR(Register d, Register s) {
         NanoAssert(IsGpReg(d) && IsGpReg(s));
@@ -310,7 +310,7 @@ namespace nanojit
         case LIR_lsh:       xop = X64_shl;      break;
         }
         emitr(xop, rr);
-        if (rr != ra) 
+        if (rr != ra)
             MR(rr, ra);
     }
 
@@ -389,8 +389,8 @@ namespace nanojit
             }
             emitr_imm(xop, rr, imm);
         }
-		if (rr != ra) 
-			MR(rr, ra); 
+        if (rr != ra)
+            MR(rr, ra);
     }
 
     // binary op with integer registers
@@ -487,8 +487,8 @@ namespace nanojit
             xop = X64_neg;
         }
         emitr(xop, rr);
-		if (rr != ra) 
-			MR(rr, ra); 
+        if (rr != ra)
+            MR(rr, ra);
     }
 
     void Assembler::asm_call(LIns *ins) {
@@ -540,7 +540,7 @@ namespace nanojit
                 // double goes in XMM reg # based on overall arg_index
                 asm_regarg(sz, arg, Register(XMM0+arg_index));
                 arg_index++;
-            } 
+            }
         #else
             else if (sz == ARGSIZE_F && fr < XMM8) {
                 // double goes in next available XMM register
@@ -654,7 +654,7 @@ namespace nanojit
 
         NanoAssert((ins->isop(LIR_qcmov) && iftrue->isQuad() && iffalse->isQuad()) ||
                    (ins->isop(LIR_cmov) && !iftrue->isQuad() && !iffalse->isQuad()));
-        
+
         // this code assumes that neither LD nor MR nor MRcc set any of the condition flags.
         // (This is true on Intel, is it true on all architectures?)
         const Register rr = prepResultReg(ins, GpRegs);
@@ -743,19 +743,19 @@ namespace nanojit
     // discussion in https://bugzilla.mozilla.org/show_bug.cgi?id=443886
     //
     //  fucom/p/pp: c3 c2 c0   jae ja    jbe jb je jne
-    //  ucomisd:     Z  P  C   !C  !C&!Z C|Z C  Z  !Z 
-    //              -- -- --   --  ----- --- -- -- -- 
-    //  unordered    1  1  1             T   T  T     
-    //  greater >    0  0  0   T   T               T  
-    //  less    <    0  0  1             T   T     T  
-    //  equal   =    1  0  0   T         T      T     
+    //  ucomisd:     Z  P  C   !C  !C&!Z C|Z C  Z  !Z
+    //              -- -- --   --  ----- --- -- -- --
+    //  unordered    1  1  1             T   T  T
+    //  greater >    0  0  0   T   T               T
+    //  less    <    0  0  1             T   T     T
+    //  equal   =    1  0  0   T         T      T
     //
     //  here's the cases, using conditionals:
     //
     //  branch  >=  >   <=       <        =
     //  ------  --- --- ---      ---      ---
     //  LIR_jt  jae ja  swap+jae swap+ja  jp over je
-    //  LIR_jf  jb  jbe swap+jb  swap+jbe jne+jp          
+    //  LIR_jf  jb  jbe swap+jb  swap+jbe jne+jp
 
     NIns* Assembler::asm_fbranch(bool onFalse, LIns *cond, NIns *target) {
         LOpcode condop = cond->opcode();
@@ -871,12 +871,12 @@ namespace nanojit
                 outputf("        restore %s",_thisfrag->lirbuf->names->formatRef(ins));
         )
     }
-    
+
     void Assembler::asm_cond(LIns *ins) {
-        LOpcode op = ins->opcode();         
+        LOpcode op = ins->opcode();
         // unlike x86-32, with a rex prefix we can use any GP register as an 8bit target
         Register r = prepResultReg(ins, GpRegs);
-        // SETcc only sets low 8 bits, so extend 
+        // SETcc only sets low 8 bits, so extend
         emitrr8(X64_movzx8, r, r);
         X64Opcode xop;
         switch (op) {
@@ -962,7 +962,7 @@ namespace nanojit
         regalloc_load(ins, r, d, b);
         emitrm(X64_movlrm, r, d, b);
     }
- 
+
     void Assembler::asm_store64(LIns *value, int d, LIns *base) {
         NanoAssert(value->isQuad());
         Register b = getBaseReg(base, d, BaseRegs);
@@ -1116,7 +1116,7 @@ namespace nanojit
                 _nvprof("x64-bytes", 4);
                 emitrr(X64_xorpsm, rr, (Register)0);
             }
-            if (ra != rr) 
+            if (ra != rr)
                 asm_nongp_copy(rr,ra);
         } else {
             // this is just hideous - can't use RIP-relative load, can't use
@@ -1258,7 +1258,7 @@ namespace nanojit
     {}
 
     void Assembler::underrunProtect(ptrdiff_t bytes) {
-        NanoAssertMsg(bytes<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small"); 
+        NanoAssertMsg(bytes<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small");
         NIns *pc = _nIns;
         NIns *top = _inExit ? this->exitStart : this->codeStart;
 
@@ -1277,7 +1277,7 @@ namespace nanojit
                 verbose_only(if (_verbose) outputf("newpage %p:", pc);)
                 codeAlloc();
             }
-            // now emit the jump, but make sure we won't need another page break. 
+            // now emit the jump, but make sure we won't need another page break.
             // we're pedantic, but not *that* pedantic.
             pedanticTop = _nIns - br_size;
             JMP(pc);

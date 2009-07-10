@@ -1,4 +1,5 @@
-/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 40 -*- */
+/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 4 -*- */
+/* vi: set ts=4 sw=4 expandtab: (add to ~/.vimrc: set modeline modelines=5) */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -99,7 +100,7 @@ Assembler::genPrologue()
 
     // Make room on stack for what we are doing
     if (amt)
-        asm_sub_imm(SP, SP, amt); 
+        asm_sub_imm(SP, SP, amt);
 
     verbose_only( verbose_outputf("         %p:",_nIns); )
     verbose_only( verbose_output("         patch entry"); )
@@ -236,7 +237,7 @@ Assembler::asm_call(LInsp ins)
 #if NJ_ARM_ARCH >= NJ_ARM_V5
         if (blx_lr_bug) {
             // workaround for msft device emulator bug (blx lr emulated as no-op)
-	        underrunProtect(8);
+            underrunProtect(8);
             BLX(IP);
             MOV(IP,LR);
         } else {
@@ -349,7 +350,7 @@ Assembler::asm_call(LInsp ins)
     if (needToLoadAddr)
         LDi(LR, (int32_t)call->_address);
 }
-    
+
 
     /* Call this with targ set to 0 if the target is not yet known and the branch
      * will be patched up later.
@@ -405,11 +406,11 @@ Assembler::asm_call(LInsp ins)
     void Assembler::asm_cmp(LIns *cond)
     {
         LOpcode condop = cond->opcode();
-        
+
         // LIR_ov and LIR_cs recycle the flags set by arithmetic ops
         if ((condop == LIR_ov) || (condop == LIR_cs))
             return;
-        
+
         LInsp lhs = cond->oprnd1();
         LInsp rhs = cond->oprnd2();
         Reservation *rA, *rB;
@@ -457,9 +458,9 @@ Assembler::asm_call(LInsp ins)
     void Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
     {
         (void)ins;
-        B_long_placeholder(); // jump to SOT    
+        B_long_placeholder(); // jump to SOT
         verbose_only( if (_verbose && _outputCache) { _outputCache->removeLast(); outputf("         jmp   SOT"); } );
-        
+
         loopJumps.add(_nIns);
 
         #ifdef NJ_VERBOSE
@@ -472,8 +473,8 @@ Assembler::asm_call(LInsp ins)
 
         // restore first parameter, the only one we use
         LInsp state = _thisfrag->lirbuf->state;
-        findSpecificRegFor(state, argRegs[state->imm8()]); 
-    }   
+        findSpecificRegFor(state, argRegs[state->imm8()]);
+    }
 
 #ifdef NJ_ARM_VFP
     // only used with VFP
@@ -491,10 +492,10 @@ Assembler::asm_call(LInsp ins)
         asm_fcmp(ins);
     }
 #endif
-                
+
     void Assembler::asm_cond(LInsp ins)
     {
-        LOpcode op = ins->opcode();         
+        LOpcode op = ins->opcode();
         Register r = prepResultReg(ins, GpRegs);
         switch (op) {
             case LIR_eq:  SETEQ(r); break;
@@ -514,7 +515,7 @@ Assembler::asm_call(LInsp ins)
 
     void Assembler::asm_arith(LInsp ins)
     {
-        LOpcode op = ins->opcode();         
+        LOpcode op = ins->opcode();
         LInsp lhs = ins->oprnd1();
         LInsp rhs = ins->oprnd2();
 
@@ -593,9 +594,9 @@ Assembler::asm_call(LInsp ins)
         {
             int c = rhs->constval();
             if (op == LIR_add || op == LIR_addp) {
-                asm_add_imm(rr, ra, c, 0); 
+                asm_add_imm(rr, ra, c, 0);
             } else if (op == LIR_sub) {
-                asm_sub_imm(rr, ra, c); 
+                asm_sub_imm(rr, ra, c);
             } else if (op == LIR_and) {
                 if (isU8(c)) {
                     ANDi(rr, ra, c);
@@ -619,22 +620,22 @@ Assembler::asm_call(LInsp ins)
                 NanoAssertMsg(0, "Unsupported");
         }
     }
-    
+
     void Assembler::asm_neg_not(LInsp ins)
     {
-        LOpcode op = ins->opcode();         
+        LOpcode op = ins->opcode();
         Register rr = prepResultReg(ins, GpRegs);
         Register ra = findRegFor(ins->oprnd1(), GpRegs);
 
         if (op == LIR_not)
-            MVN(rr, ra); 
+            MVN(rr, ra);
         else
-            RSBS(rr, ra); 
+            RSBS(rr, ra);
     }
-                
+
     void Assembler::asm_ld(LInsp ins)
     {
-        LOpcode op = ins->opcode();         
+        LOpcode op = ins->opcode();
         LIns* base = ins->oprnd1();
         LIns* disp = ins->oprnd2();
         Register rr = prepResultReg(ins, GpRegs);
@@ -660,7 +661,7 @@ Assembler::asm_call(LInsp ins)
         LIns* iffalse = values->oprnd2();
 
         NanoAssert(!iftrue->isQuad() && !iffalse->isQuad());
-        
+
         const Register rr = prepResultReg(ins, GpRegs);
 
         const Register iffalsereg = findRegFor(iffalse, GpRegs & ~rmask(rr));
@@ -683,7 +684,7 @@ Assembler::asm_call(LInsp ins)
         /*const Register iftruereg =*/ findSpecificRegFor(iftrue, rr);
         asm_cmp(condval);
     }
-                
+
     void Assembler::asm_qhi(LInsp ins)
     {
         Register rr = prepResultReg(ins, GpRegs);
@@ -760,7 +761,7 @@ Assembler::asm_call(LInsp ins)
                         // it must be in a saved reg
                         MOV(r, rA->reg);
                     }
-                } 
+                }
                 else {
                     // this is the last use, so fine to assign it
                     // to the scratch reg, it's dead after this point.
@@ -780,7 +781,7 @@ Assembler::asm_call(LInsp ins)
             NanoAssert(false);
         }
     }
-            
+
 Register
 Assembler::nRegisterAllocFromSet(int set)
 {
@@ -881,7 +882,7 @@ Assembler::asm_qjoin(LIns *ins)
     NanoAssert(d);
     LIns* lo = ins->oprnd1();
     LIns* hi = ins->oprnd2();
-                            
+
     Register r = findRegFor(hi, GpRegs);
     STR(r, FP, d+4);
 
@@ -997,7 +998,7 @@ Assembler::asm_load64(LInsp ins)
     asm_mmq(FP, d, rb, offset);
 
     // bug https://bugzilla.mozilla.org/show_bug.cgi?id=477228
-    // make sure we release the instruction's stack slot *after* 
+    // make sure we release the instruction's stack slot *after*
     // any findRegFor() since that call can trigger a spill
     freeRsrcOf(ins, false);
 #endif
@@ -1214,16 +1215,16 @@ void
 Assembler::nativePageSetup()
 {
     if (!_nIns)
-		codeAlloc();
+        codeAlloc();
     if (!_nExitIns)
-		codeAlloc(true);
-    
+        codeAlloc(true);
+
     // constpool starts at top of page and goes down,
     // code starts at bottom of page and moves up
     if (!_nSlot)
-		_nSlot = codeStart;
+        _nSlot = codeStart;
     if (!_nExitSlot)
-		_nExitSlot = exitStart;
+        _nExitSlot = exitStart;
 }
 
 NIns*
@@ -1258,7 +1259,7 @@ Assembler::asm_adjustBranch(NIns* at, NIns* target)
 void
 Assembler::underrunProtect(int bytes)
 {
-	NanoAssertMsg(bytes<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small"); 
+    NanoAssertMsg(bytes<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small");
     NanoAssert(_nSlot != 0 && int(_nIns)-int(_nSlot) <= 4096);
     uintptr_t top = uintptr_t(_nSlot);
     uintptr_t pc = uintptr_t(_nIns);
@@ -1269,8 +1270,8 @@ Assembler::underrunProtect(int bytes)
         codeAlloc(_inExit);
         _nSlot = _inExit ? exitStart : codeStart;
 
-		// _nSlot points to the first empty position in the new code block
-		// _nIns points just past the last empty position.  
+        // _nSlot points to the first empty position in the new code block
+        // _nIns points just past the last empty position.
         // Assume B_nochk won't ever try to write to _nSlot. See B_cond_chk macro.
         B_nochk(target);
     }
@@ -1384,7 +1385,7 @@ bool Assembler::BL_noload(NIns* addr, Register reg)
         NanoAssert(reg != PC);
         if (blx_lr_bug) {
             // workaround for msft device emulator bug (blx lr emulated as no-op)
-	        underrunProtect(8);
+            underrunProtect(8);
             BLX(IP);
             MOV(IP,LR);
             return true;
@@ -1490,7 +1491,7 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
         *(--_nIns) = (NIns)(_t);
         *(--_nIns) = (NIns)( COND_AL | (0x51<<20) | (PC<<16) | (PC<<12) | 0x4 );
         asm_output("b%s %p", _c == AL ? "" : condNames[_c], (void*)(_t));
-	} else if (PC_OFFSET_FROM(_nSlot, _nIns-1) > -0x1000) {
+    } else if (PC_OFFSET_FROM(_nSlot, _nIns-1) > -0x1000) {
         if(_chk) underrunProtect(8);
         *(_nSlot++) = (NIns)(_t);
         offs = PC_OFFSET_FROM(_nSlot-1,_nIns-1);
@@ -1671,7 +1672,7 @@ Assembler::asm_fcmp(LInsp ins)
     findRegFor2(FpRegs, lhs, rA, rhs, rB);
     Register ra = rA->reg;
     Register rb = rB->reg;
-    
+
     int e_bit = (op != LIR_feq);
 
     // do the comparison and get results loaded in ARM status register

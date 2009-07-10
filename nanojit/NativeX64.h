@@ -108,7 +108,7 @@ namespace nanojit
  * Micro-templating variable-length opcodes, idea first
  * describe by Mike Pall of Luajit.
  *
- * X86-64 opcode encodings:  LSB encodes the length of the 
+ * X86-64 opcode encodings:  LSB encodes the length of the
  * opcode in bytes, remaining bytes are encoded as 1-7 bytes
  * in a single uint64_t value.  The value is written as a single
  * store into the code stream, and the code pointer is decremented
@@ -347,7 +347,7 @@ namespace nanojit
         NIns* asm_fbranch(bool, LIns*, NIns*);\
         int max_stk_used;
 
-	#define swapptrs()  { NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins; }
+    #define swapptrs()  { NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins; }
 
     const int LARGEST_UNDERRUN_PROT = 32;  // largest value passed to underrunProtect
 

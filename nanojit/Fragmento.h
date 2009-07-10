@@ -1,4 +1,5 @@
-/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: t; tab-width: 4 -*- */
+/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 4 -*- */
+/* vi: set ts=4 sw=4 expandtab: (add to ~/.vimrc: set modeline modelines=5) */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -48,125 +49,125 @@ extern void drawTraceTrees(Fragmento *frago, FragmentMap * _frags, avmplus::AvmC
 
 namespace nanojit
 {
-	struct GuardRecord;
-	class Assembler;
-	
-	typedef avmplus::GCSortedMap<const void*, uint32_t, avmplus::LIST_NonGCObjects> BlockSortedMap;
-	class BlockHist: public BlockSortedMap
-	{
-	public:
-		BlockHist(GC*gc) : BlockSortedMap(gc)
-		{
-		}
-		uint32_t count(const void *p) {
-			uint32_t c = 1+get(p);
-			put(p, c);
-			return c;
-		}
-	};
+    struct GuardRecord;
+    class Assembler;
 
-	struct fragstats;
-	/*
-	 *
-	 * This is the main control center for creating and managing fragments.
-	 */
-	class Fragmento : public GCFinalizedObject
-	{
-		public:
-			
-			enum { MAX_CACHE_SIZE_LOG2 = 30 }; // 640KB^H^H^H^H^H 1GB should be enough for anybody...
-			
-			Fragmento(AvmCore* core, uint32_t cacheSizeLog2, CodeAlloc *codeAlloc);
-			~Fragmento();
+    typedef avmplus::GCSortedMap<const void*, uint32_t, avmplus::LIST_NonGCObjects> BlockSortedMap;
+    class BlockHist: public BlockSortedMap
+    {
+    public:
+        BlockHist(GC*gc) : BlockSortedMap(gc)
+        {
+        }
+        uint32_t count(const void *p) {
+            uint32_t c = 1+get(p);
+            put(p, c);
+            return c;
+        }
+    };
 
-			AvmCore*	core();
+    struct fragstats;
+    /*
+     *
+     * This is the main control center for creating and managing fragments.
+     */
+    class Fragmento : public GCFinalizedObject
+    {
+        public:
+
+            enum { MAX_CACHE_SIZE_LOG2 = 30 }; // 640KB^H^H^H^H^H 1GB should be enough for anybody...
+
+            Fragmento(AvmCore* core, uint32_t cacheSizeLog2, CodeAlloc *codeAlloc);
+            ~Fragmento();
+
+            AvmCore*    core();
             Fragment*   getLoop(const void* ip);
             Fragment*   getAnchor(const void* ip);
-			void        clearFrags();	// clear all fragments from the cache
+            void        clearFrags();   // clear all fragments from the cache
             Fragment*   getMerge(GuardRecord *lr, const void* ip);
             Fragment*   createBranch(GuardRecord *lr, const void* ip);
             Fragment*   newFrag(const void* ip);
             Fragment*   newBranch(Fragment *from, const void* ip);
-			verbose_only( void addLabel(Fragment* f, const char *prefix, int id); )
-			
-			// stats
-			struct 
-			{
-				uint32_t	pages;					// pages consumed
-				uint32_t	flushes, ilsize, abcsize, compiles, totalCompiles;
-			}
-			_stats;
+            verbose_only( void addLabel(Fragment* f, const char *prefix, int id); )
 
-			verbose_only( DWB(BlockHist*)		enterCounts; )
-			verbose_only( DWB(BlockHist*)		mergeCounts; )
-			verbose_only( DWB(LabelMap*)        labels; )
-			
-    		#ifdef NJ_VERBOSE
-    		void	drawTrees(char *fileName);
+            // stats
+            struct
+            {
+                uint32_t    pages;                  // pages consumed
+                uint32_t    flushes, ilsize, abcsize, compiles, totalCompiles;
+            }
+            _stats;
+
+            verbose_only( DWB(BlockHist*)       enterCounts; )
+            verbose_only( DWB(BlockHist*)       mergeCounts; )
+            verbose_only( DWB(LabelMap*)        labels; )
+
+            #ifdef NJ_VERBOSE
+            void    drawTrees(char *fileName);
             #endif
-			
-		private:
-			AvmCore*		 _core;
-			DWB(CodeAlloc*) _codeAlloc;
-			FragmentMap 	_frags;		/* map from ip -> Fragment ptr  */
 
-			const uint32_t _max_pages;
-			const uint32_t _pagesGrowth;
-	};
+        private:
+            AvmCore*         _core;
+            DWB(CodeAlloc*) _codeAlloc;
+            FragmentMap     _frags;     /* map from ip -> Fragment ptr  */
 
-	enum TraceKind {
-		LoopTrace,
-		BranchTrace,
-		MergeTrace
-	};
-	
-	/**
-	 * Fragments are linear sequences of native code that have a single entry 
-	 * point at the start of the fragment and may have one or more exit points 
-	 * 
-	 * It may turn out that that this arrangement causes too much traffic
-	 * between d and i-caches and that we need to carve up the structure differently.
-	 */
-	class Fragment : public GCFinalizedObject
-	{
-		public:
-			Fragment(const void*);
-			~Fragment();
+            const uint32_t _max_pages;
+            const uint32_t _pagesGrowth;
+    };
 
-			NIns*			code()							{ return _code; }
-			void			setCode(NIns* codee)			{ _code = codee; }
-			GuardRecord*	links()							{ return _links; }
-			int32_t&		hits()							{ return _hits; }
+    enum TraceKind {
+        LoopTrace,
+        BranchTrace,
+        MergeTrace
+    };
+
+    /**
+     * Fragments are linear sequences of native code that have a single entry
+     * point at the start of the fragment and may have one or more exit points
+     *
+     * It may turn out that that this arrangement causes too much traffic
+     * between d and i-caches and that we need to carve up the structure differently.
+     */
+    class Fragment : public GCFinalizedObject
+    {
+        public:
+            Fragment(const void*);
+            ~Fragment();
+
+            NIns*           code()                          { return _code; }
+            void            setCode(NIns* codee)            { _code = codee; }
+            GuardRecord*    links()                         { return _links; }
+            int32_t&        hits()                          { return _hits; }
             void            blacklist();
-			bool			isBlacklisted()		{ return _hits < 0; }
-			void			resetLinks();
-			void			addLink(GuardRecord* lnk);
-			void			removeLink(GuardRecord* lnk);
-			void			link(Assembler* assm);
-			void			linkBranches(Assembler* assm);
-			void			unlink(Assembler* assm);
-			void			unlinkBranches(Assembler* assm);
-			debug_only( bool hasOnlyTreeLinks(); )
-			void			removeIntraLinks();
-			void			releaseLirBuffer();
-			void			releaseCode(CodeAlloc *alloc);
-			void			releaseTreeMem(CodeAlloc *alloc);
-			bool			isAnchor() { return anchor == this; }
-			bool			isRoot() { return root == this; }
+            bool            isBlacklisted()     { return _hits < 0; }
+            void            resetLinks();
+            void            addLink(GuardRecord* lnk);
+            void            removeLink(GuardRecord* lnk);
+            void            link(Assembler* assm);
+            void            linkBranches(Assembler* assm);
+            void            unlink(Assembler* assm);
+            void            unlinkBranches(Assembler* assm);
+            debug_only( bool hasOnlyTreeLinks(); )
+            void            removeIntraLinks();
+            void            releaseLirBuffer();
+            void            releaseCode(CodeAlloc *alloc);
+            void            releaseTreeMem(CodeAlloc *alloc);
+            bool            isAnchor() { return anchor == this; }
+            bool            isRoot() { return root == this; }
             void            onDestroy();
-			
-			verbose_only( uint32_t		_called; )
-			verbose_only( uint32_t		_native; )
+
+            verbose_only( uint32_t      _called; )
+            verbose_only( uint32_t      _native; )
             verbose_only( uint32_t      _exitNative; )
-			verbose_only( uint32_t		_lir; )
-			verbose_only( uint32_t		_lirbytes; )
-			verbose_only( const char*	_token; )
+            verbose_only( uint32_t      _lir; )
+            verbose_only( uint32_t      _lirbytes; )
+            verbose_only( const char*   _token; )
             verbose_only( uint64_t      traceTicks; )
             verbose_only( uint64_t      interpTicks; )
-			verbose_only( DWB(Fragment*) eot_target; )
-			verbose_only( uint32_t		sid;)
-			verbose_only( uint32_t		compileNbr;)
-			verbose_only( DWB(BlockLocator*) cfg; )
+            verbose_only( DWB(Fragment*) eot_target; )
+            verbose_only( uint32_t      sid;)
+            verbose_only( uint32_t      compileNbr;)
+            verbose_only( DWB(BlockLocator*) cfg; )
 
             DWB(Fragment*) treeBranches;
             DWB(Fragment*) branches;
@@ -176,26 +177,26 @@ namespace nanojit
             DWB(Fragment*) parent;
             DWB(Fragment*) first;
             DWB(Fragment*) peer;
-			DWB(BlockHist*) mergeCounts;
+            DWB(BlockHist*) mergeCounts;
             DWB(LirBuffer*) lirbuf;
-			LIns*			lastIns;
-			LIns*		spawnedFrom;
-			GuardRecord*	outbound;
-			
-			TraceKind kind;
-			const void* ip;
-			uint32_t guardCount;
+            LIns*           lastIns;
+            LIns*       spawnedFrom;
+            GuardRecord*    outbound;
+
+            TraceKind kind;
+            const void* ip;
+            uint32_t guardCount;
             uint32_t xjumpCount;
             int32_t blacklistLevel;
             NIns* fragEntry;
-			int32_t calldepth;
-			void* vmprivate;
-			CodeList* codeList;
-			
-		private:
-			NIns*			_code;		// ptr to start of code
-			GuardRecord*	_links;		// code which is linked (or pending to be) to this fragment
-			int32_t			_hits;
-	};
+            int32_t calldepth;
+            void* vmprivate;
+            CodeList* codeList;
+
+        private:
+            NIns*           _code;      // ptr to start of code
+            GuardRecord*    _links;     // code which is linked (or pending to be) to this fragment
+            int32_t         _hits;
+    };
 }
 #endif // __nanojit_Fragmento__

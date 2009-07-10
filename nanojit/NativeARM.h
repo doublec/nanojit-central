@@ -1,4 +1,5 @@
-/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 40 -*- */
+/* -*- Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil; tab-width: 4 -*- */
+/* vi: set ts=4 sw=4 expandtab: (add to ~/.vimrc: set modeline modelines=5) */
 /* ***** BEGIN LICENSE BLOCK *****
  * Version: MPL 1.1/GPL 2.0/LGPL 2.1
  *
@@ -137,7 +138,7 @@ typedef enum {
 
     FirstFloatReg = D0,
     LastFloatReg = D6,
-        
+
     FirstReg = R0,
 #ifdef NJ_ARM_VFP
     LastReg = D6,
@@ -319,7 +320,7 @@ enum {
         } \
     } while (0)
 
-#define rot_as_lshift(r)  (((r)==0)?0:32-2*(r)) 
+#define rot_as_lshift(r)  (((r)==0)?0:32-2*(r))
 
 #define ALUi_rot(cond, op, S, rd, rl, imm, rot) do {\
         underrunProtect(4);\
@@ -465,7 +466,7 @@ enum {
 // MOVS _d, _r, LSL #_imm
 // _d = _r << _imm
 #define LSLi(_d, _r, _imm) ALUr_shi(AL, mov, 1, _d, 0, _r, LSL_imm, _imm)
-                    
+
 // TST
 #define TST(_l,_r)     ALUr(AL, tst, 1, 0, _l, _r)
 #define TSTi(_d,_imm)   ALUi(AL, tst, 1, 0, _d, _imm)
@@ -646,7 +647,7 @@ enum {
 // emit a placeholder that will be filled in later by nPatchBranch
 #define B_long_placeholder() B(0)
 
-// MOV(cond)  _r, #1 
+// MOV(cond)  _r, #1
 // MOV(!cond) _r, #0
 #define SET(_r,_cond) do {                                              \
     ALUi(OppositeCond(_cond), mov, 0, _r, 0, 0);                        \
