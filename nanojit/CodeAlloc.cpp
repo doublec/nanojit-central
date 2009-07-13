@@ -47,11 +47,10 @@
 namespace nanojit
 {
     static const bool verbose = false;
-    static const int pagesPerAlloc = 1;
-    static const int bytesPerAlloc = pagesPerAlloc * GCHeap::kBlockSize;
+    static const int bytesPerAlloc = 4096;
 
-    CodeAlloc::CodeAlloc(GCHeap* heap)
-        : heap(heap), heapblocks(0)
+    CodeAlloc::CodeAlloc()
+        : heapblocks(0)
     {}
 
     CodeAlloc::~CodeAlloc() {
@@ -62,7 +61,7 @@ namespace nanojit
             CodeList* next = b->next;
             void *mem = firstBlock(b);
             VMPI_setPageProtection(mem, bytesPerAlloc, false /* executable */, true /* writable */);
-            heap->Free(mem);
+            freeCodeChunk(mem, bytesPerAlloc);
             b = next;
         }
     }
@@ -112,7 +111,8 @@ namespace nanojit
             }
         }
         // no suitable block found, get more memory
-        void *mem = heap->Alloc(pagesPerAlloc);  // allocations never fail
+        void *mem = allocCodeChunk(bytesPerAlloc); // allocations never fail
+        NanoAssert(mem != NULL); // see allocCodeChunk contract in CodeAlloc.h
         _nvprof("alloc page", uintptr_t(mem)>>12);
         VMPI_setPageProtection(mem, bytesPerAlloc, true/*executable*/, true/*writable*/);
         CodeList* b = addMem(mem, bytesPerAlloc);
@@ -165,7 +165,7 @@ namespace nanojit
                 *prev = hb->next;
                 _nvprof("free page",1);
                 VMPI_setPageProtection(mem, bytesPerAlloc, false /* executable */, true /* writable */);
-                heap->Free(mem);
+                freeCodeChunk(mem, bytesPerAlloc);
             } else {
                 prev = &hb->next;
             }

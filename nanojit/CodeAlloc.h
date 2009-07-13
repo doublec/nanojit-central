@@ -104,7 +104,6 @@ namespace nanojit
         static const size_t sizeofMinBlock = offsetof(CodeList, code);
         static const size_t minAllocSize = LARGEST_UNDERRUN_PROT;
 
-        GCHeap* heap;
         CodeList* heapblocks;
 
         /** remove one block from a list */
@@ -125,8 +124,22 @@ namespace nanojit
         /** find the beginning of the heapblock terminated by term */
         static CodeList* firstBlock(CodeList* term);
 
+        //
+        // CodeAlloc's SPI.  Implementations must be defined by nanojit embedder.
+        // allocation failures should cause an exception or longjmp; nanojit
+        // intentionally does not check for null.
+        //
+
+        /** allocate nbytes of memory to hold code.  Never return null! */
+        void* allocCodeChunk(size_t nbytes);
+
+        /** free a block previously allocated by allocCodeMem.  nbytes will
+         * match the previous allocCodeMem, but is provided here as well
+         * to mirror the mmap()/munmap() api. */
+        void freeCodeChunk(void* addr, size_t nbytes);
+
     public:
-        CodeAlloc(GCHeap*);
+        CodeAlloc();
         ~CodeAlloc();
 
         /** allocate some memory for code, return pointers to the region. */
