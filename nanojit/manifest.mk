@@ -62,6 +62,7 @@ nanojit_cpu_cxxsrc := NativeSparc.cpp
 endif
 
 avmplus_CXXSRCS := $(avmplus_CXXSRCS) \
+  $(curdir)/Allocator.cpp \
   $(curdir)/Assembler.cpp \
   $(curdir)/CodeAlloc.cpp \
   $(curdir)/Fragmento.cpp \

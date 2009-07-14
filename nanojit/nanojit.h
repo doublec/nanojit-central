@@ -231,13 +231,13 @@ static inline bool isU32(uintptr_t i) {
 #define alignTo(x,s)        ((((uintptr_t)(x)))&~(((uintptr_t)s)-1))
 #define alignUp(x,s)        ((((uintptr_t)(x))+(((uintptr_t)s)-1))&~(((uintptr_t)s)-1))
 
+#include "Allocator.h"
 #include "Native.h"
 #include "CodeAlloc.h"
 #include "LIR.h"
 #include "RegAlloc.h"
 #include "Fragmento.h"
 #include "Assembler.h"
-//#include "TraceTreeDrawer.h"
 
 #endif // FEATURE_NANOJIT
 #endif // __nanojit_h__

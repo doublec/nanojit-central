@@ -94,12 +94,11 @@ namespace nanojit
     #define counter_value(x)        x
 #endif /* NJ_PROFILE */
 
-    LirBuffer::LirBuffer(GC *gc)
-        : abi(ABI_FASTCALL), gc(gc), _segments(gc)
+    LirBuffer::LirBuffer(Allocator& alloc)
+        : abi(ABI_FASTCALL), allocator(alloc), _allocatedBytes(0)
     {
         clear();
-        primeNewSegment();
-        if (!outOMem()) transitionToNewSegment();
+        transitionToNewSegment();
     }
 
     LirBuffer::~LirBuffer()
@@ -111,9 +110,6 @@ namespace nanojit
     void LirBuffer::clear()
     {
         // free all the memory and clear the stats
-        while(_segments.size()>0)
-            gc->Free( _segments.removeLast() );
-        NanoAssert(!_segments.size());
         _currentSegment = 0;
         _idx = 0;
         _stats.lir = 0;
@@ -128,34 +124,19 @@ namespace nanojit
 
     size_t LirBuffer::byteCount()
     {
-        size_t sz = (segmentsInUse()-1)*LIR_BUF_SEGMENT_SIZE;
-        sz += idx()*sizeof(LIns);
-        return sz;
-    }
-
-    void LirBuffer::primeNewSegment()
-    {
-        NanoAssert(!segmentWaiting());
-        LInsp segment = (LIns*)gc->Alloc(LIR_BUF_SEGMENT_SIZE);
-        if (segment)
-            _segments.add(segment);
-        else
-            _noMem = true;
+        return _allocatedBytes - (maxIdx() - idx()) * sizeof(LIns);
     }
 
     void LirBuffer::transitionToNewSegment()
     {
-        NanoAssert(segmentWaiting());
-        _currentSegment = _segments.last();
+        _currentSegment = (LIns*) allocator.alloc(LIR_BUF_SEGMENT_SIZE);
+        _allocatedBytes += LIR_BUF_SEGMENT_SIZE;
         _idx = 0;
     }
 
     LInsp       LirBuffer::next()           { return &_currentSegment[_idx];  }
     uint32_t    LirBuffer::idx()            { return _idx; }
     uint32_t    LirBuffer::maxIdx()         { return LIR_BUF_SEGMENT_SIZE/sizeof(LIns); }
-    uint32_t    LirBuffer::thresholdIdx()   { NanoAssert(maxIdx()>MAX_LIR_COMMIT); return maxIdx()-MAX_LIR_COMMIT; }
-    bool        LirBuffer::segmentWaiting() { return (_segments.size()>0 && _currentSegment!=_segments.last()); }
-    uint32_t    LirBuffer::segmentsInUse() { return segmentWaiting() ? _segments.size()-1 : _segments.size(); }
     void        LirBuffer::commit(uint32_t count) { _idx+=count; NanoAssert(count<MAX_LIR_COMMIT && _idx<maxIdx()); }
 
     void LirBufWriter::ensureRoom(size_t count)
@@ -166,16 +147,8 @@ namespace nanojit
             // we need to transition to threshold list
             LInsp before = _buf->next();
             _buf->transitionToNewSegment();
-            NanoAssert(!_buf->outOMem() && !_buf->segmentWaiting());
-
+            NanoAssert(!_buf->outOMem());
             insLinkTo(LIR_skip,before-1);
-        }
-        else if (after > _buf->thresholdIdx())
-        {
-            // not overflowing yet , but prime the new list (OOM set if not able to)
-            if (!_buf->segmentWaiting())  // <= if this shows up in profiling , then use a flag(?) rather than _segments.last()
-                _buf->primeNewSegment();
-            NanoAssert(_buf->outOMem() || _buf->segmentWaiting());
         }
     }
 
