@@ -113,7 +113,6 @@ namespace nanojit
         _currentSegment = 0;
         _idx = 0;
         _stats.lir = 0;
-        _noMem = 0;
     }
 
     int32_t LirBuffer::insCount()
@@ -130,6 +129,7 @@ namespace nanojit
     void LirBuffer::transitionToNewSegment()
     {
         _currentSegment = (LIns*) allocator.alloc(LIR_BUF_SEGMENT_SIZE);
+        NanoAssert(_currentSegment != NULL); // never fails, see Allocator contract in util.h
         _allocatedBytes += LIR_BUF_SEGMENT_SIZE;
         _idx = 0;
     }
@@ -147,7 +147,6 @@ namespace nanojit
             // we need to transition to threshold list
             LInsp before = _buf->next();
             _buf->transitionToNewSegment();
-            NanoAssert(!_buf->outOMem());
             insLinkTo(LIR_skip,before-1);
         }
     }

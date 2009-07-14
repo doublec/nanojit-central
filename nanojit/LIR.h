@@ -979,7 +979,6 @@ namespace nanojit
             ~LirBuffer();
             void        clear();
             LInsp       next();
-            bool        outOMem() { return _noMem != 0; }
 
             verbose_only(DWB(LirNameMap*) names;)
 
@@ -1020,7 +1019,6 @@ namespace nanojit
 
             uint32_t    _idx;
             LInsp       _currentSegment;
-            int         _noMem;     // set if ran out of memory when writing to buffer
             size_t      _allocatedBytes;
     };
 
