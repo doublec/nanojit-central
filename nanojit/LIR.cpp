@@ -1633,34 +1633,13 @@ namespace nanojit
         }
     }
 
-    LabelMap::Entry::~Entry()
-    {
-    }
-
-    LirNameMap::Entry::~Entry()
-    {
-    }
-
-    LirNameMap::~LirNameMap()
-    {
-        Entry *e;
-
-        while ((e = names.removeLast()) != NULL) {
-            NJ_DELETE(e);
-        }
-    }
-
-    bool LirNameMap::addName(LInsp i, Stringp name) {
+    void LirNameMap::addName(LInsp i, const char* name) {
         if (!names.containsKey(i)) {
-            Entry *e = NJ_NEW(labels->core->gc, Entry)(name);
+            char *copy = new (allocator) char[VMPI_strlen(name)+1];
+            VMPI_strcpy(copy, name);
+            Entry *e = new (allocator) Entry(copy);
             names.put(i, e);
-            return true;
         }
-        return false;
-    }
-    void LirNameMap::addName(LInsp i, const char *name) {
-        Stringp new_name = labels->core->newStringLatin1(name);
-        addName(i, new_name);
     }
 
     void LirNameMap::copyName(LInsp i, const char *s, int suffix) {
@@ -1671,7 +1650,7 @@ namespace nanojit
         } else {
             VMPI_sprintf(s2,"%s%d", s, suffix);
         }
-        addName(i, labels->core->newStringLatin1(s2));
+        addName(i, s2);
     }
 
     void LirNameMap::formatImm(int32_t c, char *buf) {
@@ -1686,8 +1665,8 @@ namespace nanojit
         char buffer[200], *buf=buffer;
         buf[0]=0;
         if (names.containsKey(ref)) {
-            StUTF8String cname8 (names.get(ref)->name);
-            VMPI_strcat(buf, cname8.c_str());
+            const char* name = names.get(ref)->name;
+            VMPI_strcat(buf, name);
         }
         else if (ref->isconstq()) {
             VMPI_sprintf(buf, "#0x%llxLL", (long long unsigned int) ref->constvalq());
@@ -1701,8 +1680,8 @@ namespace nanojit
             } else {
                 copyName(ref, lirNames[ref->opcode()], lircounts.add(ref->opcode()));
             }
-            StUTF8String cname8(names.get(ref)->name);
-            VMPI_strcat(buf, cname8.c_str());
+            const char* name = names.get(ref)->name;
+            VMPI_strcat(buf, name);
         }
         return labels->dup(buffer);
     }
@@ -2118,31 +2097,17 @@ namespace nanojit
     #endif /* FEATURE_NANOJIT */
 
 #if defined(NJ_VERBOSE)
-    LabelMap::LabelMap(AvmCore *core, LabelMap* parent)
-        : parent(parent), names(core->gc), addrs(core->config.verbose_addrs), end(buf), core(core)
+    LabelMap::LabelMap(AvmCore* core, Allocator& a, LabelMap* parent)
+        : allocator(a), parent(parent), names(core->gc), addrs(core->config.verbose_addrs), end(buf)
     {}
-
-    LabelMap::~LabelMap()
-    {
-        Entry *e;
-
-        while ((e = names.removeLast()) != NULL) {
-            NJ_DELETE(e);
-        }
-    }
 
     void LabelMap::add(const void *p, size_t size, size_t align, const char *name)
     {
         if (!this || names.containsKey(p))
             return;
-        add(p, size, align, core->newStringLatin1(name));
-    }
-
-    void LabelMap::add(const void *p, size_t size, size_t align, Stringp name)
-    {
-        if (!this || names.containsKey(p))
-            return;
-        Entry *e = NJ_NEW(core->gc, Entry)(name, size<<align, align);
+        char* copy = new (allocator) char[VMPI_strlen(name)+1];
+        VMPI_strcpy(copy, name);
+        Entry *e = new (allocator) Entry(copy, size << align, align);
         names.put(p, e);
     }
 
@@ -2155,8 +2120,7 @@ namespace nanojit
             const void *start = names.keyAt(i);
             Entry *e = names.at(i);
             const void *end = (const char*)start + e->size;
-            StUTF8String cname8(e->name);
-            const char *name = cname8.c_str();
+            const char *name = e->name;
             if (p == start) {
                 if (addrs)
                     VMPI_sprintf(b,"%p %s",p,name);
