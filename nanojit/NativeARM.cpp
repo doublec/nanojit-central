@@ -376,7 +376,6 @@ Assembler::asm_call(LInsp ins)
 #endif
             case LIR_eq:  arm_cond=EQ; break;
             case LIR_ov:  arm_cond=VS; break;
-            case LIR_cs:  arm_cond=CS; break;
             case LIR_lt:  arm_cond=LT; break;
             case LIR_le:  arm_cond=LE; break;
             case LIR_gt:  arm_cond=GT; break;
@@ -407,8 +406,8 @@ Assembler::asm_call(LInsp ins)
     {
         LOpcode condop = cond->opcode();
 
-        // LIR_ov and LIR_cs recycle the flags set by arithmetic ops
-        if ((condop == LIR_ov) || (condop == LIR_cs))
+        // LIR_ov recycles the flags set by arithmetic ops
+        if (condop == LIR_ov)
             return;
 
         LInsp lhs = cond->oprnd1();
@@ -421,7 +420,7 @@ Assembler::asm_call(LInsp ins)
         // ready to issue the compare
         if (rhs->isconst())
         {
-            int c = rhs->constval();
+            int c = rhs->imm32();
             Register r = getBaseReg(lhs, c, GpRegs);
             asm_cmpi(r, c);
         }
@@ -469,11 +468,11 @@ Assembler::asm_call(LInsp ins)
         LDi(argRegs[1], int((Fragment*)_thisfrag));
         #endif
 
-        assignSavedParams();
+        assignSavedRegs();
 
         // restore first parameter, the only one we use
         LInsp state = _thisfrag->lirbuf->state;
-        findSpecificRegFor(state, argRegs[state->imm8()]);
+        findSpecificRegFor(state, argRegs[state->paramArg()]);
     }
 
 #ifdef NJ_ARM_VFP
@@ -500,7 +499,6 @@ Assembler::asm_call(LInsp ins)
         switch (op) {
             case LIR_eq:  SETEQ(r); break;
             case LIR_ov:  SETVS(r); break;
-            case LIR_cs:  SETCS(r); break;
             case LIR_lt:  SETLT(r); break;
             case LIR_le:  SETLE(r); break;
             case LIR_gt:  SETGT(r); break;
@@ -528,7 +526,7 @@ Assembler::asm_call(LInsp ins)
         // 0..255 for others.
         if (!forceReg)
         {
-            if (rhs->isconst() && !isU8(rhs->constval()))
+            if (rhs->isconst() && !isU8(rhs->imm32()))
                 forceReg = true;
         }
 
@@ -540,7 +538,7 @@ Assembler::asm_call(LInsp ins)
         else if ((op == LIR_add||op == LIR_addp) && lhs->isop(LIR_alloc) && rhs->isconst()) {
             // add alloc+const, use lea
             Register rr = prepResultReg(ins, allow);
-            int d = findMemFor(lhs) + rhs->constval();
+            int d = findMemFor(lhs) + rhs->imm32();
             asm_add_imm(rr, FP, d, 0);
         }
 
@@ -592,7 +590,7 @@ Assembler::asm_call(LInsp ins)
         }
         else
         {
-            int c = rhs->constval();
+            int c = rhs->imm32();
             if (op == LIR_add || op == LIR_addp) {
                 asm_add_imm(rr, ra, c, 0);
             } else if (op == LIR_sub) {
@@ -639,7 +637,7 @@ Assembler::asm_call(LInsp ins)
         LIns* base = ins->oprnd1();
         LIns* disp = ins->oprnd2();
         Register rr = prepResultReg(ins, GpRegs);
-        int d = disp->constval();
+        int d = disp->imm32();
         Register ra = getBaseReg(base, d, GpRegs);
         if (op == LIR_ldcb) {
             LDRB(rr, ra, d);
@@ -670,7 +668,6 @@ Assembler::asm_call(LInsp ins)
             // note that these are all opposites...
             case LIR_eq:    MOVNE(rr, iffalsereg);  break;
             case LIR_ov:    MOVVC(rr, iffalsereg);   break;
-            case LIR_cs:    MOVCC(rr, iffalsereg);   break;
             case LIR_lt:    MOVGE(rr, iffalsereg);  break;
             case LIR_le:    MOVGT(rr, iffalsereg);  break;
             case LIR_gt:    MOVLE(rr, iffalsereg);  break;
@@ -695,8 +692,8 @@ Assembler::asm_call(LInsp ins)
 
     void Assembler::asm_param(LInsp ins)
     {
-        uint32_t a = ins->imm8();
-        uint32_t kind = ins->imm8b();
+        uint32_t a = ins->paramArg();
+        uint32_t kind = ins->paramKind();
         if (kind == 0) {
             // ordinary param
             // first four args always in R0..R3 for ARM
@@ -713,13 +710,6 @@ Assembler::asm_call(LInsp ins)
             // saved param
             prepResultReg(ins, rmask(savedRegs[a]));
         }
-    }
-
-    void Assembler::asm_short(LInsp ins)
-    {
-        Register rr = prepResultReg(ins, GpRegs);
-        int32_t val = ins->imm16();
-        LDi(rr, val);
     }
 
     void Assembler::asm_int(LInsp ins)
@@ -744,7 +734,7 @@ Assembler::asm_call(LInsp ins)
         {
             // arg goes in specific register
             if (p->isconst()) {
-                int c = p->constval();
+                int c = p->imm32();
                 LDi(r, c);
             } else {
                 Reservation* rA = getresv(p);
@@ -867,8 +857,8 @@ Assembler::hint(LIns* i, RegisterMask allow /* = ~0 */)
     else if (op == LIR_callh)
         prefer = rmask(R1);
     else if (op == LIR_param) {
-        if (i->imm8() < 4)
-            prefer = rmask(argRegs[i->imm8()]);
+        if (i->paramArg() < 4)
+            prefer = rmask(argRegs[i->paramArg()]);
     }
     if (_allocator.free & allow & prefer)
         allow &= prefer;
@@ -920,7 +910,7 @@ Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
         if (!resv->arIndex) {
             reserveFree(i);
         }
-        LDi(r, i->constval());
+        LDi(r, i->imm32());
     }
     else {
         int d = findMemFor(i);
@@ -974,7 +964,7 @@ Assembler::asm_load64(LInsp ins)
     ///asm_output("<<< load64");
 
     LIns* base = ins->oprnd1();
-    int offset = ins->oprnd2()->constval();
+    int offset = ins->oprnd2()->imm32();
 
 #ifdef NJ_ARM_VFP
     Register rr = prepResultReg(ins, FpRegs);
@@ -1725,7 +1715,7 @@ Assembler::asm_ret(LIns *ins)
     if (_nIns != _epilogue) {
         B(_epilogue);
     }
-    assignSavedParams();
+    assignSavedRegs();
     LIns *value = ins->oprnd1();
     if (ins->isop(LIR_ret)) {
         findSpecificRegFor(value, R0);

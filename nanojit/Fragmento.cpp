@@ -365,7 +365,6 @@ namespace nanojit
         if (lirbuf) {
             lirbuf->clear();
             lirbuf = 0;
-            verbose_only(cfg = 0;)
         }
         lastIns = 0;
     }

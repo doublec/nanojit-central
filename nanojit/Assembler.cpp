@@ -586,6 +586,10 @@ namespace nanojit
         asm_spill(rr, d, pop, i->isQuad());
     }
 
+    // NOTE: Because this function frees slots on the stack, it is not safe to
+    // follow a call to this with a call to anything which might spill a
+    // register, as the stack can be corrupted. Refer to bug 495239 for a more
+    // detailed description.
     void Assembler::freeRsrcOf(LIns *i, bool pop)
     {
         Reservation* resv = getresv(i);
@@ -668,7 +672,7 @@ namespace nanojit
         nFragExit(guard);
 
         // restore the callee-saved register (aka saved params)
-        assignSavedParams();
+        assignSavedRegs();
 
         // if/when we patch this exit to jump over to another fragment,
         // that fragment will need its parameters set up just like ours.
@@ -995,11 +999,6 @@ namespace nanojit
                     break;
                 }
                 case LIR_short:
-                {
-                    countlir_imm();
-                    asm_short(ins);
-                    break;
-                }
                 case LIR_int:
                 {
                     countlir_imm();
@@ -1291,7 +1290,6 @@ namespace nanojit
 #endif
                 case LIR_eq:
                 case LIR_ov:
-                case LIR_cs:
                 case LIR_le:
                 case LIR_lt:
                 case LIR_gt:
@@ -1355,7 +1353,7 @@ namespace nanojit
                 {
                     // we traverse backwards so we are now hitting the file
                     // that is associated with a bunch of LIR_lines we already have seen
-                    uintptr_t currentFile = ins->oprnd1()->constval();
+                    uintptr_t currentFile = ins->oprnd1()->imm32();
                     cgen->jitFilenameUpdate(currentFile);
                     break;
                 }
@@ -1364,7 +1362,7 @@ namespace nanojit
                     // add a new table entry, we don't yet knwo which file it belongs
                     // to so we need to add it to the update table too
                     // note the alloc, actual act is delayed; see above
-                    uint32_t currentLine = (uint32_t) ins->oprnd1()->constval();
+                    uint32_t currentLine = (uint32_t) ins->oprnd1()->imm32();
                     cgen->jitLineNumUpdate(currentLine);
                     cgen->jitAddRecord((uintptr_t)_nIns, 0, currentLine, true);
                     break;
@@ -1382,7 +1380,7 @@ namespace nanojit
         }
     }
 
-    void Assembler::assignSavedParams()
+    void Assembler::assignSavedRegs()
     {
         // restore saved regs
         releaseRegisters();
@@ -1396,7 +1394,7 @@ namespace nanojit
         }
     }
 
-    void Assembler::reserveSavedParams()
+    void Assembler::reserveSavedRegs()
     {
         LirBuffer *b = _thisfrag->lirbuf;
         for (int i=0, n = NumSavedRegs; i < n; i++) {
@@ -1409,7 +1407,7 @@ namespace nanojit
     void Assembler::handleLoopCarriedExprs()
     {
         // ensure that exprs spanning the loop are marked live at the end of the loop
-        reserveSavedParams();
+        reserveSavedRegs();
         for (int i=0, n=pending_lives.size(); i < n; i++) {
             findMemFor(pending_lives[i]);
         }
@@ -1841,7 +1839,7 @@ namespace nanojit
         uint32_t argc = 0;
         for (uint32_t i = 0; i < MAXARGS; i++) {
             argt >>= ARGSIZE_SHIFT;
-            ArgSize a = ArgSize(argt & ARGSIZE_MASK);
+            ArgSize a = ArgSize(argt & ARGSIZE_MASK_ANY);
             if (a != ARGSIZE_NONE) {
                 sizes[argc++] = a;
             } else {

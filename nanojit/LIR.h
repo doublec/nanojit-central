@@ -139,7 +139,7 @@ namespace nanojit
         LIR_ldcb    = 52, // cse-optimizeable 8-bit load
 
         LIR_ov      = 53, // overflow condition
-        LIR_cs      = 54, // carry set condition
+        //LIR_cs      = 54, // carry set condition
         LIR_eq      = 55, // int32 equality
 
         // integer (all sizes) relational operators.  op^1 to swap left/right,
@@ -279,7 +279,7 @@ namespace nanojit
      * longer than the base pointer, causing an object to be freed too soon by
      * a non-interior-pointer-supporting collector.
      *
-     * LIR_ov LIR_cs
+     * LIR_ov
      * (todo) -- how exactly are these assumed to be used?
      *
      * LIR_2
@@ -311,7 +311,7 @@ namespace nanojit
         ARGSIZE_I = 2,      // int32_t
         ARGSIZE_Q = 3,      // uint64_t
         ARGSIZE_U = 6,      // uint32_t
-        ARGSIZE_MASK = 7,
+        ARGSIZE_MASK_ANY = 7,
         ARGSIZE_MASK_INT = 2,
         ARGSIZE_SHIFT = 3,
 
@@ -342,7 +342,7 @@ namespace nanojit
             return _address < 256;
         }
         inline uint32_t FASTCALL count_args() const {
-            return _count_args(ARGSIZE_MASK);
+            return _count_args(ARGSIZE_MASK_ANY);
         }
         inline uint32_t FASTCALL count_iargs() const {
             return _count_args(ARGSIZE_MASK_INT);
@@ -370,6 +370,8 @@ namespace nanojit
     inline bool isLoad(LOpcode op) {
         return op == LIR_ldq || op == LIR_ld || op == LIR_ldc || op == LIR_ldqc;
     }
+
+    bool FASTCALL isFloatOpcode(LOpcode v);
 
     // Sun Studio requires explicitly declaring signed int bit-field
     #if defined(__SUNPRO_C) || defined(__SUNPRO_CC)
@@ -467,11 +469,17 @@ namespace nanojit
 
         inline LOpcode  opcode() const  { return u.code; }
         inline uint8_t  imm8()   const  { return c.imm8a; }
-        inline uint8_t  imm8b()  const  { return c.imm8b; }
+        inline uint8_t  paramArg() const {
+            NanoAssert(opcode() == LIR_param);
+            return c.imm8a;
+        }
+        inline uint8_t  paramKind() const {
+            NanoAssert(opcode() == LIR_param);
+            return c.imm8b;
+        }
         inline int16_t  imm16()  const  { return i.imm16; }
         inline int32_t  imm24()  const  { return t.imm24; }
         LIns*   ref()    const;
-        int32_t imm32()  const;
         inline uint8_t  resv()   const  { return g.resv; }
         void*   payload() const;
         inline int32_t  size() const {
@@ -487,7 +495,7 @@ namespace nanojit
 
         inline int32_t  immdisp()const
         {
-            return (u.code&~LIR64) == LIR_sti ? sti.disp : oprnd3()->constval();
+            return (u.code&~LIR64) == LIR_sti ? sti.disp : oprnd3()->imm32();
         }
 
         inline static bool sameop(LIns* a, LIns* b)
@@ -501,31 +509,30 @@ namespace nanojit
             return tmp.u.code == 0;
         }
 
-        inline int32_t constval() const
-        {
-            NanoAssert(isconst());
-            return isop(LIR_short) ? imm16() : imm32();
-        }
+        int32_t imm32() const;
+        uint64_t imm64() const;
 
-        uint64_t constvalq() const;
+        inline bool isFloat() const {
+            return isFloatOpcode(opcode());
+        }
 
     #ifdef NANOJIT_64BIT
         inline void* constvalp() const {
-            return (void*)constvalq();
+            return (void*)imm64();
         }
         inline bool isPtr() const {
             return isQuad();
         }
     #else
         inline void* constvalp() const {
-            return (void*)constval();
+            return (void*)imm32();
         }
         inline bool isPtr() const {
             return !isQuad();
         }
     #endif
 
-        double constvalf() const;
+        double imm64f() const;
         bool isCse() const;
         bool isop(LOpcode o) const { return u.code == o; }
         bool isQuad() const;
@@ -564,7 +571,7 @@ namespace nanojit
         void setOprnd2(LIns*);
         void setOprnd3(LIns*);
         void setDisp(int8_t d);
-        void target(LIns* t);
+        void setTarget(LIns* t);
         LIns **targetAddr();
         LIns* getTarget();
 
@@ -623,7 +630,6 @@ namespace nanojit
     inline bool isRet(LOpcode c) {
         return (c & ~LIR64) == LIR_ret;
     }
-    bool FASTCALL isFloat(LOpcode v);
     LIns* FASTCALL callArgN(LInsp i, uint32_t n);
     extern const uint8_t operandCount[];
 
@@ -704,7 +710,6 @@ namespace nanojit
     class LabelMap : public GCFinalizedObject
     {
         Allocator& allocator;
-        LabelMap* parent;
         class Entry
         {
         public:
@@ -718,11 +723,10 @@ namespace nanojit
         char buf[1000], *end;
         void formatAddr(const void *p, char *buf);
     public:
-        LabelMap(AvmCore* core, Allocator& allocator, LabelMap* parent);
+        LabelMap(AvmCore* core, Allocator& allocator);
         void add(const void *p, size_t size, size_t align, const char *name);
         const char *dup(const char *);
         const char *format(const void *p);
-        void promoteAll(const void *newbase);
     };
 
     class LirNameMap : public GCFinalizedObject
@@ -846,66 +850,6 @@ namespace nanojit
             return add(out->insAlloc(size));
         }
     };
-
-    class BBNode : public GCObject
-    {
-    public:
-
-        enum BBKind
-        {
-            UNKNOWN = 0,
-            FALL_THRU,
-            ENDS_WITH_CALL,
-            ENDS_WITH_RET
-        };
-
-        uint32_t num;   // unique id
-        BBList  pred;   // list of predecssors
-        BBList  succ;   // list of successors
-        LInsp   start;
-        LInsp   end;
-        BBKind  kind;
-
-        BBNode(GC* gc, uint32_t id) : pred(gc),succ(gc) { num=id; }
-    };
-
-    class BlockLocator : public LirWriter
-    {
-        LirWriter*  _out;
-        GC*         _gc;
-        BBNode*     _current;   // bb we are currently building
-        BBNode*     _previous;  // bb we last built in linear fashion
-        LInsp       _priorIns;  // last instruction seen
-        BBList      _tbd;       // bb's where succ is unknown (last instruction is a forward jump)
-        BBMap       _bbs;       // LInsp to bb
-        uint32_t    _gid;       // unique id gen for bb's
-
-    public:
-        BlockLocator(GC* gc, LirWriter* out);
-
-        BBNode* entry()         { return _bbs.get(0); }
-        void    fin();
-        void    print(char* name);
-
-        // interface to LirWriter
-        LInsp ins1(LOpcode v, LIns* a);
-        LInsp ins2(LOpcode v, LIns* a, LIns* b);
-        LInsp insLoad(LOpcode op, LIns* base, LIns* d);
-        LInsp insStore(LIns* value, LIns* base, LIns* disp);
-        LInsp insStorei(LIns* value, LIns* base, int32_t d);
-        LInsp insCall(const CallInfo *call, LInsp args[]);
-        LInsp insGuard(LOpcode v, LIns *c, SideExit *x);
-        LInsp ins0(LOpcode v);
-        LInsp insBranch(LOpcode v, LInsp condition, LInsp to);
-
-    protected:
-        BBNode* bbFor(LInsp n);
-        void    ensureCurrent(LInsp n);
-        void    blockEnd(LInsp at);
-        LInsp   update(LInsp i);
-        void    link(BBNode* from, BBNode* to);
-    };
-
 #endif
 
     class ExprFilter: public LirWriter

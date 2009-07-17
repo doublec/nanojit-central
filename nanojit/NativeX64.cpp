@@ -327,17 +327,17 @@ namespace nanojit
         case LIR_rsh:       xop = X64_sari;     break;
         case LIR_lsh:       xop = X64_shli;     break;
         }
-        int shift = ins->oprnd2()->constval() & 255;
+        int shift = ins->oprnd2()->imm32() & 255;
         emit8(rexrb(xop | uint64_t(rr&7)<<48, (Register)0, rr), shift);
         if (rr != ra)
             MR(rr, ra);
     }
 
     static bool isImm32(LIns *ins) {
-        return ins->isconst() || (ins->isconstq() && isS32(ins->constvalq()));
+        return ins->isconst() || (ins->isconstq() && isS32(ins->imm64()));
     }
     static int32_t getImm32(LIns *ins) {
-        return ins->isconst() ? ins->constval() : int32_t(ins->constvalq());
+        return ins->isconst() ? ins->imm32() : int32_t(ins->imm64());
     }
 
     // binary op, integer regs, rhs is int32 const
@@ -562,7 +562,7 @@ namespace nanojit
         if (sz == ARGSIZE_I) {
             NanoAssert(!p->isQuad());
             if (p->isconst()) {
-                emit_quad(r, int64_t(p->constval()));
+                emit_quad(r, int64_t(p->imm32()));
                 return;
             }
             // sign extend int32 to int64
@@ -570,7 +570,7 @@ namespace nanojit
         } else if (sz == ARGSIZE_U) {
             NanoAssert(!p->isQuad());
             if (p->isconst()) {
-                emit_quad(r, uint64_t(uint32_t(p->constval())));
+                emit_quad(r, uint64_t(uint32_t(p->imm32())));
                 return;
             }
             // zero extend with 32bit mov, auto-zeros upper 32bits
@@ -617,10 +617,6 @@ namespace nanojit
             NanoAssert(ins->isop(LIR_i2q));
             emitrr(X64_movsxdr, rr, ra); // sign extend 32->64
         }
-    }
-
-    void Assembler::asm_short(LIns *ins) {
-        asm_int(ins);
     }
 
     // the CVTSI2SD instruction only writes to the low 64bits of the target
@@ -845,14 +841,14 @@ namespace nanojit
                 reserveFree(ins);
             }
             // unsafe to use xor r,r for zero because it changes cc's
-            emit_int(r, ins->constval());
+            emit_int(r, ins->imm32());
         }
         else if (ins->isconstq() && IsGpReg(r)) {
             if (!resv->arIndex) {
                 reserveFree(ins);
             }
             // unsafe to use xor r,r for zero because it changes cc's
-            emit_quad(r, ins->constvalq());
+            emit_quad(r, ins->imm64());
         }
         else {
             int d = findMemFor(ins);
@@ -901,7 +897,6 @@ namespace nanojit
         case LIR_quge:
         case LIR_uge:   xop = X64_setae;    break;
         case LIR_ov:    xop = X64_seto;     break;
-        case LIR_cs:    xop = X64_setc;     break;
         }
         emitr8(xop, r);
         asm_cmp(ins);
@@ -909,7 +904,7 @@ namespace nanojit
 
     void Assembler::asm_ret(LIns *ins) {
         JMP(_epilogue);
-        assignSavedParams();
+        assignSavedRegs();
         LIns *value = ins->oprnd1();
         Register r = ins->isop(LIR_ret) ? RAX : XMM0;
         findSpecificRegFor(value, r);
@@ -929,7 +924,7 @@ namespace nanojit
     }
 
     void Assembler::regalloc_load(LIns *ins, Register &rr, int32_t &dr, Register &rb) {
-        dr = ins->oprnd2()->constval();
+        dr = ins->oprnd2()->imm32();
         LIns *base = ins->oprnd1();
         rb = getBaseReg(base, dr, BaseRegs);
         Reservation *resv = getresv(ins);
@@ -1020,7 +1015,7 @@ namespace nanojit
 
     void Assembler::asm_int(LIns *ins) {
         Register r = prepResultReg(ins, GpRegs);
-        int32_t v = ins->constval();
+        int32_t v = ins->imm32();
         if (v == 0) {
             // special case for zero
             emitrr(X64_xorrr, r, r);
@@ -1030,7 +1025,7 @@ namespace nanojit
     }
 
     void Assembler::asm_quad(LIns *ins) {
-        uint64_t v = ins->constvalq();
+        uint64_t v = ins->imm64();
         RegisterMask allow = v == 0 ? GpRegs|FpRegs : GpRegs;
         Register r = prepResultReg(ins, allow);
         if (v == 0) {
@@ -1055,8 +1050,8 @@ namespace nanojit
     }
 
     void Assembler::asm_param(LIns *ins) {
-        uint32_t a = ins->imm8();
-        uint32_t kind = ins->imm8b();
+        uint32_t a = ins->paramArg();
+        uint32_t kind = ins->paramKind();
         if (kind == 0) {
             // ordinary param
             // first six args always in registers for mac x64

@@ -307,7 +307,6 @@ namespace nanojit
             void        asm_cmov(LInsp i);
             void        asm_param(LInsp i);
             void        asm_int(LInsp i);
-            void        asm_short(LInsp i);
             void        asm_qlo(LInsp i);
             void        asm_qhi(LInsp i);
             void        asm_fneg(LInsp ins);
@@ -321,8 +320,8 @@ namespace nanojit
             void        asm_call(LInsp);
             Register    asm_binop_rhs_reg(LInsp ins);
             NIns*       asm_branch(bool branchOnFalse, LInsp cond, NIns* targ);
-            void        assignSavedParams();
-            void        reserveSavedParams();
+            void        assignSavedRegs();
+            void        reserveSavedRegs();
             void        handleLoopCarriedExprs();
 
             // platform specific implementation (see NativeXXX.cpp file)

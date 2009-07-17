@@ -146,7 +146,7 @@ namespace nanojit
         LIns* base = ins->oprnd1();
         LIns* disp = ins->oprnd2();
         Register rr = prepResultReg(ins, GpRegs);
-        int d = disp->constval();
+        int d = disp->imm32();
         Register ra = getBaseReg(base, d, GpRegs);
 
         #if !PEDANTIC
@@ -199,7 +199,7 @@ namespace nanojit
         Register rr = prepResultReg(ins, FpRegs);
     #endif
 
-        int dr = ins->oprnd2()->constval();
+        int dr = ins->oprnd2()->imm32();
         Register ra = getBaseReg(base, dr, GpRegs);
 
     #ifdef NANOJIT_64BIT
@@ -267,7 +267,7 @@ namespace nanojit
     #if !PEDANTIC && !defined NANOJIT_64BIT
         if (value->isop(LIR_quad) && isS16(dr) && isS16(dr+4)) {
             // quad constant and short offset
-            uint64_t q = value->constvalq();
+            uint64_t q = value->imm64();
             STW(R0, dr, ra);   // hi
             asm_li(R0, int32_t(q>>32)); // hi
             STW(R0, dr+4, ra); // lo
@@ -509,7 +509,7 @@ namespace nanojit
 
     #if !PEDANTIC
         if (b->isconst()) {
-            int32_t d = b->constval();
+            int32_t d = b->imm32();
             if (isS16(d)) {
                 if (condop >= LIR_eq && condop <= LIR_ge) {
                     CMPWI(cr, ra, d);
@@ -566,7 +566,7 @@ namespace nanojit
         UNLESS_PEDANTIC( if (_nIns != _epilogue) ) {
             br(_epilogue, 0);
         }
-        assignSavedParams();
+        assignSavedRegs();
         LIns *value = ins->oprnd1();
         Register r = ins->isop(LIR_ret) ? R3 : F1;
         findSpecificRegFor(value, r);
@@ -588,7 +588,7 @@ namespace nanojit
             if (!resv->arIndex) {
                 reserveFree(i);
             }
-            asm_li(r, i->constval());
+            asm_li(r, i->imm32());
         }
         else {
             d = findMemFor(i);
@@ -613,13 +613,7 @@ namespace nanojit
 
     void Assembler::asm_int(LIns *ins) {
         Register rr = prepResultReg(ins, GpRegs);
-        asm_li(rr, ins->constval());
-    }
-
-    void Assembler::asm_short(LIns *ins) {
-        int32_t val = ins->imm16();
-        Register rr = prepResultReg(ins, GpRegs);
-        LI(rr, val);
+        asm_li(rr, ins->imm32());
     }
 
     void Assembler::asm_fneg(LIns *ins) {
@@ -629,8 +623,8 @@ namespace nanojit
     }
 
     void Assembler::asm_param(LIns *ins) {
-        uint32_t a = ins->imm8();
-        uint32_t kind = ins->imm8b();
+        uint32_t a = ins->paramArg();
+        uint32_t kind = ins->paramKind();
         if (kind == 0) {
             // ordinary param
             // first eight args always in R3..R10 for PPC
@@ -727,7 +721,7 @@ namespace nanojit
         #endif
             // arg goes in specific register
             if (p->isconst()) {
-                asm_li(r, p->constval());
+                asm_li(r, p->imm32());
             } else {
                 Reservation* rA = getresv(p);
                 if (rA) {
@@ -806,7 +800,7 @@ namespace nanojit
         Register ra = findRegFor(lhs, GpRegs);
 
         if (rhs->isconst()) {
-            int32_t rhsc = rhs->constval();
+            int32_t rhsc = rhs->imm32();
             if (isS16(rhsc)) {
                 // ppc arith immediate ops sign-exted the imm16 value
                 switch (op) {
@@ -1009,7 +1003,7 @@ namespace nanojit
                     int32_t hi, lo;
                 } w;
             };
-            d = ins->constvalf();
+            d = ins->imm64f();
             LFD(r, 12, SP);
             STW(R0, 12, SP);
             asm_li(R0, w.hi);
@@ -1017,7 +1011,7 @@ namespace nanojit
             asm_li(R0, w.lo);
         }
         else {
-            int64_t q = ins->constvalq();
+            int64_t q = ins->imm64();
             if (isS32(q)) {
                 asm_li(r, int32_t(q));
                 return;
@@ -1145,8 +1139,8 @@ namespace nanojit
         else if (op == LIR_fcall)
             prefer = rmask(F1);
         else if (op == LIR_param) {
-            if (i->imm8() < 8) {
-                prefer = rmask(argRegs[i->imm8()]);
+            if (i->paramArg() < 8) {
+                prefer = rmask(argRegs[i->paramArg()]);
             }
         }
         // narrow the allow set to whatever is preferred and also free

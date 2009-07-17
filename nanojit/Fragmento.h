@@ -167,7 +167,6 @@ namespace nanojit
             verbose_only( DWB(Fragment*) eot_target; )
             verbose_only( uint32_t      sid;)
             verbose_only( uint32_t      compileNbr;)
-            verbose_only( DWB(BlockLocator*) cfg; )
 
             DWB(Fragment*) treeBranches;
             DWB(Fragment*) branches;

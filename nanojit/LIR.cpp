@@ -474,10 +474,10 @@ namespace nanojit
     }
 
     bool FASTCALL isCond(LOpcode c) {
-        return (c == LIR_ov) || (c == LIR_cs) || isCmp(c);
+        return (c == LIR_ov) || isCmp(c);
     }
 
-    bool FASTCALL isFloat(LOpcode c) {
+    bool FASTCALL isFloatOpcode(LOpcode c) {
         switch (c) {
             default:
                 return false;
@@ -512,7 +512,7 @@ namespace nanojit
 
     bool LIns::isconstval(int32_t val) const
     {
-        return isconst() && constval()==val;
+        return isconst() && imm32()==val;
     }
 
     bool LIns::isconstq() const
@@ -596,7 +596,7 @@ namespace nanojit
         return &(ov->v);
     }
 
-    void LIns::target(LInsp label) {
+    void LIns::setTarget(LInsp label) {
         NanoAssert(label && label->isop(LIR_label));
         *(targetAddr()) = label;
     }
@@ -643,11 +643,14 @@ namespace nanojit
 
     int32_t LIns::imm32() const
     {
+        NanoAssert(isconst());
+        if (isop(LIR_short))
+            return imm16();
         LirImm32Ins* l = (LirImm32Ins*)(this-LIR_IMM32_SLOTS+1);
         return l->v;
     }
 
-    uint64_t LIns::constvalq() const
+    uint64_t LIns::imm64() const
     {
         LirImm64Ins* l = (LirImm64Ins*)(this-LIR_IMM64_SLOTS+1);
         NanoAssert(isconstq());
@@ -668,7 +671,7 @@ namespace nanojit
     #endif
     }
 
-    double LIns::constvalf() const
+    double LIns::imm64f() const
     {
         LirImm64Ins* l = (LirImm64Ins*)(this-LIR_IMM64_SLOTS+1);
         NanoAssert(isconstq());
@@ -716,7 +719,7 @@ namespace nanojit
     bool insIsS16(LInsp i)
     {
         if (i->isconst()) {
-            int c = i->constval();
+            int c = i->imm32();
             return isS16(c);
         }
         if (i->isop(LIR_cmov) || i->isop(LIR_qcmov)) {
@@ -733,18 +736,18 @@ namespace nanojit
     {
         if (v == LIR_qlo) {
             if (i->isconstq())
-                return insImm(int32_t(i->constvalq()));
+                return insImm(int32_t(i->imm64()));
             if (i->isop(LIR_qjoin))
                 return i->oprnd1();
         }
         else if (v == LIR_qhi) {
             if (i->isconstq())
-                return insImm(int32_t(i->constvalq()>>32));
+                return insImm(int32_t(i->imm64()>>32));
             if (i->isop(LIR_qjoin))
                 return i->oprnd2();
         }
         else if (i->isconst()) {
-            int32_t c = i->constval();
+            int32_t c = i->imm32();
             if (v == LIR_neg)
                 return insImm(-c);
             if (v == LIR_not)
@@ -757,10 +760,10 @@ namespace nanojit
         /* [ed 8.27.08] this causes a big slowdown in gameoflife.as.  why?
         else if (i->isconst()) {
             if (v == LIR_i2f) {
-                return insImmf(i->constval());
+                return insImmf(i->imm32());
             }
             else if (v == LIR_u2f) {
-                return insImmf((uint32_t)i->constval());
+                return insImmf((uint32_t)i->imm32());
             }
         }*/
 
@@ -780,7 +783,7 @@ namespace nanojit
             }
             if (oprnd1->isconst()) {
                 // const ? x : y => return x or y depending on const
-                return oprnd1->constval() ? oprnd2->oprnd1() : oprnd2->oprnd2();
+                return oprnd1->imm32() ? oprnd2->oprnd1() : oprnd2->oprnd2();
             }
         }
         if (oprnd1 == oprnd2)
@@ -797,8 +800,8 @@ namespace nanojit
         }
         if (oprnd1->isconst() && oprnd2->isconst())
         {
-            int c1 = oprnd1->constval();
-            int c2 = oprnd2->constval();
+            int c1 = oprnd1->imm32();
+            int c2 = oprnd2->imm32();
             if (v == LIR_qjoin) {
                 uint64_t q = c1 | uint64_t(c2)<<32;
                 return insImmq(q);
@@ -807,8 +810,6 @@ namespace nanojit
                 return insImm(c1 == c2);
             if (v == LIR_ov)
                 return insImm((c2 != 0) && ((c1 + c2) <= c1));
-            if (v == LIR_cs)
-                return insImm((c2 != 0) && ((uint32_t(c1) + uint32_t(c2)) <= uint32_t(c1)));
             if (v == LIR_lt)
                 return insImm(c1 < c2);
             if (v == LIR_gt)
@@ -849,8 +850,8 @@ namespace nanojit
         }
         else if (oprnd1->isconstq() && oprnd2->isconstq())
         {
-            double c1 = oprnd1->constvalf();
-            double c2 = oprnd2->constvalf();
+            double c1 = oprnd1->imm64f();
+            double c2 = oprnd2->imm64f();
             if (v == LIR_feq)
                 return insImm(c1 == c2);
             if (v == LIR_flt)
@@ -884,16 +885,16 @@ namespace nanojit
 
         if (oprnd2->isconst())
         {
-            int c = oprnd2->constval();
+            int c = oprnd2->imm32();
             if (v == LIR_add && oprnd1->isop(LIR_add) && oprnd1->oprnd2()->isconst()) {
                 // add(add(x,c1),c2) => add(x,c1+c2)
-                c += oprnd1->oprnd2()->constval();
+                c += oprnd1->oprnd2()->imm32();
                 oprnd2 = insImm(c);
                 oprnd1 = oprnd1->oprnd1();
             }
             else if (v == LIR_sub && oprnd1->isop(LIR_add) && oprnd1->oprnd2()->isconst()) {
                 // sub(add(x,c1),c2) => add(x,c1-c2)
-                c = oprnd1->oprnd2()->constval() - c;
+                c = oprnd1->oprnd2()->imm32() - c;
                 oprnd2 = insImm(c);
                 oprnd1 = oprnd1->oprnd1();
                 v = LIR_add;
@@ -910,8 +911,8 @@ namespace nanojit
                     LInsp a = oprnd1->oprnd2()->oprnd1();
                     LInsp b = oprnd1->oprnd2()->oprnd2();
                     if (a->isconst() && b->isconst()) {
-                        bool a_lt = uint32_t(a->constval()) < uint32_t(oprnd2->constval());
-                        bool b_lt = uint32_t(b->constval()) < uint32_t(oprnd2->constval());
+                        bool a_lt = uint32_t(a->imm32()) < uint32_t(oprnd2->imm32());
+                        bool b_lt = uint32_t(b->imm32()) < uint32_t(oprnd2->imm32());
                         if (a_lt == b_lt)
                             return insImm(a_lt);
                     }
@@ -927,7 +928,7 @@ namespace nanojit
                     return oprnd2;
                 else if (v == LIR_eq && oprnd1->isop(LIR_or) &&
                     oprnd1->oprnd2()->isconst() &&
-                    oprnd1->oprnd2()->constval() != 0) {
+                    oprnd1->oprnd2()->imm32() != 0) {
                     // (x or c) != 0 if c != 0
                     return insImm(0);
                 }
@@ -958,7 +959,7 @@ namespace nanojit
     {
         if (v == LIR_xt || v == LIR_xf) {
             if (c->isconst()) {
-                if ((v == LIR_xt && !c->constval()) || (v == LIR_xf && c->constval())) {
+                if ((v == LIR_xt && !c->imm32()) || (v == LIR_xf && c->imm32())) {
                     return 0; // no guard needed
                 }
                 else {
@@ -994,9 +995,9 @@ namespace nanojit
     }
 
     LIns* ExprFilter::insLoad(LOpcode op, LIns *base, LIns *off) {
-        if (base->isconst() && off->isconst() && !isS8(off->constval())) {
+        if (base->isconst() && off->isconst() && !isS8(off->imm32())) {
             // ld const[bigconst] => ld bigconst[0]
-            return out->insLoad(op, insImm(base->constval() + off->constval()), insImm(0));
+            return out->insLoad(op, insImm(base->imm32() + off->imm32()), insImm(0));
         }
         return out->insLoad(op, base, off);
     }
@@ -1098,7 +1099,7 @@ namespace nanojit
             *--offs = (uint8_t) l->i.reference(args[i]);
         NanoAssert(offs>=(uint8_t*)_buf->next());
 
-        LOpcode op = k_callmap[argt & ARGSIZE_MASK];
+        LOpcode op = k_callmap[argt & ARGSIZE_MASK_ANY];
 #if defined NJ_SOFTFLOAT
 #  if defined NANOJIT_64BIT
 #    error("64BIT SOFTFLOAT NOT SUPPORTED")
@@ -1241,7 +1242,7 @@ namespace nanojit
             case LIR_int:
                 return hashimm(i->imm32());
             case LIR_quad:
-                return hashimmq(i->constvalq());
+                return hashimmq(i->imm64());
             case LIR_icall:
             case LIR_qcall:
             case LIR_fcall:
@@ -1282,7 +1283,7 @@ namespace nanojit
             }
             case LIR_quad:
             {
-                return a->constvalq() == b->constvalq();
+                return a->imm64() == b->imm64();
             }
             case LIR_icall:
             case LIR_qcall:
@@ -1402,7 +1403,7 @@ namespace nanojit
         uint32_t n = 7 << 1;
         LInsp k;
         while ((k = list[hash]) != NULL &&
-            (!k->isconst() || k->constval() != a))
+            (!k->isconst() || k->imm32() != a))
         {
             hash = (hash + (n += 2)) & bitmask;     // quadratic probe
         }
@@ -1419,7 +1420,7 @@ namespace nanojit
         uint32_t n = 7 << 1;
         LInsp k;
         while ((k = list[hash]) != NULL &&
-            (!k->isconstq() || k->constvalq() != a))
+            (!k->isconstq() || k->imm64() != a))
         {
             hash = (hash + (n += 2)) & bitmask;     // quadratic probe
         }
@@ -1669,10 +1670,10 @@ namespace nanojit
             VMPI_strcat(buf, name);
         }
         else if (ref->isconstq()) {
-            VMPI_sprintf(buf, "#0x%llxLL", (long long unsigned int) ref->constvalq());
+            VMPI_sprintf(buf, "#0x%llxLL", (long long unsigned int) ref->imm64());
         }
         else if (ref->isconst()) {
-            formatImm(ref->constval(), buf);
+            formatImm(ref->imm32(), buf);
         }
         else {
             if (ref->isCall()) {
@@ -1730,8 +1731,8 @@ namespace nanojit
             }
 
             case LIR_param: {
-                uint32_t arg = i->imm8();
-                if (!i->imm8b()) {
+                uint32_t arg = i->paramArg();
+                if (!i->paramKind()) {
                     if (arg < sizeof(Assembler::argRegs)/sizeof(Assembler::argRegs[0])) {
                         VMPI_sprintf(s, "%s = %s %d %s", formatRef(i), lirNames[op],
                             arg, gpn(Assembler::argRegs[arg]));
@@ -1773,7 +1774,6 @@ namespace nanojit
             case LIR_qlo:
             case LIR_qhi:
             case LIR_ov:
-            case LIR_cs:
             case LIR_not:
             case LIR_i2q:
             case LIR_u2q:
@@ -2097,8 +2097,8 @@ namespace nanojit
     #endif /* FEATURE_NANOJIT */
 
 #if defined(NJ_VERBOSE)
-    LabelMap::LabelMap(AvmCore* core, Allocator& a, LabelMap* parent)
-        : allocator(a), parent(parent), names(core->gc), addrs(core->config.verbose_addrs), end(buf)
+    LabelMap::LabelMap(AvmCore* core, Allocator& a)
+        : allocator(a), names(core->gc), addrs(core->config.verbose_addrs), end(buf)
     {}
 
     void LabelMap::add(const void *p, size_t size, size_t align, const char *name)
@@ -2137,18 +2137,11 @@ namespace nanojit
                 result = dup(b);
             }
             else {
-                if (parent)
-                    result = parent->format(p);
-                else {
-                    VMPI_sprintf(b, "%p", p);
-                    result = dup(b);
-                }
+                VMPI_sprintf(b, "%p", p);
+                result = dup(b);
             }
             return result;
         }
-
-        if (parent)
-            return parent->format(p);
 
         VMPI_sprintf(b, "%p", p);
         return dup(b);
@@ -2167,203 +2160,6 @@ namespace nanojit
         VMPI_strcpy(s, b);
         return s;
     }
-
-    // copy all labels to parent, adding newbase to label addresses
-    void LabelMap::promoteAll(const void *newbase)
-    {
-        for (int i=0, n=names.size(); i < n; i++) {
-            void *base = (char*)newbase + (intptr_t)names.keyAt(i);
-            parent->names.put(base, names.at(i));
-        }
-    }
-
-    // BB mgmt functions
-    BlockLocator::BlockLocator(GC* gc, LirWriter* out)
-        : LirWriter(out), _gc(gc), _tbd(gc), _bbs(gc)
-    {
-        _out = out;
-    }
-
-    BBNode* BlockLocator::bbFor(LInsp n)
-    {
-        BBNode* e = _bbs.get(n);
-        if (!e)
-        {
-            e = NJ_NEW(_gc, BBNode)(_gc,++_gid);
-            _bbs.put(n,e);
-
-            if (!_bbs.get(0)) _bbs.put(0,e);
-        }
-        return e;
-    }
-
-    void BlockLocator::ensureCurrent(LInsp n)
-    {
-        if (!_current)
-        {
-            _current = bbFor(n);
-            NanoAssert(_current->start==0);
-            _current->start = n;
-        }
-        _priorIns = n;
-    }
-
-    void BlockLocator::blockEnd(LInsp i)
-    {
-        if (i && _current)
-        {
-            _current->end = i;
-            _previous = _current;
-            _current = 0;
-
-            // does control flow drop to the next block?
-            if (i->isCall())
-            {
-                _previous->kind = BBNode::ENDS_WITH_CALL;
-                _previous = 0;  // in abc->lir this pattern implies a terminal block, would
-                                // be more precise to de-mark the CallInfo record and check that
-            }
-            else if (isRet(i->opcode()))
-            {
-                _previous->kind = BBNode::ENDS_WITH_RET;
-                _previous = 0;  // definately terminates the block
-            }
-            else
-            {
-                _previous->kind = BBNode::FALL_THRU;
-            }
-
-        }
-    }
-
-    LInsp BlockLocator::update(LInsp i)
-    {
-        if (!i) return i;
-        ensureCurrent(i);
-        if (_previous)
-        {
-            link(_previous, _current);
-            _previous = 0;
-        }
-        return i;
-    }
-
-    void BlockLocator::link(BBNode* from, BBNode* to)
-    {
-        from->succ.add(to);
-        to->pred.add(from);
-    }
-
-    void BlockLocator::fin()
-    {
-        blockEnd(_priorIns);
-        _previous = 0;
-
-        // process the tbd list
-        uint32_t c = _tbd.size();
-        for(uint32_t i = 0; i<c;i++)
-        {
-            BBNode* n = _tbd.get(i);
-            LInsp target = n->end->getTarget();
-            BBNode* to = _bbs.get(target);
-            link(n,to);
-        }
-        _tbd.clear();
-    }
-
-    static const char* BBArrow(uint32_t from, BBNode* to)
-    {
-        if (from <= to->num)
-            return ",arrowhead=empty";
-        else
-            return "";
-    }
-
-    static const char* BBShape(BBNode* b)
-    {
-        BBNode::BBKind k = b->kind;
-        if (k == BBNode::ENDS_WITH_CALL)
-            return ",shape=oval";
-        else if (k == BBNode::ENDS_WITH_RET)
-            return ",shape=invhouse";
-        else
-            return "";
-    }
-
-    static void printLinks(uint32_t num, BBList& l)
-    {
-        uint32_t c = l.size();
-        for(uint32_t i=0; i<c; i++)
-        {
-            BBNode* to = l.get(i);
-            AvmLog("bb%d -> bb%d [weight=2 %s] \n", num, to->num, BBArrow(num,to));
-        }
-    }
-
-    void BlockLocator::print(char* name)
-    {
-        // generate dot info for the graph
-        //   'dot -Tjpg a.txt > a.jpg'  - will then generate a pretty picture for you
-        AvmLog("digraph \"%s\" {\n", name);
-        AvmLog("ratio=fill\n");
-        AvmLog("ranksep=.1\n");
-        AvmLog("nodesep=.2\n");
-        AvmLog("rankdir=LR\n");
-        AvmLog("edge [arrowsize=.7,labeldistance=1.0,labelangle=-45,labelfontsize=9]\n");
-        AvmLog("node [fontsize=9,shape=box,width=.2,height=.2]\n");
-
-        uint32_t c = _bbs.size();
-        for(uint32_t i=1; i<c; i++)
-        {
-            BBNode* b = _bbs.at(i);  // zero node is repeated starting node so skip it
-            AvmLog("bb%d [label=\"BB%d\" %s]\n", (int)i, (int)i, BBShape(b));
-            printLinks(b->num,b->succ);
-        }
-        AvmLog("}\n");
-    }
-
-    LInsp BlockLocator::ins1(LOpcode v, LIns* a)                        { return update( _out->ins1(v,a) ); }
-    LInsp BlockLocator::ins2(LOpcode v, LIns* a, LIns* b)               { return update( _out->ins2(v,a,b) ); }
-    LInsp BlockLocator::insLoad(LOpcode op, LIns* base, LIns* d)        { return update( _out->insLoad(op,base,d) ); }
-    LInsp BlockLocator::insStore(LIns* value, LIns* base, LIns* disp)   { return update( _out->insStore(value,base,disp) ); }
-    LInsp BlockLocator::insStorei(LIns* value, LIns* base, int32_t d)   { return update( _out->insStorei(value,base,d) ); }
-    LInsp BlockLocator::insCall(const CallInfo *ci, LInsp args[])       { return update( _out->insCall(ci,args) ); }
-
-    LInsp BlockLocator::insGuard(LOpcode v, LIns *c, SideExit *x)
-    {
-        LInsp i = out->insGuard(v, c, x);
-        blockEnd(_priorIns);
-        return i;
-    }
-
-    LInsp BlockLocator::ins0(LOpcode v)
-    {
-        LInsp i = _out->ins0(v);
-        if (v == LIR_label || isRet(v))
-            blockEnd(_priorIns);
-
-        update(i);
-        return i;
-    }
-
-    LInsp BlockLocator::insBranch(LOpcode v, LInsp condition, LInsp to)
-    {
-        LInsp i = _out->insBranch(v, condition, to);
-        if (!i) return i;
-
-        blockEnd(i);
-        if (to)
-        {
-            BBNode* e = _bbs.get(to); // must have already been processed
-            link(_previous, e);
-        }
-        else
-        {
-            _tbd.add(_previous);
-        }
-        return i;
-    }
-
 #endif // NJ_VERBOSE
 }
 

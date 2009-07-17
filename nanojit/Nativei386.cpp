@@ -292,8 +292,8 @@ namespace nanojit
         }
         else if (op == LIR_param) {
             uint32_t max_regs = max_abi_regs[_thisfrag->lirbuf->abi];
-            if (i->imm8() < max_regs)
-                prefer &= rmask(argRegs[i->imm8()]);
+            if (i->paramArg() < max_regs)
+                prefer &= rmask(argRegs[i->paramArg()]);
         }
         else if (op == LIR_callh || (op == LIR_rsh && i->oprnd1()->opcode()==LIR_callh)) {
             prefer &= rmask(retRegs[1]);
@@ -322,7 +322,7 @@ namespace nanojit
 
         if (hi->isconst())
         {
-            STi(FP, d+4, hi->constval());
+            STi(FP, d+4, hi->imm32());
         }
         else
         {
@@ -332,7 +332,7 @@ namespace nanojit
 
         if (lo->isconst())
         {
-            STi(FP, d, lo->constval());
+            STi(FP, d, lo->imm32());
         }
         else
         {
@@ -370,7 +370,7 @@ namespace nanojit
             if (!resv->arIndex) {
                 reserveFree(i);
             }
-            LDi(r, i->constval());
+            LDi(r, i->imm32());
         }
         else {
             int d = findMemFor(i);
@@ -384,7 +384,7 @@ namespace nanojit
         if (value->isconst())
         {
             Register rb = getBaseReg(base, dr, GpRegs);
-            int c = value->constval();
+            int c = value->imm32();
             STi(rb, dr, c);
         }
         else
@@ -398,7 +398,7 @@ namespace nanojit
                 ra = findRegFor(value, GpRegs);
             } else if (base->isconst()) {
                 // absolute address
-                dr += base->constval();
+                dr += base->imm32();
                 ra = findRegFor(value, GpRegs);
                 rb = UnknownReg;
             } else {
@@ -439,7 +439,7 @@ namespace nanojit
     void Assembler::asm_load64(LInsp ins)
     {
         LIns* base = ins->oprnd1();
-        int db = ins->oprnd2()->constval();
+        int db = ins->oprnd2()->imm32();
         Reservation *resv = getresv(ins);
         Register rr = resv->reg;
 
@@ -601,8 +601,6 @@ namespace nanojit
                 JNE(targ);
             else if (condop == LIR_ov)
                 JNO(targ);
-            else if (condop == LIR_cs)
-                JNC(targ);
             else if (condop == LIR_lt)
                 JNL(targ);
             else if (condop == LIR_le)
@@ -626,8 +624,6 @@ namespace nanojit
                 JE(targ);
             else if (condop == LIR_ov)
                 JO(targ);
-            else if (condop == LIR_cs)
-                JC(targ);
             else if (condop == LIR_lt)
                 JL(targ);
             else if (condop == LIR_le)
@@ -654,8 +650,8 @@ namespace nanojit
     {
         LOpcode condop = cond->opcode();
 
-        // LIR_ov and LIR_cs recycle the flags set by arithmetic ops
-        if ((condop == LIR_ov) || (condop == LIR_cs))
+        // LIR_ov recycle the flags set by arithmetic ops
+        if (condop == LIR_ov)
             return;
 
         LInsp lhs = cond->oprnd1();
@@ -672,7 +668,7 @@ namespace nanojit
         // ready to issue the compare
         if (rhs->isconst())
         {
-            int c = rhs->constval();
+            int c = rhs->imm32();
             if (c == 0 && cond->isop(LIR_eq)) {
                 Register r = findRegFor(lhs, GpRegs);
                 if (rhs->isQuad()) {
@@ -718,11 +714,11 @@ namespace nanojit
             LDi(argRegs[1], int((Fragment*)_thisfrag));
         #endif
 
-        assignSavedParams();
+        assignSavedRegs();
 
         // restore first parameter, the only one we use
         LInsp state = _thisfrag->lirbuf->state;
-        findSpecificRegFor(state, argRegs[state->imm8()]);
+        findSpecificRegFor(state, argRegs[state->paramArg()]);
     }
 
     void Assembler::asm_fcond(LInsp ins)
@@ -751,8 +747,6 @@ namespace nanojit
             SETE(r);
         else if (op == LIR_ov)
             SETO(r);
-        else if (op == LIR_cs)
-            SETC(r);
         else if (op == LIR_lt)
             SETL(r);
         else if (op == LIR_le)
@@ -788,7 +782,7 @@ namespace nanojit
         // 0..255 for others.
         if (!forceReg)
         {
-            if (rhs->isconst() && !isU8(rhs->constval()))
+            if (rhs->isconst() && !isU8(rhs->imm32()))
                 forceReg = true;
         }
 #endif
@@ -803,7 +797,7 @@ namespace nanojit
         else if ((op == LIR_add||op == LIR_addp) && lhs->isop(LIR_alloc) && rhs->isconst()) {
             // add alloc+const, use lea
             Register rr = prepResultReg(ins, allow);
-            int d = findMemFor(lhs) + rhs->constval();
+            int d = findMemFor(lhs) + rhs->imm32();
             LEA(rr, d, FP);
         }
 
@@ -843,7 +837,7 @@ namespace nanojit
         }
         else
         {
-            int c = rhs->constval();
+            int c = rhs->imm32();
             if (op == LIR_add || op == LIR_addp) {
 #ifdef NANOJIT_IA32_TODO
                 if (ra != rr) {
@@ -911,7 +905,7 @@ namespace nanojit
         LIns* base = ins->oprnd1();
         LIns* disp = ins->oprnd2();
         Register rr = prepResultReg(ins, GpRegs);
-        int d = disp->constval();
+        int d = disp->imm32();
         Register ra = getBaseReg(base, d, GpRegs);
         if (op == LIR_ldcb)
             LD8Z(rr, d, ra);
@@ -944,7 +938,6 @@ namespace nanojit
                 // note that these are all opposites...
                 case LIR_eq:    MRNE(rr, iffalsereg);   break;
                 case LIR_ov:    MRNO(rr, iffalsereg);   break;
-                case LIR_cs:    MRNC(rr, iffalsereg);   break;
                 case LIR_lt:    MRGE(rr, iffalsereg);   break;
                 case LIR_le:    MRG(rr, iffalsereg);    break;
                 case LIR_gt:    MRLE(rr, iffalsereg);   break;
@@ -964,7 +957,6 @@ namespace nanojit
                 // note that these are all opposites...
                 case LIR_eq:    MRQNE(rr, iffalsereg);  break;
                 case LIR_ov:    MRQNO(rr, iffalsereg);   break;
-                case LIR_cs:    MRQNC(rr, iffalsereg);   break;
                 case LIR_lt:    MRQGE(rr, iffalsereg);  break;
                 case LIR_le:    MRQG(rr, iffalsereg);   break;
                 case LIR_gt:    MRQLE(rr, iffalsereg);  break;
@@ -991,8 +983,8 @@ namespace nanojit
 
     void Assembler::asm_param(LInsp ins)
     {
-        uint32_t a = ins->imm8();
-        uint32_t kind = ins->imm8b();
+        uint32_t a = ins->paramArg();
+        uint32_t kind = ins->paramKind();
         if (kind == 0) {
             // ordinary param
             AbiKind abi = _thisfrag->lirbuf->abi;
@@ -1011,16 +1003,6 @@ namespace nanojit
             // saved param
             prepResultReg(ins, rmask(savedRegs[a]));
         }
-    }
-
-    void Assembler::asm_short(LInsp ins)
-    {
-        Register rr = prepResultReg(ins, GpRegs);
-        int32_t val = ins->imm16();
-        if (val == 0)
-            XOR(rr,rr);
-        else
-            LDi(rr, val);
     }
 
     void Assembler::asm_int(LInsp ins)
@@ -1044,8 +1026,8 @@ namespace nanojit
             rR->reg = UnknownReg;
             NanoAssert((rmask(rr) & FpRegs) != 0);
 
-            const double d = ins->constvalf();
-            const uint64_t q = ins->constvalq();
+            const double d = ins->imm64f();
+            const uint64_t q = ins->imm64();
             if (rmask(rr) & XmmRegs) {
                 if (q == 0.0) {
                     // test (int64)0 since -0.0 == 0.0
@@ -1188,7 +1170,7 @@ namespace nanojit
             if (r != UnknownReg) {
                 // arg goes in specific register
                 if (p->isconst()) {
-                    LDi(r, p->constval());
+                    LDi(r, p->imm32());
                 } else {
                     Reservation* rA = getresv(p);
                     if (rA) {
@@ -1230,7 +1212,7 @@ namespace nanojit
         if (rA == 0 && p->isconst())
         {
             // small const we push directly
-            PUSHi(p->constval());
+            PUSHi(p->imm32());
         }
         else if (rA == 0 || p->isop(LIR_alloc))
         {
@@ -1645,7 +1627,7 @@ namespace nanojit
         if (_nIns != _epilogue) {
             JMP(_epilogue);
         }
-        assignSavedParams();
+        assignSavedRegs();
         LIns *val = ins->oprnd1();
         if (ins->isop(LIR_ret)) {
             findSpecificRegFor(val, retRegs[0]);

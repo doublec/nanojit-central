@@ -143,7 +143,7 @@ namespace nanojit
             if (!ins)
                 continue;
 
-            if (ins->isop(LIR_param) && ins->imm8b()==1 && r == Assembler::savedRegs[ins->imm8()]) {
+            if (ins->isop(LIR_param) && ins->paramKind()==1 && r == Assembler::savedRegs[ins->paramArg()]) {
                 // dont print callee-saved regs that arent used
                 continue;
             }
