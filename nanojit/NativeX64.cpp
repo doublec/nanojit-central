@@ -924,7 +924,7 @@ namespace nanojit
     }
 
     void Assembler::regalloc_load(LIns *ins, Register &rr, int32_t &dr, Register &rb) {
-        dr = ins->oprnd2()->imm32();
+        dr = ins->disp();
         LIns *base = ins->oprnd1();
         rb = getBaseReg(base, dr, BaseRegs);
         Reservation *resv = getresv(ins);

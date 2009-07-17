@@ -144,9 +144,8 @@ namespace nanojit
 
     void Assembler::asm_ld(LIns *ins) {
         LIns* base = ins->oprnd1();
-        LIns* disp = ins->oprnd2();
+        int d = ins->disp();
         Register rr = prepResultReg(ins, GpRegs);
-        int d = disp->imm32();
         Register ra = getBaseReg(base, d, GpRegs);
 
         #if !PEDANTIC
@@ -199,7 +198,7 @@ namespace nanojit
         Register rr = prepResultReg(ins, FpRegs);
     #endif
 
-        int dr = ins->oprnd2()->imm32();
+        int dr = ins->disp();
         Register ra = getBaseReg(base, dr, GpRegs);
 
     #ifdef NANOJIT_64BIT

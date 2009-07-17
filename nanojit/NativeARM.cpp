@@ -635,9 +635,8 @@ Assembler::asm_call(LInsp ins)
     {
         LOpcode op = ins->opcode();
         LIns* base = ins->oprnd1();
-        LIns* disp = ins->oprnd2();
+        int d = ins->disp();
         Register rr = prepResultReg(ins, GpRegs);
-        int d = disp->imm32();
         Register ra = getBaseReg(base, d, GpRegs);
         if (op == LIR_ldcb) {
             LDRB(rr, ra, d);
@@ -964,7 +963,7 @@ Assembler::asm_load64(LInsp ins)
     ///asm_output("<<< load64");
 
     LIns* base = ins->oprnd1();
-    int offset = ins->oprnd2()->imm32();
+    int offset = ins->disp();
 
 #ifdef NJ_ARM_VFP
     Register rr = prepResultReg(ins, FpRegs);

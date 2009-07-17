@@ -711,6 +711,16 @@ namespace nanojit
         return deref(*offs);
     }
 
+    int32_t LIns::disp() const
+    {
+        if (isStore()) {
+            return (u.code&~LIR64) == LIR_sti ? sti.disp : oprnd3()->imm32();
+        } else {
+            NanoAssert(isLoad());
+            return oprnd2()->imm32();
+        }
+    }
+
     LIns* LirWriter::ins2i(LOpcode v, LIns* oprnd1, int32_t imm)
     {
         return ins2(v, oprnd1, insImm(imm));
@@ -1138,7 +1148,7 @@ namespace nanojit
                 if (base == sp)
                 {
                     LInsp v = i->oprnd1();
-                    int d = i->immdisp() >> 2;
+                    int d = i->disp() >> 2;
                     if (d >= top) {
                         continue;
                     } else {
@@ -1849,7 +1859,7 @@ namespace nanojit
             case LIR_stqi:
                 VMPI_sprintf(s, "%s %s[%d] = %s", lirNames[op],
                     formatRef(i->oprnd2()),
-                    i->immdisp(),
+                    i->disp(),
                     formatRef(i->oprnd1()));
                 break;
 

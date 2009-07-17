@@ -493,10 +493,7 @@ namespace nanojit
 
         LIns* arg(uint32_t i);
 
-        inline int32_t  immdisp()const
-        {
-            return (u.code&~LIR64) == LIR_sti ? sti.disp : oprnd3()->imm32();
-        }
+        int32_t  disp() const;
 
         inline static bool sameop(LIns* a, LIns* b)
         {
