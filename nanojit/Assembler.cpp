@@ -47,7 +47,7 @@
 
 #if defined(AVMPLUS_UNIX) && defined(AVMPLUS_ARM)
 #include <asm/unistd.h>
-extern "C" void __clear_cache(char *BEG, char *END);
+extern "C" void __clear_cache(void *BEG, void *END);
 #endif
 
 #ifdef AVMPLUS_SPARC
