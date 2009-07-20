@@ -421,9 +421,8 @@ namespace nanojit
 
     LInsp LirReader::read()
     {
+        NanoAssert(_i);
         LInsp cur = _i;
-        if (!cur)
-            return 0;
         LIns* i = cur;
         LOpcode iop = i->opcode();
         do
@@ -459,7 +458,7 @@ namespace nanojit
                     break;
 
                 case LIR_start:
-                    _i = 0;  // start of trace
+                    _i = 0;
                     return cur;
             }
             iop = i->opcode();
@@ -1140,7 +1139,7 @@ namespace nanojit
         for (;;)
         {
             LInsp i = in->read();
-            if (!i)
+            if (i->isop(LIR_start))
                 return i;
             if (i->isStore())
             {
@@ -1557,19 +1556,20 @@ namespace nanojit
      * if showLiveRefs == true, also print the set of live expressions next to
      * each instruction
      */
-    void live(GC *gc, LirBuffer *lirbuf, bool showLiveRefs)
+    void live(GC *gc, Fragment* frag, bool showLiveRefs)
     {
         // traverse backwards to find live exprs and a few other stats.
 
+        LirBuffer* lirbuf = frag->lirbuf;
         LiveTable live(gc);
         uint32_t exits = 0;
-        LirReader r(lirbuf);
+        LirReader r(frag->lastIns);
         //StackFilter sf(&br, gc, lirbuf, lirbuf->sp);
         //StackFilter r(&sf, gc, lirbuf, lirbuf->rp);
         int total = 0;
         if (lirbuf->state)
             live.add(lirbuf->state, r.pos());
-        for (LInsp i = r.read(); i != 0; i = r.read())
+        for (LInsp i = r.read(); !i->isop(LIR_start); i = r.read())
         {
             total++;
 
@@ -1959,20 +1959,6 @@ namespace nanojit
         return out->insCall(ci, args);
     }
 
-    CseReader::CseReader(LirFilter *in, LInsHashSet *exprs)
-        : LirFilter(in), exprs(exprs)
-    {}
-
-    LInsp CseReader::read()
-    {
-        LInsp i = in->read();
-        if (i) {
-            if (i->isCse())
-                exprs->replace(i);
-        }
-        return i;
-    }
-
     LIns* FASTCALL callArgN(LIns* i, uint32_t n)
     {
         return i->arg(i->argc()-n-1);
@@ -1990,7 +1976,7 @@ namespace nanojit
         verbose_only( assm->_outputCache = &asmOutput; )
 
         verbose_only(if (assm->_verbose && core->config.verbose_live)
-            live(gc, triggerFrag->lirbuf, /* showLiveRefs */ true);)
+            live(gc, triggerFrag, /* showLiveRefs */ true);)
 
         bool treeCompile = core->config.tree_opt && (triggerFrag->kind == BranchTrace);
         RegAllocMap regMap(gc);

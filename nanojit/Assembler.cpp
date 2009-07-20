@@ -81,7 +81,7 @@ namespace nanojit
         LInsp read() {
             for (;;) {
                 LInsp i = in->read();
-                if (!i || i->isGuard() || i->isBranch()
+                if (i->isop(LIR_start) || i->isGuard() || i->isBranch()
                     || (i->isCall() && !i->callInfo()->_cse)
                     || !ignoreInstruction(i))
                     return i;
@@ -119,7 +119,7 @@ namespace nanojit
 
         LInsp read() {
             LInsp i = in->read();
-            if (!i) {
+            if (i->isop(LIR_start)) {
                 flush();
                 return i;
             }
@@ -954,7 +954,8 @@ namespace nanojit
         // trace must start with LIR_x or LIR_loop
         //NanoAssert(reader->pos()->isop(LIR_x) || reader->pos()->isop(LIR_loop));
 
-        for (LInsp ins = reader->read(); ins != 0 && !error(); ins = reader->read())
+        for (LInsp ins = reader->read(); !ins->isop(LIR_start) && !error();
+                                         ins = reader->read())
         {
             LOpcode op = ins->opcode();
             switch(op)

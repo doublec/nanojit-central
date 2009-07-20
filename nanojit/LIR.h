@@ -57,7 +57,7 @@
  */
 namespace nanojit
 {
-    #define is_trace_skip_tramp(op) ((op) <= LIR_tramp)
+    #define is_trace_skip_tramp(op) ((op) >= LIR_nearskip && (op) <= LIR_tramp)
 
     enum LOpcode
 #if defined(_MSC_VER) && _MSC_VER >= 1400
@@ -1023,8 +1023,9 @@ namespace nanojit
         LInsp _i; // current instruction that this decoder is operating on.
 
     public:
-        LirReader(LirBuffer* buf) : LirFilter(0), _i(buf->next()-1) { }
-        LirReader(LInsp i) : LirFilter(0), _i(i) { }
+        LirReader(LInsp i) : LirFilter(0), _i(i) {
+            NanoAssert(i != NULL);
+        }
 
         // LirReader i/f
         LInsp read(); // advance to the prior instruction
@@ -1032,6 +1033,7 @@ namespace nanojit
             return _i;
         }
         void setpos(LIns *i) {
+            NanoAssert(i != NULL);
             _i = i;
         }
     };
@@ -1039,7 +1041,7 @@ namespace nanojit
     class Assembler;
 
     void compile(Fragmento*, Assembler*, Fragment*);
-    verbose_only(void live(GC *gc, LirBuffer *lirbuf, bool showLiveRefs);)
+    verbose_only(void live(GC *gc, Fragment*, bool showLiveRefs);)
 
     class StackFilter: public LirFilter
     {
@@ -1050,14 +1052,6 @@ namespace nanojit
         int getTop(LInsp br);
     public:
         StackFilter(LirFilter *in, LirBuffer *lirbuf, LInsp sp);
-        LInsp read();
-    };
-
-    class CseReader: public LirFilter
-    {
-        LInsHashSet *exprs;
-    public:
-        CseReader(LirFilter *in, LInsHashSet *exprs);
         LInsp read();
     };
 
