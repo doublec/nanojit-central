@@ -17,7 +17,7 @@
  *
  * The Initial Developer of the Original Code is
  * Adobe System Incorporated.
- * Portions created by the Initial Developer are Copyright (C) 2004-2007
+ * Portions created by the Initial Developer are Copyright (C) 2009
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
@@ -37,8 +37,8 @@
  *
  * ***** END LICENSE BLOCK ***** */
 
-#ifndef __nanojit_util__
-#define __nanojit_util__
+#ifndef __nanojit_Allocator__
+#define __nanojit_Allocator__
 
 namespace nanojit
 {
@@ -100,4 +100,4 @@ inline void* operator new[](size_t size, nanojit::Allocator& a) {
     return a.alloc(size);
 }
 
-#endif // __nanojit_util__
+#endif // __nanojit_Allocator__
