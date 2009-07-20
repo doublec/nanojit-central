@@ -1574,7 +1574,7 @@ namespace nanojit
             total++;
 
             // first handle side-effect instructions
-            if (i->isop(LIR_label) || i->isBranch() || i->isStore() || isRet(i->opcode()) ||
+            if (i->isop(LIR_label) || i->isBranch() || i->isStore() || i->isRet() ||
                 i->isGuard() || (i->isCall() && !i->callInfo()->_cse))
             {
                 live.add(i,0);
@@ -1637,7 +1637,7 @@ namespace nanojit
             } else {
                 AvmLog("    %s\n", names->formatIns(e->i));
             }
-            if (e->i->isGuard() || e->i->isBranch() || isRet(e->i->opcode())) {
+            if (e->i->isGuard() || e->i->isBranch() || e->i->isRet()) {
                 AvmLog("\n");
                 newblock = true;
             }

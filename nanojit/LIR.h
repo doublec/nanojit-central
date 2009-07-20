@@ -373,6 +373,10 @@ namespace nanojit
 
     bool FASTCALL isFloatOpcode(LOpcode v);
 
+    inline bool isRetOpcode(LOpcode c) {
+        return (c & ~LIR64) == LIR_ret;
+    }
+
     // Sun Studio requires explicitly declaring signed int bit-field
     #if defined(__SUNPRO_C) || defined(__SUNPRO_CC)
     #define _sign_int signed int
@@ -513,6 +517,10 @@ namespace nanojit
             return isFloatOpcode(opcode());
         }
 
+        inline bool isRet() const {
+            return isRetOpcode(opcode());
+        }
+
     #ifdef NANOJIT_64BIT
         inline void* constvalp() const {
             return (void*)imm64();
@@ -623,10 +631,6 @@ namespace nanojit
     bool FASTCALL isCse(LOpcode v);
     bool FASTCALL isCmp(LOpcode v);
     bool FASTCALL isCond(LOpcode v);
-
-    inline bool isRet(LOpcode c) {
-        return (c & ~LIR64) == LIR_ret;
-    }
     LIns* FASTCALL callArgN(LInsp i, uint32_t n);
     extern const uint8_t operandCount[];
 
@@ -823,7 +827,7 @@ namespace nanojit
         }
 
         LIns* ins1(LOpcode v, LInsp a) {
-            return isRet(v) ? add_flush(out->ins1(v, a)) : add(out->ins1(v, a));
+            return isRetOpcode(v) ? add_flush(out->ins1(v, a)) : add(out->ins1(v, a));
         }
         LIns* ins2(LOpcode v, LInsp a, LInsp b) {
             return v == LIR_2 ? out->ins2(v,a,b) : add(out->ins2(v, a, b));
