@@ -101,6 +101,8 @@ namespace nanojit
 
     void Assembler::nFragExit(LInsp guard)
     {
+        (void)guard;
+    #ifdef TM_MERGE
         SideExit* exit = guard->exit();
         Fragment *frag = exit->target;
         GuardRecord *lr;
@@ -119,6 +121,7 @@ namespace nanojit
 
         // return value is GuardRecord*
         SET32(int(lr), O0);
+    #endif
     }
 
     NIns *Assembler::genEpilogue()
