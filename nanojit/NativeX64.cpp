@@ -159,7 +159,7 @@ namespace nanojit
         char b[32], *s = b; // room for 8 hex bytes plus null
         *s++ = ' ';
         for (NIns *end = p + bytes; p < end; p++) {
-            sprintf(s, "%02x ", *p);
+            VMPI_sprintf(s, "%02x ", *p);
             s += 3;
         }
         *s = 0;
@@ -260,6 +260,7 @@ namespace nanojit
 
     // register allocation for 2-address style ops of the form R = R (op) B
     void Assembler::regalloc_binary(LIns *ins, RegisterMask allow, Register &rr, Register &ra, Register &rb) {
+        rb = UnknownReg;
         LIns *a = ins->oprnd1();
         LIns *b = ins->oprnd2();
         if (a != b) {
@@ -838,14 +839,14 @@ namespace nanojit
         }
         else if (ins->isconst()) {
             if (!resv->arIndex) {
-                reserveFree(ins);
+                ins->resv()->clear();
             }
             // unsafe to use xor r,r for zero because it changes cc's
             emit_int(r, ins->imm32());
         }
         else if (ins->isconstq() && IsGpReg(r)) {
             if (!resv->arIndex) {
-                reserveFree(ins);
+                ins->resv()->clear();
             }
             // unsafe to use xor r,r for zero because it changes cc's
             emit_quad(r, ins->imm64());

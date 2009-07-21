@@ -115,6 +115,8 @@ Assembler::genPrologue()
 void
 Assembler::nFragExit(LInsp guard)
 {
+    (void)guard;
+#ifdef TM_MERGE
     SideExit* exit = guard->exit();
     Fragment *frag = exit->target;
     GuardRecord *lr;
@@ -148,6 +150,7 @@ Assembler::nFragExit(LInsp guard)
 
     // return value is GuardRecord*
     LDi(R2, int(lr));
+#endif
 }
 
 NIns*
@@ -907,7 +910,7 @@ Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
     }
     else if (i->isconst()) {
         if (!resv->arIndex) {
-            reserveFree(i);
+            i->resv()->clear();
         }
         LDi(r, i->imm32());
     }

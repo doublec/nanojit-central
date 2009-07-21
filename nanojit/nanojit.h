@@ -114,6 +114,16 @@
 
 #endif
 
+// Embed no-op macros that let Valgrind work with the JIT.
+#ifdef MOZ_VALGRIND
+#  define JS_VALGRIND
+#endif
+#ifdef JS_VALGRIND
+#  include <valgrind/valgrind.h>
+#else
+#  define VALGRIND_DISCARD_TRANSLATIONS(addr, szB)
+#endif
+
 namespace nanojit
 {
     /**
@@ -160,6 +170,20 @@ namespace nanojit
         #define NanoAssert(a)             do { } while (0) /* no semi */
     #endif
 
+    /*
+     * Sun Studio C++ compiler has a bug
+     * "sizeof expression not accepted as size of array parameter"
+     * The bug number is 6688515. It is not public yet.
+     * Turn off this assert for Sun Studio until this bug is fixed.
+     */
+    #ifdef __SUNPRO_CC
+        #define NanoStaticAssert(condition)
+    #else
+        #define NanoStaticAssert(condition) \
+            extern void nano_static_assert(int arg[(condition) ? 1 : -1])
+    #endif
+
+ 
     /**
      * -------------------------------------------
      * END AVM bridging definitions
@@ -230,6 +254,61 @@ static inline bool isU32(uintptr_t i) {
 
 #define alignTo(x,s)        ((((uintptr_t)(x)))&~(((uintptr_t)s)-1))
 #define alignUp(x,s)        ((((uintptr_t)(x))+(((uintptr_t)s)-1))&~(((uintptr_t)s)-1))
+
+// -------------------------------------------------------------------
+// START debug-logging definitions
+// -------------------------------------------------------------------
+
+/* Debug printing stuff.  All Nanojit and jstracer debug printing
+   should be routed through LogControl::printf.  Don't use
+   ad-hoc calls to printf, fprintf(stderr, ...) etc.
+
+   Similarly, don't use ad-hoc getenvs etc to decide whether or not to
+   print debug output.  Instead consult the relevant control bit in
+   LogControl::lcbits in the LogControl object you are supplied with.
+*/
+
+# if defined(__GNUC__)
+# define PRINTF_CHECK(x, y) __attribute__((format(__printf__, x, y)))
+# else
+# define PRINTF_CHECK(x, y)
+# endif
+
+namespace nanojit {
+
+    // LogControl, a class for controlling and routing debug output
+
+    enum LC_Bits {
+        /* Output control bits for Nanojit code.  Only use bits 15
+           and below, so that callers can use bits 16 and above for
+           themselves. */
+        // TODO: add entries for the writer pipeline
+        LC_Liveness    = 1<<6, // (show LIR liveness analysis)
+        LC_ReadLIR     = 1<<5, // As read from LirBuffer
+        LC_AfterSF_SP  = 1<<4, // After StackFilter(sp)
+        LC_AfterSF_RP  = 1<<3, // After StackFilter(rp)
+        LC_RegAlloc    = 1<<2, // stuff to do with reg alloc
+        LC_Assembly    = 1<<1, // final assembly
+        LC_NoCodeAddrs = 1<<0  // (don't show code addresses on asm output)
+    };
+
+    class LogControl
+    {
+    public:
+        // All Nanojit and jstracer printing should be routed through
+        // this function.
+        void printf( const char* format, ... ) PRINTF_CHECK(2,3);
+
+        // An OR of LC_Bits values, indicating what should be output
+        uint32_t lcbits;
+    };
+
+}
+
+// -------------------------------------------------------------------
+// END debug-logging definitions
+// -------------------------------------------------------------------
+
 
 #include "Allocator.h"
 #include "Native.h"

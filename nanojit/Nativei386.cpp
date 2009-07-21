@@ -108,6 +108,8 @@ namespace nanojit
 
     void Assembler::nFragExit(LInsp guard)
     {
+        (void)guard;
+    #ifdef TM_MERGE
         SideExit *exit = guard->exit();
         bool trees = config.tree_opt;
         Fragment *frag = exit->target;
@@ -140,6 +142,7 @@ namespace nanojit
 
         // return value is GuardRecord*
         LDi(EAX, int(lr));
+    #endif // TM_MERGE
     }
 
     NIns *Assembler::genEpilogue()
@@ -368,7 +371,7 @@ namespace nanojit
         }
         else if (i->isconst()) {
             if (!resv->arIndex) {
-                reserveFree(i);
+                i->resv()->clear();
             }
             LDi(r, i->imm32());
         }

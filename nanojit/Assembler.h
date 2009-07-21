@@ -69,12 +69,6 @@ namespace nanojit
     /**
      * The Assembler is only concerned with transforming LIR to native instructions
      */
-    struct Reservation
-    {
-        uint32_t arIndex:16;    /* index into stack frame.  displ is -4*arIndex */
-        Register reg:15;            /* register UnkownReg implies not in register */
-        uint32_t used:1;
-    };
 
     struct AR
     {
@@ -211,7 +205,6 @@ namespace nanojit
             NIns*       genPrologue();
             NIns*       genEpilogue();
 
-            GuardRecord* placeGuardRecord(LInsp guard);
             void        initGuardRecord(LInsp guard, GuardRecord*);
 
             uint32_t    arReserve(LIns* l);
@@ -240,13 +233,9 @@ namespace nanojit
             void        internalReset();
             bool        canRemat(LIns*);
 
-            Reservation* reserveAlloc(LInsp i);
-            void        reserveFree(LInsp i);
-            void        reserveReset();
-
             Reservation* getresv(LIns *x) {
-                uint32_t resv_index = x->resv();
-                return resv_index ? &_resvTable[resv_index] : 0;
+                Reservation* r = x->resv();
+                return r->used ? r : 0;
             }
 
             AvmCore             *core;
@@ -274,8 +263,6 @@ namespace nanojit
 
             LabelStateMap   _labels;
             NInsMap     _patches;
-            Reservation _resvTable[ NJ_MAX_STACK_ENTRY ]; // table where we house stack and register information
-            uint32_t    _resvFree;
             bool        _inExit, vpad2[3];
             InsList     pending_lives;
 
@@ -320,8 +307,10 @@ namespace nanojit
             void        asm_call(LInsp);
             Register    asm_binop_rhs_reg(LInsp ins);
             NIns*       asm_branch(bool branchOnFalse, LInsp cond, NIns* targ);
+            void        asm_switch(LIns* ins, NIns* target);
             void        assignSavedRegs();
             void        reserveSavedRegs();
+            void        assignParamRegs();
             void        handleLoopCarriedExprs();
 
             // platform specific implementation (see NativeXXX.cpp file)
