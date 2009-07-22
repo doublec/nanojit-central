@@ -1113,13 +1113,13 @@ namespace nanojit
 
     void Assembler::asm_cmov(LIns *ins) {
         NanoAssert(ins->isop(LIR_cmov) || ins->isop(LIR_qcmov));
-        LIns* cond = ins->oprnd1();
+        LIns* cond    = ins->oprnd1();
+        LIns* iftrue  = ins->oprnd2();
+        LIns* iffalse = ins->oprnd3();
+
         NanoAssert(cond->isCmp());
-        LIns* values = ins->oprnd2();
-        NanoAssert(values->opcode() == LIR_2);
-        LIns* iftrue = values->oprnd1();
-        LIns* iffalse = values->oprnd2();
         NanoAssert(iftrue->isQuad() == iffalse->isQuad());
+
         // fixme: we could handle fpu registers here, too, since we're just branching
         Register rr = prepResultReg(ins, GpRegs);
         findSpecificRegFor(iftrue, rr);

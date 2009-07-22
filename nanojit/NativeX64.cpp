@@ -642,13 +642,10 @@ namespace nanojit
     }
 
     void Assembler::asm_cmov(LIns *ins) {
-        LIns* cond = ins->oprnd1();
+        LIns* cond    = ins->oprnd1();
+        LIns* iftrue  = ins->oprnd2();
+        LIns* iffalse = ins->oprnd3();
         NanoAssert(cond->isCmp());
-        LIns* values = ins->oprnd2();
-        NanoAssert(values->opcode() == LIR_2);
-        LIns* iftrue = values->oprnd1();
-        LIns* iffalse = values->oprnd2();
-
         NanoAssert((ins->isop(LIR_qcmov) && iftrue->isQuad() && iffalse->isQuad()) ||
                    (ins->isop(LIR_cmov) && !iftrue->isQuad() && !iffalse->isQuad()));
 
