@@ -47,9 +47,7 @@ namespace nanojit
     /**
      * Some notes on this Assembler (Emitter).
      *
-     *     LIR_call is a generic call operation that is encoded using form [2].  The 24bit
-     *     integer is used as an index into a function look-up table that contains information
-     *     about the target that is to be called; including address, # parameters, etc.
+     *   The class RegAlloc is essentially the register allocator from MIR
      *
      *   The Assembler class parses the LIR instructions starting at any point and converts
      *   them to machine code.  It does the translation using expression trees which are simply
@@ -64,7 +62,7 @@ namespace nanojit
      *
      */
 
-    #define STACK_GRANULARITY       sizeof(void *)
+    #define STACK_GRANULARITY        sizeof(void *)
 
     /**
      * The Assembler is only concerned with transforming LIR to native instructions
@@ -108,7 +106,6 @@ namespace nanojit
     {
          None = 0
         ,StackFull
-        ,ResvFull
         ,UnknownBranch
     };
 
@@ -151,12 +148,11 @@ namespace nanojit
      */
     class Assembler MMGC_SUBCLASS_DECL
     {
-        friend class DeadCodeFilter;
         friend class VerboseBlockReader;
         public:
             #ifdef NJ_VERBOSE
-            static char  outline[];
-            static char  outlineEOL[];  // string to be added to the end of the line
+            static char  outline[8192];
+            static char  outlineEOL[512];  // string to be added to the end of the line
             static char* outputAlign(char* s, int col);
 
             void FASTCALL outputForEOL(const char* format, ...);
@@ -186,7 +182,6 @@ namespace nanojit
             void        unpatch(GuardRecord *lr);
             AssmError   error() { return _err; }
             void        setError(AssmError e) { _err = e; }
-            void        setCallTable(const CallInfo *functions);
             void        pageReset();
 
             debug_only ( void       pageValidate(); )
@@ -244,8 +239,6 @@ namespace nanojit
             DWB(Fragment*)      _thisfrag;
             RegAllocMap*        _branchStateMap;
             GuardRecord*        _latestGuard;
-
-            const CallInfo  *_functions;
 
             NIns        *codeStart, *codeEnd;       // current block we're adding code to
             NIns        *exitStart, *exitEnd;       // current block for exit stubs
