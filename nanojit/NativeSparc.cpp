@@ -833,13 +833,11 @@ namespace nanojit
         freeRsrcOf(ins, false);
         if (d)
             {
-                Register r = registerAlloc(GpRegs);
-                _allocator.addFree(r);
                 const int32_t* p = (const int32_t*) (ins-2);
-                STW32(r, d+4, FP);
-                SET32(p[0], r);
-                STW32(r, d, FP);
-                SET32(p[1], r);
+                STW32(L2, d+4, FP);
+                SET32(p[0], L2);
+                STW32(L2, d, FP);
+                SET32(p[1], L2);
             }
     }
 
