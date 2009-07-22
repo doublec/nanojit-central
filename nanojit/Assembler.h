@@ -64,10 +64,6 @@ namespace nanojit
 
     #define STACK_GRANULARITY        sizeof(void *)
 
-    /**
-     * The Assembler is only concerned with transforming LIR to native instructions
-     */
-
     struct AR
     {
         LIns*           entry[ NJ_MAX_STACK_ENTRY ];    /* maps to 4B contiguous locations relative to the frame pointer */
@@ -200,8 +196,6 @@ namespace nanojit
             NIns*       genPrologue();
             NIns*       genEpilogue();
 
-            void        initGuardRecord(LInsp guard, GuardRecord*);
-
             uint32_t    arReserve(LIns* l);
             void        arFree(uint32_t idx);
             void        arReset();
@@ -296,7 +290,6 @@ namespace nanojit
             void        asm_promote(LIns *ins);
             Register    asm_prep_fcall(Reservation *rR, LInsp ins);
             void        asm_nongp_copy(Register r, Register s);
-            void        asm_bailout(LInsp guard, Register state);
             void        asm_call(LInsp);
             Register    asm_binop_rhs_reg(LInsp ins);
             NIns*       asm_branch(bool branchOnFalse, LInsp cond, NIns* targ);

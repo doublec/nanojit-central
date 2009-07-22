@@ -47,9 +47,6 @@
 
 #ifdef VTUNE
 #include "../core/CodegenLIR.h"
-#define vtune_only(...) __VA_ARGS__
-#else
-#define vtune_only(...)
 #endif
 
 #ifdef _MSC_VER
@@ -104,8 +101,7 @@ namespace nanojit
             else {
                 if (flushnext)
                     flush();
-                block.add(i);
-                //flush_add(i);
+                block.add(i);//flush_add(i);
                 if (i->isop(LIR_label))
                     flushnext = true;
             }
@@ -117,7 +113,7 @@ namespace nanojit
     /**
      * Need the following:
      *
-     *  - merging paths ( build a graph? ), possibly use external rep to drive code gen
+     *    - merging paths ( build a graph? ), possibly use external rep to drive codegen
      */
     Assembler::Assembler(CodeAlloc* codeAlloc, AvmCore *core)
         : hasLoop(0)
@@ -191,7 +187,10 @@ namespace nanojit
         // nothing free, steal one
         // LSRA says pick the one with the furthest use
         LIns* vic = findVictim(regs, allow);
+        NanoAssert(vic != NULL);
+
         Reservation* resv = getresv(vic);
+        NanoAssert(resv);
 
         // restore vic
         Register r = resv->reg;
@@ -365,10 +364,10 @@ namespace nanojit
             resvb = getresv(ib);
             if (resvb && (rb = resvb->reg) != UnknownReg) {
                 if (allow & rmask(rb)) {
-                    // ib already assigned to an allowable reg, don't let ia steal it
+                    // ib already assigned to an allowable reg, keep that one
                     allow &= ~rmask(rb);
                 } else {
-                    // ib assigned to not-allowed register, pick another one below
+                    // ib assigned to unusable reg, pick a different one below
                     rb = UnknownReg;
                 }
             }
@@ -514,10 +513,12 @@ namespace nanojit
         if (rr != UnknownReg)
         {
             asm_spilli(i, resv, pop);
-            _allocator.retire(rr);  // free any register associated with entry
+            _allocator.retire(rr);    // free any register associated with entry
         }
-        if (index)
-            arFree(index);          // free any stack stack space associated with entry
+        if (index) {
+            NanoAssert(_activation.entry[index] == i);
+            arFree(index);            // free any stack stack space associated with entry
+        }
         i->resv()->clear();
     }
 
@@ -685,12 +686,12 @@ namespace nanojit
         _inExit = false;
         gen(rdr, loopJumps);
         frag->fragEntry = _nIns;
-        frag->outbound = config.tree_opt? _latestGuard : 0;
-        //fprintf(stderr, "assemble frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
+        //frag->outbound = config.tree_opt? _latestGuard : 0;
+        //nj_dprintf(stderr, "assemble frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
 
         if (!error()) {
             // patch all branches
-            while(!_patches.isEmpty())
+            while (!_patches.isEmpty())
             {
                 NIns* where = _patches.lastKey();
                 LInsp targ = _patches.removeLast();
@@ -700,7 +701,7 @@ namespace nanojit
                     nPatchBranch(where,ntarg);
                 }
                 else {
-                    _err = UnknownBranch;
+                    setError(UnknownBranch);
                     break;
                 }
             }
@@ -1043,8 +1044,8 @@ namespace nanojit
                 }
 #endif
 
-                case LIR_iaddp:
                 case LIR_add:
+                case LIR_iaddp:
                 case LIR_sub:
                 case LIR_mul:
                 case LIR_and:
@@ -1333,9 +1334,9 @@ namespace nanojit
                 #endif // VTUNE
             }
 
-            vtune_only(
-                cgen->jitCodePosUpdate((uintptr_t)_nIns);
-            )
+        #ifdef VTUNE
+            cgen->jitCodePosUpdate((uintptr_t)_nIns);
+        #endif
 
             // check that all is well (don't check in exit paths since its more complicated)
             debug_only( pageValidate(); )
@@ -1692,6 +1693,9 @@ namespace nanojit
     }
 
 #ifdef NJ_VERBOSE
+    // "outline" must be able to hold the output line in addition to the
+    // outlineEOL buffer, which is concatinated onto outline just before it
+    // is printed.
     char Assembler::outline[8192];
     char Assembler::outlineEOL[512];
 
@@ -1705,7 +1709,7 @@ namespace nanojit
 
     void Assembler::outputf(const char* format, ...)
     {
-        va_list args;
+        va_list     args;
         va_start(args, format);
         outline[0] = '\0';
         vsprintf(outline, format, args);
