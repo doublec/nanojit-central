@@ -128,8 +128,8 @@ namespace nanojit
     {
         nInit(core);
         verbose_only( _verbose = !core->quiet_opt() && core->verbose() );
-        verbose_only( _outputCache = 0);
-        verbose_only( outlineEOL[0] = '\0');
+        verbose_only( _outputCache = 0; )
+        verbose_only( outlineEOL[0] = '\0'; )
 
         internalReset();
         pageReset();
@@ -278,7 +278,7 @@ namespace nanojit
 
     void Assembler::resourceConsistencyCheck()
     {
-        if (error()) return;
+        NanoAssert(!error());
 
 #ifdef NANOJIT_IA32
         NanoAssert((_allocator.active[FST0] && _fpuStkDepth == -1) ||
@@ -867,7 +867,7 @@ namespace nanojit
         // trace must start with LIR_x or LIR_loop
         //NanoAssert(reader->pos()->isop(LIR_x) || reader->pos()->isop(LIR_loop));
 
-        for (LInsp ins = reader->read(); !ins->isop(LIR_start) && !error();
+        for (LInsp ins = reader->read(); !ins->isop(LIR_start);
                                          ins = reader->read())
         {
             /* What's going on here: we're visiting all the LIR nodes
@@ -922,6 +922,11 @@ namespace nanojit
                     LInsp op1 = ins->oprnd1();
                     // alloca's are meant to live until the point of the LIR_live instruction, marking
                     // other expressions as live ensures that they remain so at loop bottoms.
+                    // alloca areas require special treatment because they are accessed indirectly and
+                    // the indirect accesses are invisible to the assembler, other than via LIR_live.
+                    // other expression results are only accessed directly in ways that are visible to
+                    // the assembler, so extending those expression's lifetimes past the last loop edge
+                    // isn't necessary.
                     if (op1->isop(LIR_alloc)) {
                         findMemFor(op1);
                     } else {
@@ -1332,6 +1337,9 @@ namespace nanojit
                 }
                 #endif // VTUNE
             }
+
+            if (error())
+                return;
 
         #ifdef VTUNE
             cgen->jitCodePosUpdate((uintptr_t)_nIns);
