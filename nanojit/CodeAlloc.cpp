@@ -51,6 +51,7 @@ namespace nanojit
 
     CodeAlloc::CodeAlloc()
         : heapblocks(0)
+		, availblocks(0)
     {}
 
     CodeAlloc::~CodeAlloc() {
@@ -95,20 +96,15 @@ namespace nanojit
     }
 
     void CodeAlloc::alloc(NIns* &start, NIns* &end) {
-        // search each heap block for a free block
-        for (CodeList* hb = heapblocks; hb != 0; hb = hb->next) {
-            // check each block to see if it's free and big enough
-            for (CodeList* b = hb->lower; b != 0; b = b->lower) {
-                if (b->isFree && b->size() >= minAllocSize) {
-                    // good block
-                    b->isFree = false;
-                    start = b->start();
-                    end = b->end;
-                    if (verbose)
-                        avmplus::AvmLog("alloc %p-%p %d\n", start, end, int(end-start));
-                    return;
-                }
-            }
+        //  Reuse a block if possible.
+        if (availblocks) {
+            CodeList* b = removeBlock(availblocks);
+            b->isFree = false;
+            start = b->start();
+            end = b->end;
+            if (verbose)
+                avmplus::AvmLog("alloc %p-%p %d\n", start, end, int(end-start));
+            return;
         }
         // no suitable block found, get more memory
         void *mem = allocCodeChunk(bytesPerAlloc); // allocations never fail
@@ -130,28 +126,53 @@ namespace nanojit
 
         AvmAssert(!blk->isFree);
 
-        // coalesce
+		// coalesce adjacent blocks.
+		bool already_on_avail_list;
+
         if (blk->lower && blk->lower->isFree) {
             // combine blk into blk->lower (destroy blk)
             CodeList* lower = blk->lower;
             CodeList* higher = blk->higher;
+            already_on_avail_list = lower->size() >= minAllocSize;
             lower->higher = higher;
             higher->lower = lower;
             debug_only( sanity_check();)
             blk = lower;
         }
-        // the last block in each heapblock is never free, therefore blk->higher != null
+        else
+            already_on_avail_list = false;
+
+        // the last block in each heapblock is a terminator block,
+		// which is never free, therefore blk->higher != null
         if (blk->higher->isFree) {
             // combine blk->higher into blk (destroy blk->higher)
             CodeList *higher = blk->higher->higher;
             blk->higher = higher;
             higher->lower = blk;
             debug_only(sanity_check();)
+
+            if ( higher->size() >= minAllocSize ) {
+                // Unlink higher from the available block chain.
+                if ( availblocks == higher ) {
+                    removeBlock(availblocks);
+                }
+                else {
+                    CodeList* free_block = availblocks;
+                    while ( free_block && free_block->next != higher) {
+                        free_block = free_block->next;
+                    }
+                    NanoAssert(free_block && free_block->next == higher);
+                    if (free_block && free_block->next == higher)
+                        free_block->next = higher->next;
+                }
+            }
         }
         blk->isFree = true;
         NanoAssert(!blk->lower || !blk->lower->isFree);
         NanoAssert(blk->higher && !blk->higher->isFree);
         //memset(blk->start(), 0xCC, blk->size()); // INT 3 instruction
+        if ( !already_on_avail_list && blk->size() >= minAllocSize )
+            addBlock(availblocks, blk);
     }
 
     void CodeAlloc::sweep() {
@@ -279,6 +300,7 @@ extern  "C" void sync_instruction_memory(caddr_t v, u_int len);
 
     CodeList* CodeAlloc::removeBlock(CodeList* &blocks) {
         CodeList* b = blocks;
+        NanoAssert(b);
         blocks = b->next;
         b->next = 0;
         return b;
@@ -398,6 +420,33 @@ extern  "C" void sync_instruction_memory(caddr_t v, u_int len);
                 NanoAssert(b->higher->lower == b);
             }
         }
+        for (CodeList* avail = this->availblocks; avail; avail = avail->next) {
+            NanoAssert(avail->isFree && avail->size() >= minAllocSize);
+        }
+
+        #if CROSS_CHECK_FREE_LIST
+        for(CodeList* term = heapblocks; term; term = term->next) {
+            for(CodeList* hb = term->lower; hb; hb = hb->lower) {
+                if (hb->isFree && hb->size() >= minAllocSize) {
+                    bool found_on_avail = false;
+                    for (CodeList* avail = this->availblocks; !found_on_avail && avail; avail = avail->next) {
+                        found_on_avail = avail == hb;
+                    }
+
+                    NanoAssert(found_on_avail);
+                }
+            }
+        }
+        for (CodeList* avail = this->availblocks; avail; avail = avail->next) {
+            bool found_in_heapblocks = false;
+            for(CodeList* term = heapblocks; !found_in_heapblocks && term; term = term->next) {
+                for(CodeList* hb = term->lower; hb; hb = hb->lower) {
+                    found_in_heapblocks = hb == avail;
+                }
+            }
+            NanoAssert(found_in_heapblocks);
+        }
+        #endif /* CROSS_CHECK_FREE_LIST */
     }
     #endif
 }

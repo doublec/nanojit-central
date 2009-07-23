@@ -104,7 +104,13 @@ namespace nanojit
         static const size_t sizeofMinBlock = offsetof(CodeList, code);
         static const size_t minAllocSize = LARGEST_UNDERRUN_PROT;
 
+        /** Terminator blocks.  All active and free allocations
+            are reachable by traversing this chain and each 
+            element's lower chain. */
         CodeList* heapblocks;
+
+        /** Reusable blocks. */
+        CodeList* availblocks;
 
         /** remove one block from a list */
         static CodeList* removeBlock(CodeList* &list);
