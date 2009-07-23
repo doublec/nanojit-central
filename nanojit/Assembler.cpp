@@ -547,6 +547,17 @@ namespace nanojit
         }
     }
 
+#ifdef NANOJIT_IA32
+    void Assembler::patch(SideExit* exit, SwitchInfo* si)
+    {
+        for (GuardRecord* lr = exit->guards; lr; lr = lr->next) {
+            Fragment *frag = lr->exit->target;
+            NanoAssert(frag->fragEntry != 0);
+            si->table[si->index] = frag->fragEntry;
+        }
+    }
+#endif
+
     NIns* Assembler::asm_exit(LInsp guard)
     {
         SideExit *exit = guard->record()->exit;
@@ -1481,8 +1492,8 @@ namespace nanojit
             for (i=start; i < NJ_MAX_STACK_ENTRY; i+=2) {
                 if ( (ar.entry[i+stack_direction(1)] == 0) && (i==tos || (ar.entry[i] == 0)) ) {
                     // found 2 adjacent aligned slots
-                    NanoAssert(_activation.entry[i] == 0);
-                    NanoAssert(_activation.entry[i+stack_direction(1)] == 0);
+                    NanoAssert(ar.entry[i] == 0);
+                    NanoAssert(ar.entry[i+stack_direction(1)] == 0);
                     ar.entry[i] = l;
                     ar.entry[i+stack_direction(1)] = l;
                     break;
@@ -1497,8 +1508,8 @@ namespace nanojit
                 if (canfit(size, i, ar)) {
                     // place the entry in the table and mark the instruction with it
                     for (int32_t j=0; j < size; j++) {
-                        NanoAssert(_activation.entry[i+stack_direction(j)] == 0);
-                        _activation.entry[i+stack_direction(j)] = l;
+                        NanoAssert(ar.entry[i+stack_direction(j)] == 0);
+                        ar.entry[i+stack_direction(j)] = l;
                     }
                     break;
                 }
