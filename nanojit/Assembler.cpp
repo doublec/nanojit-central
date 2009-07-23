@@ -672,11 +672,11 @@ namespace nanojit
         GC *gc = core->gc;
         //StackFilter storefilter1(&bufreader, gc, frag->lirbuf, frag->lirbuf->sp);
         //StackFilter storefilter2(&storefilter1, gc, frag->lirbuf, frag->lirbuf->rp);
-        LirFilter* rdr = &bufreader;
+        LirFilter* prev = &bufreader;
         verbose_only(
-            VerboseBlockReader vbr(rdr, this, frag->lirbuf->names);
+            VerboseBlockReader vbr(prev, this, frag->lirbuf->names);
             if (verbose_enabled())
-                rdr = &vbr;
+                prev = &vbr;
         )
 
         verbose_only(_thisfrag->compileNbr++; )
@@ -684,8 +684,8 @@ namespace nanojit
 
         LabelStateMap labels(gc);
         NInsMap patches(gc);
-        gen(rdr, loopJumps, labels, patches);
-        frag->fragEntry = _nIns;
+        gen(prev, loopJumps, labels, patches);
+        frag->loopEntry = _nIns;
         //nj_dprintf(stderr, "assemble frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
 
         if (!error()) {
@@ -709,60 +709,64 @@ namespace nanojit
 
     void Assembler::endAssembly(Fragment* frag, NInsList& loopJumps)
     {
-        while(!loopJumps.isEmpty())
-        {
-            NIns* loopJump = (NIns*)loopJumps.removeLast();
-            nPatchBranch(loopJump, _nIns);
-        }
-
-        NIns* patchEntry = 0;
-        if (!error())
-        {
-            patchEntry = genPrologue();
-            verbose_only( outputAddr=true; )
-            verbose_only( asm_output("[prologue]"); )
-        }
-
-        // something bad happened?
-        if (!error())
-        {
-            // check for resource leaks
-            debug_only(
-                for(uint32_t i=_activation.lowwatermark;i<_activation.highwatermark; i++) {
-                    NanoAssertMsgf(_activation.entry[i] == 0, "frame entry %d wasn't freed\n",-4*i);
-                }
-            )
-
-            // save used parts of current block on fragment's code list, free the rest
-#ifdef NANOJIT_ARM
-            _codeAlloc->addRemainder(codeList, exitStart, exitEnd, _nExitSlot, _nExitIns);
-            _codeAlloc->addRemainder(codeList, codeStart, codeEnd, _nSlot, _nIns);
-#else
-            _codeAlloc->addRemainder(codeList, exitStart, exitEnd, exitStart, _nExitIns);
-            _codeAlloc->addRemainder(codeList, codeStart, codeEnd, codeStart, _nIns);
-#endif
-
-            // at this point all our new code is in the d-cache and not the i-cache,
-            // so flush the i-cache on cpu's that need it.
-            _codeAlloc->flushICache(codeList);
-
-            // save entry point pointers
-            frag->fragEntry = patchEntry;
-            frag->setCode(_nIns);
-            PERFM_NVPROF("code", CodeAlloc::size(frag->codeList));
-        }
-        else
-        {
-            // something went wrong, release all allocated memory
+        // don't try to patch code if we are in an error state since we might have partially
+        // overwritten the code cache already
+        if (error()) {
+            // something went wrong, release all allocated code memory
             _codeAlloc->freeAll(codeList);
             _codeAlloc->free(exitStart, exitEnd);
             _codeAlloc->free(codeStart, codeEnd);
+            return;
         }
+
+        NIns* SOT = 0;
+        if (frag->isRoot()) {
+            SOT = frag->loopEntry;
+            verbose_only( verbose_outputf("%010lx:", (unsigned long)_nIns); )
+        } else {
+            SOT = frag->root->fragEntry;
+        }
+        AvmAssert(SOT != 0);
+        while(!loopJumps.isEmpty())
+        {
+            NIns* loopJump = (NIns*)loopJumps.removeLast();
+            verbose_only( verbose_outputf("## patching branch at %010lx to %010lx",
+                                          loopJump, SOT); )
+            nPatchBranch(loopJump, SOT);
+        }
+
+        NIns* fragEntry = genPrologue();
+        verbose_only( outputAddr=true; )
+        verbose_only( asm_output("[prologue]"); )
+
+        // check for resource leaks
+        debug_only(
+            for(uint32_t i=_activation.lowwatermark;i<_activation.highwatermark; i++) {
+                NanoAssertMsgf(_activation.entry[i] == 0, "frame entry %d wasn't freed\n",-4*i);
+            }
+        )
+
+        // save used parts of current block on fragment's code list, free the rest
+#ifdef NANOJIT_ARM
+        _codeAlloc->addRemainder(codeList, exitStart, exitEnd, _nExitSlot, _nExitIns);
+        _codeAlloc->addRemainder(codeList, codeStart, codeEnd, _nSlot, _nIns);
+#else
+        _codeAlloc->addRemainder(codeList, exitStart, exitEnd, exitStart, _nExitIns);
+        _codeAlloc->addRemainder(codeList, codeStart, codeEnd, codeStart, _nIns);
+#endif
+
+        // at this point all our new code is in the d-cache and not the i-cache,
+        // so flush the i-cache on cpu's that need it.
+        _codeAlloc->flushICache(codeList);
+
+        // save entry point pointers
+        frag->fragEntry = fragEntry;
+        frag->setCode(_nIns);
+        PERFM_NVPROF("code", CodeAlloc::size(frag->codeList));
 
         NanoAssertMsgf(error() || _fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
 
         internalReset();  // clear the reservation tables and regalloc
-        pageReset();
         NanoAssert( !_branchStateMap || _branchStateMap->isEmpty());
         _branchStateMap = 0;
     }
@@ -851,8 +855,13 @@ namespace nanojit
     void Assembler::gen(LirFilter* reader,  NInsList& loopJumps, LabelStateMap& labels,
                         NInsMap& patches)
     {
-        // trace must start with LIR_x or LIR_loop
-        //NanoAssert(reader->pos()->isop(LIR_x) || reader->pos()->isop(LIR_loop));
+        // trace must end with LIR_x, LIR_loop, LIR_[f]ret, LIR_xtbl, or LIR_live
+        NanoAssert(reader->pos()->isop(LIR_x) ||
+                   reader->pos()->isop(LIR_loop) ||
+                   reader->pos()->isop(LIR_ret) ||
+                   reader->pos()->isop(LIR_fret) ||
+                   reader->pos()->isop(LIR_xtbl) ||
+                   reader->pos()->isop(LIR_live));
 
         InsList pending_lives(_gc);
 
@@ -996,6 +1005,7 @@ namespace nanojit
                 case LIR_ld:
                 case LIR_ldc:
                 case LIR_ldcb:
+                case LIR_ldcs:
                 {
                     countlir_ld();
                     asm_ld(ins);
@@ -1047,6 +1057,8 @@ namespace nanojit
                 case LIR_lsh:
                 case LIR_rsh:
                 case LIR_ush:
+                case LIR_div:
+                case LIR_mod:
                 {
                     countlir_alu();
                     asm_arith(ins);
@@ -1197,7 +1209,7 @@ namespace nanojit
 #if TM_MERGE
 #ifdef NANOJIT_IA32
                 case LIR_xtbl: {
-                    NIns* exit = asm_exit(ins); // does intersectRegisterState()                                                                                                                                
+                    NIns* exit = asm_exit(ins); // does intersectRegisterState()
                     asm_switch(ins, exit);
                     break;
                 }
@@ -1230,6 +1242,8 @@ namespace nanojit
                 {
                     countlir_loop();
                     asm_loop(ins, loopJumps);
+                    assignSavedRegs();
+                    assignParamRegs();
                     break;
                 }
 
@@ -1690,6 +1704,28 @@ namespace nanojit
                 findSpecificRegFor(i, r);
         }
         debug_only(saved.used = 0);  // marker that we are no longer in exit path
+    }
+
+    // scan table for instruction with the lowest priority, meaning it is used
+    // furthest in the future.
+    LIns* Assembler::findVictim(RegAlloc &regs, RegisterMask allow)
+    {
+        NanoAssert(allow != 0);
+        LIns *i, *a=0;
+        int allow_pri = 0x7fffffff;
+        for (Register r=FirstReg; r <= LastReg; r = nextreg(r))
+        {
+            if ((allow & rmask(r)) && (i = regs.getActive(r)) != 0)
+            {
+                int pri = canRemat(i) ? 0 : regs.getPriority(r);
+                if (!a || pri < allow_pri) {
+                    a = i;
+                    allow_pri = pri;
+                }
+            }
+        }
+        NanoAssert(a != 0);
+        return a;
     }
 
 #ifdef NJ_VERBOSE

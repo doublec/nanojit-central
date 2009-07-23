@@ -179,6 +179,7 @@ namespace nanojit
             uint32_t xjumpCount;
             int32_t blacklistLevel;
             NIns* fragEntry;
+            NIns* loopEntry;
             int32_t calldepth;
             void* vmprivate;
             CodeList* codeList;

@@ -180,7 +180,7 @@ namespace nanojit
 #ifdef NANOJIT_IA32
             void        patch(SideExit *exit, SwitchInfo* si);
 #endif
-            AssmError   error() { return _err; }
+            AssmError   error()    { return _err; }
             void        setError(AssmError e) { _err = e; }
             void        pageReset();
 
