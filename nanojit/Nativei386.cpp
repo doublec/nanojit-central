@@ -1575,18 +1575,6 @@ namespace nanojit
         }
     }
 
-    NIns* Assembler::asm_adjustBranch(NIns* at, NIns* target)
-    {
-        NIns *save = _nIns;
-        NIns *was = (NIns*)( (intptr_t)*(int32_t*)(at+1)+(intptr_t)(at+5) );
-        _nIns = at +5; // +5 is size of JMP
-        intptr_t tt = (intptr_t)target - (intptr_t)_nIns;
-        IMM32(tt);
-        *(--_nIns) = JMPc;
-        _nIns = save;
-        return was;
-    }
-
     void Assembler::nativePageReset()
     {}
 

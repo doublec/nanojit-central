@@ -61,7 +61,6 @@ better code
 - stack based LIR_param
 
 tracing
-- asm_adjustBranch
 - asm_loop
 - asm_qjoin
 - asm_qhi
@@ -1066,11 +1065,6 @@ namespace nanojit
             // saved param
             prepResultReg(ins, rmask(savedRegs[a]));
         }
-    }
-
-    NIns* Assembler::asm_adjustBranch(NIns*, NIns*) {
-        TODO(asm_adjustBranch);
-        return 0;
     }
 
     // register allocation for 2-address style unary ops of the form R = (op) R

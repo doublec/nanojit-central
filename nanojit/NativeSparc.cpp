@@ -1010,17 +1010,6 @@ namespace nanojit
         FCMPD(rLhs, rRhs);
     }
 
-    NIns* Assembler::asm_adjustBranch(NIns* at, NIns* target)
-    {
-        NIns* was;
-        was = (NIns*)(((*(uint32_t*)&at[0] & 0x3FFFFF) << 10) | (*(uint32_t*)&at[1] & 0x3FF ));
-        *(uint32_t*)&at[0] &= 0xFFC00000;
-        *(uint32_t*)&at[0] |= ((intptr_t)target >> 10) & 0x3FFFFF;
-        *(uint32_t*)&at[1] &= 0xFFFFFC00;
-        *(uint32_t*)&at[1] |= (intptr_t)target & 0x3FF;
-        return was;
-    }
-
     void Assembler::nativePageReset()
     {
     }

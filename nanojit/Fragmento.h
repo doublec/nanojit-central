@@ -140,15 +140,6 @@ namespace nanojit
             int32_t&        hits()                          { return _hits; }
             void            blacklist();
             bool            isBlacklisted()     { return _hits < 0; }
-            void            resetLinks();
-            void            addLink(GuardRecord* lnk);
-            void            removeLink(GuardRecord* lnk);
-            void            link(Assembler* assm);
-            void            linkBranches(Assembler* assm);
-            void            unlink(Assembler* assm);
-            void            unlinkBranches(Assembler* assm);
-            debug_only( bool hasOnlyTreeLinks(); )
-            void            removeIntraLinks();
             void            releaseLirBuffer();
             void            releaseCode(CodeAlloc *alloc);
             void            releaseTreeMem(CodeAlloc *alloc);

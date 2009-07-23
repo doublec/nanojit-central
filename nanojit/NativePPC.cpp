@@ -1297,12 +1297,6 @@ namespace nanojit
     void Assembler::nFragExit(LIns*) {
         TODO(nFragExit);
     }
-
-    NIns* Assembler::asm_adjustBranch(NIns*, NIns*) {
-        TODO(asm_adjustBranch);
-        return 0;
-    }
-
 } // namespace nanojit
 
 #endif // FEATURE_NANOJIT && NANOJIT_PPC

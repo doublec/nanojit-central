@@ -530,20 +530,21 @@ namespace nanojit
 
     void Assembler::patch(GuardRecord *lr)
     {
-        Fragment *frag = lr->target;
+        Fragment *frag = lr->exit->target;
         NanoAssert(frag->fragEntry != 0);
-        NIns* was = asm_adjustBranch((NIns*)lr->jmp, frag->fragEntry);
-        if (!lr->origTarget) lr->origTarget = was;
-        verbose_only(verbose_outputf("patching jump at %p to target %p (was %p)\n",
-            lr->jmp, frag->fragEntry, was);)
+        nPatchBranch((NIns*)lr->jmp, frag->fragEntry);
+        verbose_only(verbose_outputf("patching jump at %p to target %p\n",
+            lr->jmp, frag->fragEntry);)
     }
 
-    void Assembler::unpatch(GuardRecord *lr)
+    void Assembler::patch(SideExit *exit)
     {
-        NIns* was = asm_adjustBranch((NIns*)lr->jmp, (NIns*)lr->origTarget);
-        (void)was;
-        verbose_only(verbose_outputf("unpatching jump at %p to original target %p (was %p)\n",
-            lr->jmp, lr->origTarget, was);)
+        GuardRecord *rec = exit->guards;
+        NanoAssert(rec);
+        while (rec) {
+            patch(rec);
+            rec = rec->next;
+        }
     }
 
     NIns* Assembler::asm_exit(LInsp guard)

@@ -175,7 +175,7 @@ namespace nanojit
             void        copyRegisters(RegAlloc* copyTo);
             void        releaseRegisters();
             void        patch(GuardRecord *lr);
-            void        unpatch(GuardRecord *lr);
+            void        patch(SideExit *exit);
             AssmError   error() { return _err; }
             void        setError(AssmError e) { _err = e; }
             void        pageReset();
@@ -269,7 +269,6 @@ namespace nanojit
             void        asm_spill(Register rr, int d, bool pop, bool quad);
             void        asm_load64(LInsp i);
             void        asm_ret(LInsp p);
-            NIns*       asm_adjustBranch(NIns* at, NIns* target);
             void        asm_quad(LInsp i);
             void        asm_loop(LInsp i, NInsList& loopJumps);
             void        asm_fcond(LInsp i);

@@ -1215,35 +1215,6 @@ Assembler::nativePageSetup()
         _nExitSlot = exitStart;
 }
 
-NIns*
-Assembler::asm_adjustBranch(NIns* at, NIns* target)
-{
-    // This always got emitted as a BL_far sequence; at points
-    // to the first of 4 instructions.  Ensure that we're where
-    // we think we were..
-    NanoAssert(at[1] == (NIns)( COND_AL | OP_IMM | (1<<23) | (PC<<16) | (LR<<12) | (4) ));
-    NanoAssert(at[2] == (NIns)( COND_AL | (0x9<<21) | (0xFFF<<8) | (1<<4) | (IP) ));
-
-    NIns* was = (NIns*) at[3];
-
-    //fprintf (stderr, "Adjusting branch @ 0x%8x: 0x%x -> 0x%x\n", at+3, at[3], target);
-
-    at[3] = (NIns)target;
-
-#if defined(UNDER_CE)
-    // we changed the code, so we need to do this (sadly)
-    FlushInstructionCache(GetCurrentProcess(), NULL, NULL);
-#elif defined(AVMPLUS_LINUX)
-    __clear_cache((char*)at, (char*)(at+4));
-#endif
-
-#ifdef AVMPLUS_PORTING_API
-    NanoJIT_PortAPI_FlushInstructionCache((char*)at, (char*)(at+4));
-#endif
-
-    return was;
-}
-
 void
 Assembler::underrunProtect(int bytes)
 {
