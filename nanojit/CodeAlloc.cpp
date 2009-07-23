@@ -190,8 +190,12 @@ extern  "C" void sync_instruction_memory(caddr_t v, u_int len);
 
 #if defined NANOJIT_IA32 || defined NANOJIT_X64
     // intel chips have dcache/icache interlock
-    void CodeAlloc::flushICache(CodeList* &)
-    {}
+    void CodeAlloc::flushICache(CodeList* &blocks) {
+        // Tell Valgrind that new code has been generated, and it must flush
+        // any translations it has for the memory range generated into. 
+        for (CodeList *b = blocks; b != 0; b = b->next)
+            VALGRIND_DISCARD_TRANSLATIONS(b->start(), b->size());
+    }
 
 #elif defined NANOJIT_ARM && defined UNDER_CE
     // on arm/winmo, just flush the whole icache

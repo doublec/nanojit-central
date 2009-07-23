@@ -779,13 +779,6 @@ namespace nanojit
 
         NanoAssertMsgf(error() || _fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
 
-        // Tell Valgrind that new code has been generated, and it must flush                                                                                                                                    
-        // any translations it has for the memory range generated into.                                                                                                                                         
-        //@fixme: update to use codeAlloc api, and use addresses of code
-        // bits in the newly minted codeList.
-        VALGRIND_DISCARD_TRANSLATIONS(pageTop(_nIns-1),     NJ_PAGE_SIZE);
-        VALGRIND_DISCARD_TRANSLATIONS(pageTop(_nExitIns-1), NJ_PAGE_SIZE);
-
         internalReset();  // clear the reservation tables and regalloc
         pageReset();
         NanoAssert( !_branchStateMap || _branchStateMap->isEmpty());
