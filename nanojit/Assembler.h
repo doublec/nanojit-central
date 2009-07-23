@@ -232,7 +232,6 @@ namespace nanojit
             GC*                 _gc;
             DWB(Fragment*)      _thisfrag;
             RegAllocMap*        _branchStateMap;
-            GuardRecord*        _latestGuard;
 
             NIns        *codeStart, *codeEnd;       // current block we're adding code to
             NIns        *exitStart, *exitEnd;       // current block for exit stubs

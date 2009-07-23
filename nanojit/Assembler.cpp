@@ -682,11 +682,9 @@ namespace nanojit
         )
 
         verbose_only(_thisfrag->compileNbr++; )
-        _latestGuard = 0;
         _inExit = false;
         gen(rdr, loopJumps);
         frag->fragEntry = _nIns;
-        //frag->outbound = config.tree_opt? _latestGuard : 0;
         //nj_dprintf(stderr, "assemble frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
 
         if (!error()) {
