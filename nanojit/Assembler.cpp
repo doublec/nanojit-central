@@ -1777,6 +1777,15 @@ namespace nanojit
         labels.put(label, st);
     }
 
+    LabelStateMap::~LabelStateMap() {
+        LabelState *st;
+    
+        while (!labels.isEmpty()) {
+            st = labels.removeLast();
+            NJ_DELETE(st);
+        }   
+    }
+
     LabelState* LabelStateMap::get(LIns *label) {
         return labels.get(label);
     }

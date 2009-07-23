@@ -129,6 +129,7 @@ namespace nanojit
     public:
         LabelStateMap(GC *gc) : gc(gc), labels(gc)
         {}
+        ~LabelStateMap();
 
         void clear() { labels.clear(); }
         void add(LIns *label, NIns *addr, RegAlloc &regs);
