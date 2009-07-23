@@ -240,7 +240,6 @@ namespace nanojit
             NIns        *exitStart, *exitEnd;       // current block for exit stubs
             NIns*       _nIns;          // current native instruction
             NIns*       _nExitIns;      // current instruction in exit fragment page
-            NIns*       _startingIns;   // starting location of code compilation for error handling
             NIns*       _epilogue;
             AssmError   _err;           // 0 = means assemble() appears ok, otherwise it failed
         #if PEDANTIC

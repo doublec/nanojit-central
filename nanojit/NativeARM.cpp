@@ -1196,7 +1196,6 @@ void
 Assembler::nativePageReset()
 {
     _nExitSlot = 0;
-    _startingSlot = 0;
 }
 
 void

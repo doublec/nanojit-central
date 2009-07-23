@@ -256,7 +256,6 @@ namespace nanojit
     {
         _nIns = 0;
         _nExitIns = 0;
-        _startingIns = 0;
         codeStart = codeEnd = 0;
         exitStart = exitEnd = 0;
         _stats.pages = 0;
@@ -646,13 +645,6 @@ namespace nanojit
         // native code gen buffer setup
         nativePageSetup();
 
-        // When outOMem, nIns is set to startingIns and we overwrite the region until the error is handled
-        underrunProtect(LARGEST_UNDERRUN_PROT);  // the largest value passed to underrunProtect()
-        _startingIns = _nIns;
-#ifdef NANOJIT_ARM
-        _startingSlot = _nSlot;
-#endif
-
     #ifdef AVMPLUS_PORTING_API
         _endJit2Addr = _nExitIns;
     #endif
@@ -715,13 +707,6 @@ namespace nanojit
                     break;
                 }
             }
-        }
-        else {
-            _nIns = _startingIns;  // in case of failure reset nIns ready for the next assembly run
-#ifdef NANOJIT_ARM
-            _nSlot = _startingSlot;  // in case of failure reset nSlot ready for the next assembly run
-#endif
-            IF_PEDANTIC( pedanticTop = _nIns;)
         }
     }
 
