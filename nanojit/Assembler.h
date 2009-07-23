@@ -196,7 +196,8 @@ namespace nanojit
 
         private:
 
-            void        gen(LirFilter* toCompile, NInsList& loopJumps);
+            void        gen(LirFilter* toCompile, NInsList& loopJumps, LabelStateMap& labels,
+                            NInsMap& patches);
             NIns*       genPrologue();
             NIns*       genEpilogue();
 
@@ -250,10 +251,7 @@ namespace nanojit
             AR          _activation;
             RegAlloc    _allocator;
 
-            LabelStateMap   _labels;
-            NInsMap     _patches;
             bool        _inExit, vpad2[3];
-            InsList     pending_lives;
 
 #ifndef NJ_SOFTFLOAT
             void        asm_fcmp(LIns *cond);
@@ -298,7 +296,7 @@ namespace nanojit
             void        assignSavedRegs();
             void        reserveSavedRegs();
             void        assignParamRegs();
-            void        handleLoopCarriedExprs();
+            void        handleLoopCarriedExprs(InsList& pending_lives);
 
             // platform specific implementation (see NativeXXX.cpp file)
             void        nInit(AvmCore *);
