@@ -175,7 +175,7 @@ namespace nanojit
         ((int64_t*)_nIns)[-1] = op;
         _nIns -= len; // move pointer by length encoded in opcode
         _nvprof("x64-bytes", len);
-        verbose_only( if (_verbose) dis(_nIns, len); )
+        verbose_only( if (_logc->lcbits & LC_Assembly) dis(_nIns, len); )
     }
 
     void Assembler::emit8(uint64_t op, int64_t v) {
@@ -498,7 +498,7 @@ namespace nanojit
 
         bool indirect = call->isIndirect();
         if (!indirect) {
-            verbose_only(if (_verbose)
+            verbose_only(if (_logc->lcbits & LC_Assembly)
                 outputf("        %p:", _nIns);
             )
             NIns *target = (NIns*)call->_address;
@@ -859,10 +859,9 @@ namespace nanojit
                 emitrm(X64_movlrm, r, d, FP);
             }
         }
-        verbose_only(
-            if (_verbose)
-                outputf("        restore %s",_thisfrag->lirbuf->names->formatRef(ins));
-        )
+        verbose_only( if (_logc->lcbits & LC_RegAlloc) {
+                        outputForEOL("  <= restore %s",
+                        _thisfrag->lirbuf->names->formatRef(ins)); } )
     }
 
     void Assembler::asm_cond(LIns *ins) {
@@ -1261,7 +1260,7 @@ namespace nanojit
             const int br_size = 8; // opcode + 32bit addr
             if (pc - bytes - br_size < top) {
                 // really do need a page break
-                verbose_only(if (_verbose) outputf("newpage %p:", pc);)
+                verbose_only(if (_logc->lcbits & LC_Assembly) outputf("newpage %p:", pc);)
                 codeAlloc();
             }
             // now emit the jump, but make sure we won't need another page break.
@@ -1272,7 +1271,7 @@ namespace nanojit
         }
     #else
         if (pc - bytes < top) {
-            verbose_only(if (_verbose) outputf("newpage %p:", pc);)
+            verbose_only(if (_logc->lcbits & LC_Assembly) outputf("newpage %p:", pc);)
             codeAlloc();
             // this jump will call underrunProtect again, but since we're on a new
             // page, nothing will happen.

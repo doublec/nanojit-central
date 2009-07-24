@@ -267,10 +267,10 @@ namespace nanojit
         if (i->isop(LIR_alloc)) {
             ADD(FP, L2, r);
             SET32(disp(resv), L2);
-            verbose_only(if (_verbose) {
+            verbose_only(if (_logc->lcbits & LC_RegAlloc) {
                 outputf("        remat %s size %d", _thisfrag->lirbuf->names->formatRef(i), i->size());
             })
-                }
+        }
         else if (i->isconst()) {
             if (!resv->arIndex) {
                 i->resv()->clear();
@@ -284,10 +284,10 @@ namespace nanojit
             } else {
                 LDSW32(FP, d, r);
             }
-            verbose_only(if (_verbose) {
+            verbose_only(if (_logc->lcbits & LC_RegAlloc) {
                 outputf("        restore %s", _thisfrag->lirbuf->names->formatRef(i));
             })
-                }
+        }
     }
 
     void Assembler::asm_store32(LIns *value, int dr, LIns *base)
@@ -563,7 +563,8 @@ namespace nanojit
     {
         (void)ins;
         JMP_long_placeholder(); // jump to SOT
-        verbose_only( if (_verbose && _outputCache) { _outputCache->removeLast(); outputf("         jmp   SOT"); } );
+        verbose_only( if ((_logc->lcbits & LC_Assembly) && _outputCache) {
+                          _outputCache->removeLast(); outputf("         jmp   SOT"); } );
 
         loopJumps.add(_nIns);
 

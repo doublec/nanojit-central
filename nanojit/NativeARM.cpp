@@ -296,7 +296,7 @@ Assembler::asm_call(LInsp ins)
 #endif
 
     if (!indirect) {
-        verbose_only(if (_verbose)
+        verbose_only(if (_logc->lcbits & LC_Assembly)
             outputf("        %p:", _nIns);
         )
         // Direct call: on v5 and above (where the calling sequence doesn't
@@ -589,9 +589,9 @@ Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
 #else
         LDR(r, FP, d);
 #endif
+
         verbose_only(
-            if (_verbose)
-                outputf("        restore %s",_thisfrag->lirbuf->names->formatRef(i));
+            asm_output("        restore %s",_thisfrag->lirbuf->names->formatRef(i));
         )
     }
 }
@@ -852,7 +852,7 @@ Assembler::underrunProtect(int bytes)
     uintptr_t pc = uintptr_t(_nIns);
     if (pc - bytes < top)
     {
-        verbose_only(if (_verbose) outputf("        %p:", _nIns);)
+        verbose_only(if (_logc->lcbits & LC_Assembly) outputf("        %p:", _nIns);)
         NIns* target = _nIns;
         codeAlloc(_inExit);
         _nSlot = _inExit ? exitStart : codeStart;
@@ -1413,24 +1413,16 @@ Assembler::asm_prep_fcall(Reservation*, LInsp)
     }
 
     void Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
-{
-    (void)ins;
-        B_long_placeholder(); // jump to SOT
-        verbose_only( if (_verbose && _outputCache) { _outputCache->removeLast(); outputf("         jmp   SOT"); } );
+    {
+        // XXX asm_loop should be in Assembler.cpp!
 
+        JMP_far(0);
         loopJumps.add(_nIns);
 
-        #ifdef NJ_VERBOSE
-        // branching from this frag to ourself.
-        if (config.show_stats)
-        LDi(argRegs[1], int((Fragment*)_thisfrag));
-        #endif
-
-        assignSavedRegs();
-
-        // restore first parameter, the only one we use
-        LInsp state = _thisfrag->lirbuf->state;
-        findSpecificRegFor(state, argRegs[state->paramArg()]);
+        // If the target we are looping to is in a different fragment, we have to restore
+        // SP since we will target fragEntry and not loopEntry.
+        if (ins->record()->exit->target != _thisfrag)
+            MOV(SP,FP);
     }
 
 #ifdef NJ_ARM_VFP

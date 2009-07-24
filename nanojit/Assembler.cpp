@@ -108,6 +108,64 @@ namespace nanojit
             return i;
         }
     };
+
+    /* A listing filter for LIR, going through backwards.  It merely
+       passes its input to its output, but notes it down too.  When
+       destructed, prints out what went through.  Is intended to be
+       used to print arbitrary intermediate transformation stages of
+       LIR. */
+    class ReverseLister : public LirFilter
+    {
+        GC*          _gc;
+        LirNameMap*  _names;
+        const char*  _title;
+        avmplus::List<char*, avmplus::LIST_NonGCObjects> _strs;
+        LogControl*  _logc;
+    public:
+        ReverseLister(LirFilter* in, GC* gc,
+                      LirNameMap* names, LogControl* logc, const char* title)
+            : LirFilter(in)
+            , _gc(gc)
+            , _names(names)
+            , _title(title)
+            , _strs(gc)
+            , _logc(logc)
+        { }
+
+        ~ReverseLister()
+        {
+            _logc->printf("\n");
+            _logc->printf("=== BEGIN %s ===\n", _title);
+            int i, j;
+            const char* prefix = "  ";
+            for (j = 0, i = _strs.size()-1; i >= 0; i--, j++) {
+                char* str = _strs.get(i);
+                _logc->printf("%s%02d: %s\n", prefix, j, str);
+                delete [] str;
+            }
+            _logc->printf("=== END %s ===\n", _title);
+            _logc->printf("\n");
+        }
+
+        LInsp read()
+        {
+            LInsp i = in->read();
+            const char* str = _names->formatIns(i);
+            char* cpy = new char[strlen(str)+1];
+            strcpy(cpy, str);
+            _strs.add(cpy);
+            return i;
+        }
+
+        static void finish(ReverseLister *r)
+        {
+            if (r) {
+                GC* gc = r->_gc;
+                r->~ReverseLister();
+                gc->Free(r);
+            }
+        }
+    };
 #endif
 
     /**
@@ -115,7 +173,7 @@ namespace nanojit
      *
      *    - merging paths ( build a graph? ), possibly use external rep to drive codegen
      */
-    Assembler::Assembler(CodeAlloc* codeAlloc, AvmCore *core)
+    Assembler::Assembler(CodeAlloc* codeAlloc, AvmCore *core, LogControl* logc)
         : hasLoop(0)
         , codeList(0)
         , core(core)
@@ -124,7 +182,8 @@ namespace nanojit
         , config(core->config)
     {
         nInit(core);
-        verbose_only( _verbose = !core->quiet_opt() && core->verbose() );
+        (void)logc;
+        verbose_only( _logc = logc; )
         verbose_only( _outputCache = 0; )
         verbose_only( outlineEOL[0] = '\0'; )
 
@@ -491,7 +550,9 @@ namespace nanojit
     {
         int d = disp(resv);
         Register rr = resv->reg;
-        verbose_only( if (d && _verbose) { outputForEOL("  <= spill %s", _thisfrag->lirbuf->names->formatRef(i)); } )
+        verbose_only( if (d && (_logc->lcbits & LC_RegAlloc)) {
+                         outputForEOL("  <= spill %s",
+                                      _thisfrag->lirbuf->names->formatRef(i)); } )
         asm_spill(rr, d, pop, i->isQuad());
     }
 
@@ -565,6 +626,11 @@ namespace nanojit
         {
             RegAlloc* captured = _branchStateMap->get(exit);
             intersectRegisterState(*captured);
+            verbose_only(
+                verbose_outputf("## merging trunk with %s",
+                    _labelMap->format(exit->target));
+                verbose_outputf("%010lx:", (unsigned long)_nIns);
+            )
             at = exit->target->fragEntry;
             NanoAssert(at != 0);
             _branchStateMap->remove(exit);
@@ -652,7 +718,7 @@ namespace nanojit
         _stats.pages = 0;
         _stats.codeStart = _nIns-1;
         _stats.codeExitStart = _nExitIns-1;
-        //fprintf(stderr,"pageReset %d start %x exit start %x\n", _stats.pages, (int)_stats.codeStart, (int)_stats.codeExitStart);
+        //nj_dprintf("pageReset %d start %x exit start %x\n", _stats.pages, (int)_stats.codeStart, (int)_stats.codeExitStart);
 #endif /* PERFM */
 
         _epilogue = genEpilogue();
@@ -667,16 +733,55 @@ namespace nanojit
         if (error()) return;
         _thisfrag = frag;
 
-        // set up backwards pipeline: assembler -> StackFilter -> LirReader
-        LirReader bufreader(frag->lastIns);
-        GC *gc = core->gc;
-        //StackFilter storefilter1(&bufreader, gc, frag->lirbuf, frag->lirbuf->sp);
-        //StackFilter storefilter2(&storefilter1, gc, frag->lirbuf, frag->lirbuf->rp);
-        LirFilter* prev = &bufreader;
+        // Used for debug printing, if needed
         verbose_only(
-            VerboseBlockReader vbr(prev, this, frag->lirbuf->names);
-            if (verbose_enabled())
-                prev = &vbr;
+        ReverseLister *pp_init = NULL;
+        ReverseLister *pp_after_sf1 = NULL;
+        ReverseLister *pp_after_sf2 = NULL;
+        )
+
+        // set up backwards pipeline: assembler -> StackFilter -> LirReader
+        GC *gc = core->gc;
+        LirReader bufreader(frag->lastIns);
+
+        // Used to construct the pipeline
+        LirFilter* prev = &bufreader;
+
+        // The LIR passes through these filters as listed in this
+        // function, viz, top to bottom.
+
+        // INITIAL PRINTING
+        verbose_only( if (_logc->lcbits & LC_ReadLIR) {
+        pp_init = new (gc) ReverseLister(prev, gc, frag->lirbuf->names, _logc,
+                                    "Initial LIR");
+        prev = pp_init;
+        })
+
+        /*// STOREFILTER for sp
+        StackFilter storefilter1(prev, gc, frag->lirbuf, frag->lirbuf->sp);
+        prev = &storefilter1;
+
+        verbose_only( if (_logc->lcbits & LC_AfterSF_SP) {
+        pp_after_sf1 = new ReverseLister(prev, gc, frag->lirbuf->names, _logc,
+                                         "After Storefilter(sp)");
+        prev = pp_after_sf1;
+        })
+
+        // STOREFILTER for rp
+        StackFilter storefilter2(prev, gc, frag->lirbuf, frag->lirbuf->rp);
+        prev = &storefilter2;
+
+        verbose_only( if (_logc->lcbits & LC_AfterSF_RP) {
+        pp_after_sf2 = new ReverseLister(prev, gc, frag->lirbuf->names, _logc,
+                                         "After StoreFilter(rp) (final LIR)");
+        prev = pp_after_sf2;
+        })*/
+
+        // end of pipeline
+        verbose_only(
+        VerboseBlockReader vbr(prev, this, frag->lirbuf->names);
+        if (_logc->lcbits & LC_Assembly)
+            prev = &vbr;
         )
 
         verbose_only(_thisfrag->compileNbr++; )
@@ -705,6 +810,15 @@ namespace nanojit
                 }
             }
         }
+
+        // If we were accumulating debug info in the various ReverseListers,
+        // destruct them now.  Their destructors cause them to emit whatever
+        // contents they have accumulated.
+        verbose_only(
+        ReverseLister::finish(pp_init);
+        ReverseLister::finish(pp_after_sf1);
+        ReverseLister::finish(pp_after_sf2);
+        )
     }
 
     void Assembler::endAssembly(Fragment* frag, NInsList& loopJumps)
@@ -764,7 +878,7 @@ namespace nanojit
         frag->setCode(_nIns);
         PERFM_NVPROF("code", CodeAlloc::size(frag->codeList));
 
-        NanoAssertMsgf(error() || _fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
+        NanoAssertMsgf(_fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
 
         internalReset();  // clear the reservation tables and regalloc
         NanoAssert( !_branchStateMap || _branchStateMap->isEmpty());
@@ -1203,7 +1317,10 @@ namespace nanojit
                         intersectRegisterState(label->regs);
                         label->addr = _nIns;
                     }
-                    verbose_only( if (_verbose) { outputAddr=true; asm_output("[%s]", _thisfrag->lirbuf->names->formatRef(ins)); } )
+                    verbose_only( if (_logc->lcbits & LC_Assembly) { outputAddr=true; asm_output("[%s]", _thisfrag->lirbuf->names->formatRef(ins)); } )
+                    break;
+                }
+                case LIR_xbarrier: {
                     break;
                 }
 #if TM_MERGE
@@ -1232,7 +1349,8 @@ namespace nanojit
                 case LIR_x:
                 {
                     countlir_x();
-                    verbose_only(verbose_output(""));
+                    verbose_only( if (_logc->lcbits & LC_Assembly)
+                                      asm_output("FIXME-whats-this?\n"); )
                     // generate the side exit branch on the main trace.
                     NIns *exit = asm_exit(ins);
                     JMP( exit );
@@ -1416,8 +1534,7 @@ namespace nanojit
 #ifdef NJ_VERBOSE
     void Assembler::printActivationState(const char* what)
     {
-        bool verbose_activation = false;
-        if (!verbose_activation || !verbose_enabled())
+        if (!(_logc->lcbits & LC_Activation))
             return;
 
         char* s = &outline[0];
@@ -1642,7 +1759,11 @@ namespace nanojit
             }
         }
         assignSaved(saved, skip);
-        verbose_only( if (shouldMention) verbose_outputf("                                              merging registers (intersect) with existing edge");  )
+        verbose_only(
+            if (shouldMention)
+                verbose_outputf("## merging registers (intersect) "
+                                "with existing edge");
+        )
     }
 
     /**
@@ -1748,7 +1869,17 @@ namespace nanojit
         va_list     args;
         va_start(args, format);
         outline[0] = '\0';
-        vsprintf(outline, format, args);
+
+        // Format the output string and remember the number of characters
+        // that were written.
+        uint32_t outline_len = vsprintf(outline, format, args);
+
+        // Add the EOL string to the output, ensuring that we leave enough
+        // space for the terminating NULL character, then reset it so it
+        // doesn't repeat on the next outputf.
+        VMPI_strncat(outline, outlineEOL, sizeof(outline)-(outline_len+1));
+        outlineEOL[0] = '\0';
+
         output(outline);
     }
 
@@ -1762,15 +1893,22 @@ namespace nanojit
         }
         else
         {
-            core->console << s << "\n";
+            _logc->printf("%s\n", s);
         }
     }
 
     void Assembler::output_asm(const char* s)
     {
-        if (!verbose_enabled())
+        if (!(_logc->lcbits & LC_Assembly))
             return;
-            output(s);
+
+        // Add the EOL string to the output, ensuring that we leave enough
+        // space for the terminating NULL character, then reset it so it
+        // doesn't repeat on the next outputf.
+        strncat(outline, outlineEOL, sizeof(outline)-(strlen(outline)+1));
+        outlineEOL[0] = '\0';
+
+        output(s);
     }
 
     char* Assembler::outputAlign(char *s, int col)

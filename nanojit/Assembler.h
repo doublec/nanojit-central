@@ -157,17 +157,22 @@ namespace nanojit
             void FASTCALL outputf(const char* format, ...);
             void FASTCALL output_asm(const char* s);
 
-            bool _verbose, outputAddr, vpad[2];  // if outputAddr=true then next asm instr. will include address in output
+            bool outputAddr, vpad[3];  // if outputAddr=true then next asm instr. will include address in output
             void printActivationState(const char* what);
 
             StringList* _outputCache;
-            #endif
+            DWB(LabelMap*) _labelMap;
+
+            // Log controller object.  Contains what-stuff-should-we-print
+            // bits, and a sink function for debug printing
+            LogControl* _logc;
+            #endif // NJ_VERBOSE
 
             #ifdef VTUNE
             avmplus::CodegenLIR *cgen;
             #endif
 
-            Assembler(CodeAlloc* codeAlloc, AvmCore* core);
+            Assembler(CodeAlloc* codeAlloc, AvmCore* core, LogControl* logc);
             ~Assembler() {}
 
             void        assemble(Fragment* frag, NInsList& loopJumps);

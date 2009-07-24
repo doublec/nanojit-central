@@ -196,15 +196,13 @@ namespace nanojit
 #define NJ_PROFILE 1
 #endif
 
-#ifdef NJ_VERBOSE
-    #define verbose_output                      if (verbose_enabled()) Assembler::output
-    #define verbose_outputf                     if (verbose_enabled()) Assembler::outputf
-    #define verbose_enabled()                   (_verbose)
-    #define verbose_only(...)                   __VA_ARGS__
+#if defined(NJ_VERBOSE)
+    #include <stdio.h>
+    #define verbose_outputf            if (_logc->lcbits & LC_Assembly) \
+                                        Assembler::outputf
+    #define verbose_only(...)        __VA_ARGS__
 #else
-    #define verbose_output
     #define verbose_outputf
-    #define verbose_enabled()
     #define verbose_only(...)
 #endif /*NJ_VERBOSE*/
 
@@ -283,6 +281,7 @@ namespace nanojit {
            and below, so that callers can use bits 16 and above for
            themselves. */
         // TODO: add entries for the writer pipeline
+        LC_Activation  = 1<<7, // enable printActivationState
         LC_Liveness    = 1<<6, // (show LIR liveness analysis)
         LC_ReadLIR     = 1<<5, // As read from LirBuffer
         LC_AfterSF_SP  = 1<<4, // After StackFilter(sp)
