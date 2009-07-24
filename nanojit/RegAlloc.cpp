@@ -66,23 +66,20 @@ namespace nanojit
         free |= rmask(r);
     }
 
-    void RegAlloc::removeFree(Register r)
-    {
-        NanoAssert(isFree(r));
-        free &= ~rmask(r);
-    }
-
     void RegAlloc::addActive(Register r, LIns* v)
     {
         //  Count++;
-        NanoAssert(v && r != UnknownReg && active[r] == NULL );
+        NanoAssert(v);
+        NanoAssert(r != UnknownReg);
+        NanoAssert(active[r] == NULL);
         active[r] = v;
         useActive(r);
     }
 
     void RegAlloc::useActive(Register r)
     {
-        NanoAssert(r != UnknownReg && active[r] != NULL);
+        NanoAssert(r != UnknownReg);
+        NanoAssert(active[r] != NULL);
         usepri[r] = priority++;
     }
 
@@ -117,7 +114,7 @@ namespace nanojit
             if (ins && regs.isFree(r))
                 { NanoAssertMsg( 0, "Coding error; register is both free and active! " ); }
             //if (!ins && !regs.isFree(r))
-            //  { NanoAssertMsg( 0, "Coding error; register is not in the free list when it should be" ); }
+            //    { NanoAssertMsg( 0, "Coding error; register is not in the free list when it should be" ); }
             if (!ins)
                 continue;
 
