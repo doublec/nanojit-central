@@ -102,8 +102,11 @@ Assembler::genPrologue()
     if (amt)
         asm_sub_imm(SP, SP, amt);
 
-    verbose_only( verbose_outputf("         %p:",_nIns); )
-    verbose_only( verbose_output("         patch entry"); )
+    verbose_only(
+    if (_logc->lcbits & LC_Assembly) {
+        outputf("         %p:",_nIns);
+        output("         patch entry");
+    })
     NIns *patchEntry = _nIns;
 
     MOV(FP, SP);
