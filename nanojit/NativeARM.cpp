@@ -1414,6 +1414,9 @@ Assembler::asm_prep_fcall(Reservation*, LInsp)
 
     void Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
     {
+        (void)ins;
+        (void)loopJumps;
+    #ifdef TM_MERGE
         // XXX asm_loop should be in Assembler.cpp!
 
         JMP_far(0);
@@ -1423,6 +1426,7 @@ Assembler::asm_prep_fcall(Reservation*, LInsp)
         // SP since we will target fragEntry and not loopEntry.
         if (ins->record()->exit->target != _thisfrag)
             MOV(SP,FP);
+    #endif
     }
 
 #ifdef NJ_ARM_VFP
