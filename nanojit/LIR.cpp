@@ -1424,10 +1424,10 @@ namespace nanojit
         uint32_t cap = m_cap;
         const LInsp *list = m_list;
         const uint32_t bitmask = (cap - 1) & ~0x1;
-        uint32_t hash = hash3(op,a,b,c) & bitmask;  
+        uint32_t hash = hash3(op,a,b,c) & bitmask;
         uint32_t n = 7 << 1;
         LInsp k;
-        while ((k = list[hash]) != NULL && 
+        while ((k = list[hash]) != NULL &&
             (k->opcode() != op || k->oprnd1() != a || k->oprnd2() != b || k->oprnd3() != c))
         {
             hash = (hash + (n += 2)) & bitmask;     // quadratic probe
@@ -1661,7 +1661,7 @@ namespace nanojit
             const char* name = names.get(ref)->name;
             VMPI_strcat(buf, name);
         }
-        else if (ref->isconstp() && 
+        else if (ref->isconstp() &&
             ((intptr_t)ref->constvalp() >= 10000 || (intptr_t)ref->constvalp() <= -10000)) {
             VMPI_sprintf(buf, "#%s", labels->format((void*)ref->constvalp()));
         }

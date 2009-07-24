@@ -51,7 +51,7 @@ namespace nanojit
 
     CodeAlloc::CodeAlloc()
         : heapblocks(0)
-		, availblocks(0)
+        , availblocks(0)
     {}
 
     CodeAlloc::~CodeAlloc() {
@@ -126,8 +126,8 @@ namespace nanojit
 
         AvmAssert(!blk->isFree);
 
-		// coalesce adjacent blocks.
-		bool already_on_avail_list;
+        // coalesce adjacent blocks.
+        bool already_on_avail_list;
 
         if (blk->lower && blk->lower->isFree) {
             // combine blk into blk->lower (destroy blk)
@@ -143,7 +143,7 @@ namespace nanojit
             already_on_avail_list = false;
 
         // the last block in each heapblock is a terminator block,
-		// which is never free, therefore blk->higher != null
+        // which is never free, therefore blk->higher != null
         if (blk->higher->isFree) {
             // combine blk->higher into blk (destroy blk->higher)
             CodeList *higher = blk->higher->higher;
@@ -213,7 +213,7 @@ extern  "C" void sync_instruction_memory(caddr_t v, u_int len);
     // intel chips have dcache/icache interlock
     void CodeAlloc::flushICache(CodeList* &blocks) {
         // Tell Valgrind that new code has been generated, and it must flush
-        // any translations it has for the memory range generated into. 
+        // any translations it has for the memory range generated into.
         for (CodeList *b = blocks; b != 0; b = b->next)
             VALGRIND_DISCARD_TRANSLATIONS(b->start(), b->size());
     }

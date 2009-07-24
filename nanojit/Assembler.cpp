@@ -994,18 +994,18 @@ namespace nanojit
                Otherwise we fall into the big switch, which calls a
                target-specific routine to generate the required
                instructions.
-   
+
                For each node, we need to decide whether we need to
                generate any code.  This is a rather subtle part of the
                generation algorithm.
- 
+
                There are two categories:
- 
+
                "statement" nodes -- ones with side effects.  Anything
                that could change control flow or the state of memory.
                These we must absolutely retain.  That accounts for the
                first part of the following disjunction for 'required'.
- 
+
                The rest are "value" nodes, which compute a value based
                only on the operands to the node (and, in the case of
                loads, the state of memory).  It's safe to omit these
@@ -1957,11 +1957,11 @@ namespace nanojit
 
     LabelStateMap::~LabelStateMap() {
         LabelState *st;
-    
+
         while (!labels.isEmpty()) {
             st = labels.removeLast();
             NJ_DELETE(st);
-        }   
+        }
     }
 
     LabelState* LabelStateMap::get(LIns *label) {

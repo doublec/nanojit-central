@@ -244,7 +244,7 @@ verbose_only( extern const char* shiftNames[]; )
     int *_startingSlot;                                                 \
     int *_nExitSlot;                                                    \
     bool blx_lr_bug;                                                    \
-    int  max_out_args; /* bytes */                                      
+    int  max_out_args; /* bytes */
 
 #define swapptrs()  {                                                   \
         NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins;          \

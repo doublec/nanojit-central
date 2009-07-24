@@ -183,7 +183,7 @@ namespace nanojit
             extern void nano_static_assert(int arg[(condition) ? 1 : -1])
     #endif
 
- 
+
     /**
      * -------------------------------------------
      * END AVM bridging definitions

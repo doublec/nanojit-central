@@ -1471,7 +1471,7 @@ Assembler::asm_prep_fcall(Reservation*, LInsp)
         return at;
     }
 
-    void 
+    void
     Assembler::asm_cmp(LIns *cond)
     {
         LOpcode condop = cond->opcode();
@@ -1508,7 +1508,7 @@ Assembler::asm_prep_fcall(Reservation*, LInsp)
         }
     }
 
-    void 
+    void
     Assembler::asm_cmpi(Register r, int32_t imm)
     {
         if (imm < 0) {
@@ -1545,25 +1545,25 @@ Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
 }
 
 #ifdef NJ_ARM_VFP
-    void 
+    void
     Assembler::asm_fcond(LInsp ins)
     {
         // only want certain regs
         Register r = prepResultReg(ins, AllowableFlagRegs);
-    
+
         switch (ins->opcode()) {
             case LIR_feq: SETEQ(r); break;
             case LIR_flt: SETLO(r); break; // } note: VFP LT/LE operations require use of
             case LIR_fle: SETLS(r); break; // } unsigned LO/LS condition codes!
             case LIR_fge: SETGE(r); break;
             case LIR_fgt: SETGT(r); break;
-            default: NanoAssert(0); break;            
+            default: NanoAssert(0); break;
         }
         asm_fcmp(ins);
     }
 #endif
 
-    void 
+    void
     Assembler::asm_cond(LInsp ins)
     {
         Register r = prepResultReg(ins, AllowableFlagRegs);
@@ -1579,12 +1579,12 @@ Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
             case LIR_ule: SETLS(r); break;
             case LIR_ugt: SETHI(r); break;
             case LIR_uge: SETHS(r); break;
-            default:        NanoAssert(0);  break;            
+            default:        NanoAssert(0);  break;
         }
         asm_cmp(ins);
     }
 
-    void 
+    void
     Assembler::asm_arith(LInsp ins)
     {
         LOpcode op = ins->opcode();
@@ -1691,12 +1691,12 @@ Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
         }
     }
 
-    void 
+    void
     Assembler::asm_neg_not(LInsp ins)
     {
         LOpcode op = ins->opcode();
         Register rr = prepResultReg(ins, GpRegs);
-    
+
         LIns* lhs = ins->oprnd1();
         Reservation *rA = getresv(lhs);
         // if this is last use of lhs in reg, we can re-use result reg
@@ -1712,13 +1712,13 @@ Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
             RSBS(rr, ra);
     }
 
-    void 
+    void
     Assembler::asm_ld(LInsp ins)
     {
         LOpcode op = ins->opcode();
         LIns* base = ins->oprnd1();
         int d = ins->disp();
-        
+
         Register rr = prepResultReg(ins, GpRegs);
         Register ra = getBaseReg(base, d, GpRegs);
 
@@ -1727,23 +1727,23 @@ Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
             LDR(rr, ra, d);
             return;
         }
-    
+
         // these will be 2 or 4-byte aligned
         if (op == LIR_ldcs) {
             LDRH(rr, ra, d);
             return;
         }
-    
+
         // aaand this is just any byte.
         if (op == LIR_ldcb) {
             LDRB(rr, ra, d);
             return;
         }
-    
+
         NanoAssertMsg(0, "Unsupported instruction in asm_ld");
     }
 
-    void 
+    void
     Assembler::asm_cmov(LInsp ins)
     {
         NanoAssert(ins->opcode() == LIR_cmov);
@@ -1778,7 +1778,7 @@ Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
         asm_cmp(condval);
     }
 
-    void 
+    void
     Assembler::asm_qhi(LInsp ins)
     {
         Register rr = prepResultReg(ins, GpRegs);
@@ -1787,7 +1787,7 @@ Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
         LDR(rr, FP, d+4);
     }
 
-    void 
+    void
     Assembler::asm_qlo(LInsp ins)
     {
         Register rr = prepResultReg(ins, GpRegs);
@@ -1796,7 +1796,7 @@ Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
         LDR(rr, FP, d);
     }
 
-    void 
+    void
     Assembler::asm_param(LInsp ins)
     {
         uint32_t a = ins->paramArg();
