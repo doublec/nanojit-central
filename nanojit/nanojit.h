@@ -135,15 +135,12 @@ namespace nanojit
     class LIns;
     struct SideExit;
     class RegAlloc;
-    class BBNode;
     typedef avmplus::AvmCore AvmCore;
     typedef avmplus::OSDep OSDep;
     typedef avmplus::SortedMap<const void*, Fragment*, avmplus::LIST_GCObjects> FragmentMap;
     typedef avmplus::SortedMap<SideExit*, RegAlloc*, avmplus::LIST_GCObjects> RegAllocMap;
     typedef avmplus::List<LIns*, avmplus::LIST_NonGCObjects>    InsList;
-    typedef avmplus::SortedMap<LIns*,BBNode*,avmplus::LIST_GCObjects> BBMap;
     typedef avmplus::List<char*, avmplus::LIST_GCObjects> StringList;
-    typedef avmplus::List<BBNode*,avmplus::LIST_GCObjects>  BBList;
 
     const uint32_t MAXARGS = 8;
 
