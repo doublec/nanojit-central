@@ -692,7 +692,7 @@ Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
 
         verbose_only( if (_logc->lcbits & LC_RegAlloc) {
                         outputForEOL("  <= restore %s",
-                        _thisfrag->lirbuf->names->formatRef(i)); } )
+                        _thisfrag->lirbuf->names->formatRef(i)); }
         )
     }
 }
