@@ -65,7 +65,7 @@ const int NJ_LOG2_PAGE_SIZE = 12;       // 4K
 //#define NJ_ARM_VFP
 
 #if defined VMCFG_DOUBLE_MSW_FIRST || defined _MSC_VER
-#  define NJ_ARM_EABI  0
+#  undef  NJ_ARM_EABI
 #else
 #  define NJ_ARM_EABI  1
 #endif
@@ -241,7 +241,6 @@ verbose_only( extern const char* shiftNames[]; )
     void asm_arg(ArgSize sz, LInsp arg, Register& r, int& stkd);        \
     uint32_t CountLeadingZeroes(uint32_t data);                         \
     int* _nSlot;                                                        \
-    int *_startingSlot;                                                 \
     int *_nExitSlot;                                                    \
     bool blx_lr_bug;                                                    \
     int  max_out_args; /* bytes */
