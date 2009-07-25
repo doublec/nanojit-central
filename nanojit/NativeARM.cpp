@@ -234,50 +234,158 @@ Assembler::genEpilogue()
     return _nIns;
 }
 
-    void Assembler::asm_regarg(ArgSize sz, LInsp p, Register r)
-    {
-        NanoAssert(r != UnknownReg);
-        if (sz & ARGSIZE_MASK_INT)
-        {
-            // arg goes in specific register
-            if (p->isconst()) {
-                int c = p->imm32();
-                LDi(r, c);
-            } else {
-                Reservation* rA = getresv(p);
-                if (rA) {
-                    if (rA->reg == UnknownReg) {
-                        // load it into the arg reg
-                        int d = findMemFor(p);
-                        if (p->isop(LIR_alloc)) {
-                            asm_add_imm(r, FP, d, 0);
-                        } else {
-                            LDR(r, FP, d);
-                        }
-                    } else {
-                        // it must be in a saved reg
-                        MOV(r, rA->reg);
-                    }
-                }
-                else {
-                    // this is the last use, so fine to assign it
-                    // to the scratch reg, it's dead after this point.
-                    findSpecificRegFor(p, r);
-                }
-            }
-        }
-        else if (sz == ARGSIZE_Q) {
-            // 64 bit integer argument - should never happen on ARM
-            NanoAssert(false);
-        }
-        else
-        {
-            NanoAssert(sz == ARGSIZE_F);
-            // fpu argument in register - should never happen since FPU
-            // args are converted to two 32-bit ints on ARM
-            NanoAssert(false);
+/* gcc/linux use the ARM EABI; Windows CE uses the legacy abi.
+ *
+ * Under EABI:
+ * - doubles are 64-bit aligned both in registers and on the stack.
+ *   If the next available argument register is R1, it is skipped
+ *   and the double is placed in R2:R3.  If R0:R1 or R2:R3 are not
+ *   available, the double is placed on the stack, 64-bit aligned.
+ * - 32-bit arguments are placed in registers and 32-bit aligned
+ *   on the stack.
+ *
+ * Under legacy ABI:
+ * - doubles are placed in subsequent arg registers; if the next
+ *   available register is r3, the low order word goes into r3
+ *   and the high order goes on the stack.
+ * - 32-bit arguments are placed in the next available arg register,
+ * - both doubles and 32-bit arguments are placed on stack with 32-bit
+ *   alignment.
+ */
+
+#if TM_MERGE
+void
+Assembler::asm_arg(ArgSize sz, LInsp p, Register r)
+{
+    // should never be called -- the ARM-specific longer form of
+    // asm_arg is used on ARM.
+    NanoAssert(0);
+}
+#endif
+
+/*
+ * asm_arg will update r and stkd to indicate where the next
+ * argument should go.  If r == UnknownReg, then the argument
+ * is placed on the stack at stkd, and stkd is updated.
+ *
+ * Note that this currently doesn't actually use stkd on input,
+ * except for figuring out alignment; it always pushes to SP.
+ * See TODO in asm_call.
+ */
+void 
+Assembler::asm_arg(ArgSize sz, LInsp arg, Register& r, int& stkd)
+{
+    if (sz == ARGSIZE_F) {
+#ifdef NJ_SOFTFLOAT
+        NanoAssert(arg->isop(LIR_qjoin));
+#else
+        Register fp_reg = findRegFor(arg, FpRegs);
+        NanoAssert(fp_reg != UnknownReg);
+#endif
+
+#if NJ_ARM_EABI
+        // arm eabi puts doubles only in R0:1 or R2:3, and 64bit aligned on the stack.
+        if ((r == R1) || (r == R3)) r = nextreg(r);
+#endif
+        if (r < R3) {
+            // put double in two registers
+#ifdef NJ_SOFTFLOAT
+            asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
+            asm_regarg(ARGSIZE_LO, arg->oprnd2(), nextreg(r));
+#else
+            FMRRD(r, nextreg(r), fp_reg);
+#endif
+            r = Register(r+2);                
+#ifndef NJ_ARM_EBAI
+        } else if (r < R4) {
+            // put LSW in R3, MSW on stack
+#ifdef NJ_SOFTFLOAT
+            asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
+            asm_stkarg(arg->oprnd2(), stkd);
+#else
+            NanoAssert(stkd==0);
+            STR(IP, SP, 0);
+            FMRRD(r, IP, fp_reg);
+#endif
+            r = nextreg(r);
+            stkd += 4;
+#endif /* NJ_ARM_EABI */
+        } else {
+#ifdef NJ_ARM_EABI
+            // put double on stack, 64bit aligned
+            if ((stkd & 7) != 0) stkd += 4;
+#endif
+#ifdef NJ_SOFTFLOAT
+            asm_stkarg(arg->oprnd1(), stkd);
+            asm_stkarg(arg->oprnd2(), stkd+4);
+#else
+            asm_stkarg(arg, stkd);
+#endif
+            stkd += 8;
         }
     }
+    else if (sz & ARGSIZE_MASK_INT) {
+        // pre-assign registers R0-R3 for arguments (if they fit)
+        if (r < R4) {
+            asm_regarg(sz, arg, r);
+            r = nextreg(r);
+        } else {
+            asm_stkarg(arg, stkd);
+            stkd += 4;
+        }
+    }
+    else {
+        NanoAssert(sz == ARGSIZE_Q);
+        // shouldn't have 64 bit int params on ARM
+        NanoAssert(false);
+    }
+}
+
+void 
+Assembler::asm_regarg(ArgSize sz, LInsp p, Register r)
+{
+    NanoAssert(r != UnknownReg);
+    if (sz & ARGSIZE_MASK_INT)
+    {
+        // arg goes in specific register
+        if (p->isconst()) {
+            int c = p->imm32();
+            LDi(r, c);
+        } else {
+            Reservation* rA = getresv(p);
+            if (rA) {
+                if (rA->reg == UnknownReg) {
+                    // load it into the arg reg
+                    int d = findMemFor(p);
+                    if (p->isop(LIR_alloc)) {
+                        asm_add_imm(r, FP, d, 0);
+                    } else {
+                        LDR(r, FP, d);
+                    }
+                } else {
+                    // it must be in a saved reg
+                    MOV(r, rA->reg);
+                }
+            }
+            else {
+                // this is the last use, so fine to assign it
+                // to the scratch reg, it's dead after this point.
+                findSpecificRegFor(p, r);
+            }
+        }
+    }
+    else if (sz == ARGSIZE_Q) {
+        // 64 bit integer argument - should never happen on ARM
+        NanoAssert(false);
+    }
+    else
+    {
+        NanoAssert(sz == ARGSIZE_F);
+        // fpu argument in register - should never happen since FPU
+        // args are converted to two 32-bit ints on ARM
+        NanoAssert(false);
+    }
+}
 
 void
 Assembler::asm_stkarg(LInsp arg, int stkd)
@@ -398,91 +506,30 @@ Assembler::asm_call(LInsp ins)
 
     Register r = R0;
     int stkd = 0;
+
+    // XXX TODO we should go through the args and figure out how much
+    // stack space we'll need, allocate it up front, and then do
+    // SP-relative stores using stkd instead of doing STR_preindex for
+    // every stack write like we currently do in asm_arg.
+
     for(uint32_t i = 0; i < argc; i++) {
         uint32_t j = argc - i - 1;
         ArgSize sz = sizes[j];
         LInsp arg = ins->arg(j);
-        if (sz == ARGSIZE_F) {
-#ifdef NJ_SOFTFLOAT
-            NanoAssert(arg->isop(LIR_qjoin));
-#else
-            Register fp_reg = findRegFor(arg, FpRegs);
-            NanoAssert(fp_reg != UnknownReg);
-#endif
 
-#if NJ_ARM_EABI
-            // arm eabi puts doubles only in R0:1 or R2:3, and 64bit aligned on the stack.
-            if ((r == R1) || (r == R3)) r = nextreg(r);
-            if (r < R3) {
-                // put double in two registers
-#ifdef NJ_SOFTFLOAT
-                asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
-                asm_regarg(ARGSIZE_LO, arg->oprnd2(), nextreg(r));
-#else
-                FMRRD(r, nextreg(r), fp_reg);
-#endif
-                r = Register(r+2);
-            } else {
-                // put double on stack, 64bit aligned
-                if ((stkd & 7) != 0) stkd += 4;
-#ifdef NJ_SOFTFLOAT
-                asm_stkarg(arg->oprnd1(), stkd);
-                asm_stkarg(arg->oprnd2(), stkd+4);
-#else
-                asm_stkarg(arg, stkd);
-#endif
-                stkd += 8;
-            }
-#else // !NJ_ARM_EABI
-            // legacy arm abi's don't align doubles
-            if (r < R3) {
-                // put double in next two registers
-#ifdef NJ_SOFTFLOAT
-                asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
-                asm_regarg(ARGSIZE_LO, arg->oprnd2(), nextreg(r));
-#else
-                FMRRD(r, nextreg(r), fp_reg);
-#endif
-                r = Register(r+2);
-            } else if (r < R4) {
-                // put LSW in R3, MSW on stack
-#ifdef NJ_SOFTFLOAT
-                asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
-                asm_stkarg(arg->oprnd2(), stkd);
-#else
-                NanoAssert(stkd==0);
-                STR(IP, SP, 0);
-                FMRRD(r, IP, fp_reg);
-#endif
-                r = nextreg(r);
-                stkd += 4;
-            } else {
-                // put double on stack, 32bit aligned.
-#ifdef NJ_SOFTFLOAT
-                asm_stkarg(arg->oprnd1(), stkd);
-                asm_stkarg(arg->oprnd2(), stkd+4);
-#else
-                asm_stkarg(arg, stkd);
-#endif
-                stkd += 8;
-            }
-#endif // !NJ_ARM_EABI
+#ifdef TM_MERGE
+        NanoAssert(r < R4 || r == UnknownReg);
+
+#ifdef NJ_ARM_EABI
+        if (sz == ARGSIZE_F) {
+            if (r == R1)
+                r = R2;
+            else if (r == R3)
+                r = UnknownReg;
         }
-        else if (sz & ARGSIZE_MASK_INT) {
-            // pre-assign registers R0-R3 for arguments (if they fit)
-            if (r < R4) {
-                asm_regarg(sz, arg, r);
-                r = nextreg(r);
-            } else {
-                asm_stkarg(arg, stkd);
-                stkd += 4;
-            }
-        }
-        else {
-            NanoAssert(sz == ARGSIZE_Q);
-            // shouldn't have 64 bit int params on ARM
-            NanoAssert(false);
-        }
+#endif
+#endif
+        asm_arg(sz, arg, r, stkd);
     }
     if (stkd > max_out_args)
         max_out_args = stkd;
@@ -490,7 +537,6 @@ Assembler::asm_call(LInsp ins)
     if (needToLoadAddr)
         LDi(LR, (int32_t)call->_address);
 }
-
 
 Register
 Assembler::nRegisterAllocFromSet(int set)
