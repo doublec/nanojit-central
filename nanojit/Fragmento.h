@@ -52,20 +52,6 @@ namespace nanojit
     struct GuardRecord;
     class Assembler;
 
-    typedef avmplus::GCSortedMap<const void*, uint32_t, avmplus::LIST_NonGCObjects> BlockSortedMap;
-    class BlockHist: public BlockSortedMap
-    {
-    public:
-        BlockHist(GC*gc) : BlockSortedMap(gc)
-        {
-        }
-        uint32_t count(const void *p) {
-            uint32_t c = 1+get(p);
-            put(p, c);
-            return c;
-        }
-    };
-
     struct fragstats;
     /*
      *
@@ -98,8 +84,6 @@ namespace nanojit
             }
             _stats;
 
-            verbose_only( DWB(BlockHist*)       enterCounts; )
-            verbose_only( DWB(BlockHist*)       mergeCounts; )
             verbose_only( DWB(LabelMap*)        labels; )
 
             #ifdef NJ_VERBOSE
@@ -167,7 +151,6 @@ namespace nanojit
             DWB(Fragment*) parent;
             DWB(Fragment*) first;
             DWB(Fragment*) peer;
-            DWB(BlockHist*) mergeCounts;
             DWB(LirBuffer*) lirbuf;
             LIns*           lastIns;
             LIns*       spawnedFrom;

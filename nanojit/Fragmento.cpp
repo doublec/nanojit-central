@@ -66,18 +66,12 @@ namespace nanojit
             _pagesGrowth(16)
     {
         NanoAssert(_max_pages > _pagesGrowth); // shrink growth if needed
-        verbose_only( enterCounts = NJ_NEW(core->gc, BlockHist)(core->gc); )
-        verbose_only( mergeCounts = NJ_NEW(core->gc, BlockHist)(core->gc); )
     }
 
     Fragmento::~Fragmento()
     {
         clearFrags();
         _frags.clear();
-#if defined(NJ_VERBOSE)
-        //NJ_DELETE(enterCounts);
-        //NJ_DELETE(mergeCounts);
-#endif
     }
 
     void Fragmento::clearFrags()
@@ -95,8 +89,6 @@ namespace nanojit
             NJ_DELETE(f);
         }
 
-        verbose_only( enterCounts->clear();)
-        verbose_only( mergeCounts->clear();)
         verbose_only( _stats.flushes++ );
         verbose_only( _stats.compiles = 0 );
     }
@@ -124,7 +116,6 @@ namespace nanojit
         f->anchor = f;
         f->root = f;
         f->kind = LoopTrace;
-        f->mergeCounts = NJ_NEW(_core->gc, BlockHist)(_core->gc);
         verbose_only( addLabel(f, "T", _frags.size()); )
         return f;
     }
@@ -210,7 +201,6 @@ namespace nanojit
         Fragment *f = newFrag(ip);
         f->anchor = from->anchor;
         f->root = from->root;
-        f->mergeCounts = from->anchor->mergeCounts;
         f->xjumpCount = from->xjumpCount;
         /*// prepend
         f->nextbranch = from->branches;
