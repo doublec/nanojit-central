@@ -79,6 +79,18 @@ uint32_t
 Assembler::CountLeadingZeroes(uint32_t data)
 {
     uint32_t    leading_zeroes;
+
+    // We can't do CLZ on anything earlier than ARMv5. Architectures as early
+    // as that aren't supported, but assert that we aren't running on one
+    // anyway.
+    // If ARMv4 support is required in the future for some reason, we can do a
+    // run-time check on config.arch and fall back to the C routine, but for
+    // now we can avoid the cost of the check as we don't intend to support
+    // ARMv4 anyway.
+#ifdef TM_MERGE    
+    NanoAssert(AvmCore::config.arch >= 5);
+#endif
+
 #if defined(__ARMCC__)
     // ARMCC can do this with an intrinsic.
     leading_zeroes = __clz(data);
@@ -108,6 +120,9 @@ Assembler::CountLeadingZeroes(uint32_t data)
         }
     }
 #endif
+
+    // Assert that the operation worked!
+    NanoAssert(((0xffffffff >> leading_zeroes) & data) == data);
 
     return leading_zeroes;
 }
@@ -537,11 +552,17 @@ Assembler::asm_call(LInsp ins)
 Register
 Assembler::nRegisterAllocFromSet(int set)
 {
+    NanoAssert(set != 0);
+
     // The CountLeadingZeroes function will use the CLZ instruction where
     // available. In other cases, it will fall back to a (slower) C
     // implementation.
     Register r = (Register)(31-CountLeadingZeroes(set));
     _allocator.free &= ~rmask(r);
+
+    NanoAssert(IsGpReg(r) || IsFpReg(r));
+    NanoAssert((rmask(r) & set) == rmask(r));
+
     return r;
 }
 
@@ -764,11 +785,16 @@ Assembler::asm_store64(LInsp value, int dr, LInsp base)
     //asm_output("<<< store64 (dr: %d)", dr);
 
     Register rb = findRegFor(base, GpRegs);
+
     if (value->isconstq()) {
+        underrunProtect(LD32_size*2 + 8);
+
+        // XXX use another reg, get rid of dependency
         STR(IP, rb, dr);
-        LDi(IP, value->imm64_0());
+        asm_ld_imm(IP, value->imm64_0());
         STR(IP, rb, dr+4);
-        LDi(IP, value->imm64_1());
+        asm_ld_imm(IP, value->imm64_1());
+
         return;
     }
 
@@ -789,13 +815,13 @@ Assembler::asm_store64(LInsp value, int dr, LInsp base)
     FSTD(rv, baseReg, baseOffset);
 
     if (!isS8(dr)) {
-        asm_add_imm(IP, rb, dr, 0);
+        asm_add_imm(IP, rb, dr);
     }
 
     // if it's a constant, make sure our baseReg/baseOffset location
     // has the right value
     if (value->isconstq()) {
-        underrunProtect(16);
+        underrunProtect(4*4);
         asm_quad_nochk(rv, value->imm64_0(), value->imm64_1());
     }
 #else
@@ -957,15 +983,12 @@ Assembler::asm_mmq(Register rd, int dd, Register rs, int ds)
 
         // Note: Not every register in GpRegs is usable here. However, these
         // registers will never appear on the free list.
-#ifdef TM_MERGE
-        // The above statement and asserts below are not true LR does appear
-        // on the free list
         NanoAssert((free & rmask(PC)) == 0);
         NanoAssert((free & rmask(LR)) == 0);
         NanoAssert((free & rmask(SP)) == 0);
         NanoAssert((free & rmask(IP)) == 0);
         NanoAssert((free & rmask(FP)) == 0);
-#endif
+
         // Emit the actual instruction sequence.
 
         STR(IP, rd, dd+4);
@@ -1201,6 +1224,12 @@ Assembler::LD32_nochk(Register r, int32_t imm)
     NanoAssert(*((int32_t*)_nSlot-1) == imm);
 }
 
+// Emit the code required to load a memory address into a register as follows:
+// d = *(b+off)
+// underrunProtect calls from this function can be disabled by setting chk to
+// false. However, this function can use more than LD32_size bytes of space if
+// the offset is out of the range of a LDR instruction; the maximum space this
+// function requires for underrunProtect is 4+LD32_size.
 void
 Assembler::asm_ldr_chk(Register d, Register b, int32_t off, bool chk)
 {
@@ -1210,6 +1239,14 @@ Assembler::asm_ldr_chk(Register d, Register b, int32_t off, bool chk)
         return;
     }
 #endif
+
+    NanoAssert(IsGpReg(d));
+    NanoAssert(IsGpReg(b));
+
+    // We can't use underrunProtect if the base register is the PC because
+    // underrunProtect might move the PC if there isn't enough space on the
+    // current page.
+    NanoAssert((b != PC) || (!chk));
 
     if (isU12(off)) {
         // LDR d, b, #+off
@@ -1232,14 +1269,22 @@ Assembler::asm_ldr_chk(Register d, Register b, int32_t off, bool chk)
         if (chk) underrunProtect(4+LD32_size);
 
         *(--_nIns) = (NIns)( COND_AL | (0x79<<20) | (b<<16) | (d<<12) | IP );
-        LD32_nochk(IP, off);
+        asm_ld_imm(IP, off, false);
     }
 
     asm_output("ldr %s, [%s, #%d]",gpn(d),gpn(b),(off));
 }
 
+// Emit the code required to load an immediate value (imm) into general-purpose
+// register d. Optimal (MOV-based) mechanisms are used if the immediate can be
+// encoded using ARM's operand 2 encoding. Otherwise, a slot is used on the
+// literal pool and LDR is used to load the value.
+//
+// chk can be explicitly set to false in order to disable underrunProtect calls
+// from this function; this allows the caller to perform the check manually.
+// This function guarantees not to use more than LD32_size bytes of space.
 void
-Assembler::asm_ld_imm(Register d, int32_t imm)
+Assembler::asm_ld_imm(Register d, int32_t imm, bool)
 {
     NanoAssert(IsGpReg(d));
     if (isU8(imm)) {
