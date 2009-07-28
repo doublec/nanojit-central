@@ -340,52 +340,25 @@ enum {
 //  S   - bit, 0 or 1, whether the CPSR register is updated
 //  rd  - destination register
 //  rl  - first (left) operand register
-//  imm - immediate (max 8 bits)
-#define ALUi(cond, op, S, rd, rl, imm) do {\
-        underrunProtect(4);\
+//  op2imm  - operand 2 immediate. Use encOp2Imm (from NativeARM.cpp) to calculate this.
+#define ALUi(cond, op, S, rd, rl, op2imm)   ALUi_chk(cond, op, S, rd, rl, op2imm, 1)
+#define ALUi_chk(cond, op, S, rd, rl, op2imm, chk) do {\
+        if (chk) underrunProtect(4);\
         NanoAssert(IsCond(cond));\
         NanoAssert(IsOp(op));\
         NanoAssert(((S)==0) || ((S)==1));\
         NanoAssert(IsGpReg(rd) && IsGpReg(rl));\
-        NanoAssert(isU8(imm));\
-        *(--_nIns) = (NIns) ((cond)<<28 | OP_IMM | (ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (imm));\
+        NanoAssert(isOp2Imm(op2imm));\
+        *(--_nIns) = (NIns) ((cond)<<28 | OP_IMM | (ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (op2imm));\
         if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
-            asm_output("%s%s%s %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), (imm));\
+            asm_output("%s%s%s %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), decOp2Imm(op2imm));\
         else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {\
             NanoAssert(S==1);\
-            asm_output("%s%s %s, #%d", #op, condNames[cond], gpn(rl), (imm));\
+            asm_output("%s%s %s, #%d", #op, condNames[cond], gpn(rl), decOp2Imm(op2imm));\
         } else {                                                        \
-            asm_output("%s%s%s %s, %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), (imm));\
+            asm_output("%s%s%s %s, %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), decOp2Imm(op2imm));\
         } \
     } while (0)
-
-// ALU operation with register and rotated 8-bit immediate arguments
-//  S   - bit, 0 or 1, whether the CPSR register is updated
-//  rd  - destination register
-//  rl  - first (left) operand register
-//  imm - immediate (max 8 bits)
-//  rot - rotation to apply to imm
-#define rot_as_lshift(r)  (((r)==0)?0:32-2*(r))
-
-#define ALUi_rot(cond, op, S, rd, rl, imm, rot) do {\
-        underrunProtect(4);\
-        NanoAssert(IsCond(cond));\
-        NanoAssert(IsOp(op));\
-        NanoAssert(((S)==0) || ((S)==1));\
-        NanoAssert(IsGpReg(rd) && IsGpReg(rl));\
-        NanoAssert(((rot)>=0) && ((rot)<=15));\
-        NanoAssert(isU8(imm));\
-        *(--_nIns) = (NIns) ((cond)<<28 | OP_IMM | (ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (rot)<<8 | (imm));\
-        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn) {               \
-            asm_output("%s%s%s %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), (imm)<<rot_as_lshift(rot)); \
-        } else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {         \
-            NanoAssert(S==1);\
-            asm_output("%s%s %s, #%d", #op, condNames[cond], gpn(rl), (imm)<<rot_as_lshift(rot)); \
-        } else {                                                        \
-            asm_output("%s%s%s %s, %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), (imm)<<rot_as_lshift(rot)); \
-        } \
-    } while (0)
-
 
 // ALU operation with two register arguments
 //  S   - bit, 0 or 1, whether the CPSR register is updated
@@ -798,8 +771,12 @@ enum {
 // MOV(cond)  _r, #1
 // MOV(!cond) _r, #0
 #define SET(_r,_cond) do {                                              \
-    ALUi(OppositeCond(_cond), mov, 0, _r, 0, 0);                        \
-    ALUi(_cond, mov, 0, _r, 0, 1);                                      \
+    ConditionCode _opp = OppositeCond(_cond);                           \
+    underrunProtect(8);                                                 \
+    *(--_nIns) = (NIns)( ( _opp<<28) | (0x3A<<20) | ((_r)<<12) | (0) ); \
+    *(--_nIns) = (NIns)( (_cond<<28) | (0x3A<<20) | ((_r)<<12) | (1) ); \
+    asm_output("mov%s %s, #1", condNames[_cond], gpn(_r));              \
+    asm_output("mov%s %s, #0", condNames[_opp], gpn(_r));               \
     } while (0)
 
 #define SETEQ(r)    SET(r,EQ)

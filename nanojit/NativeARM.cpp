@@ -74,8 +74,61 @@ const Register Assembler::savedRegs[] = { R4, R5, R6, R7, R8, R9, R10 };
 // ARM-specific utility functions.
 // --------------------------------
 
+// NB the thumb2 check (i.e using > v6) is technically 
+// not correct, but its close enough for now).
+#ifdef JS_TRACER
+#   define IS_ARM_ARCH_GT_V5()    (AvmCore::config.arch > 5)
+#   define IS_ARM_ARCH_VFP()      (AvmCore::config.vfp)
+#   define IS_ARM_ARCH_THUMB2()   (AvmCore::config.thumb2)
+#else 
+#   if NJ_ARM_ARCH > NJ_ARM_V5
+#      define IS_ARM_ARCH_GT_V5() (1)
+#   else
+#      define IS_ARM_ARCH_GT_V5() (0)
+#   endif
+#   if NJ_ARM_ARCH > NJ_ARM_V6
+#      define IS_ARM_ARCH_THUMB2() (1)
+#   else
+#      define IS_ARM_ARCH_THUMB2() (0)
+#   endif
+#   ifdef NJ_ARM_VFP
+#      define IS_ARM_ARCH_VFP()   (1)
+#   else
+#      define IS_ARM_ARCH_VFP()   (0)
+#   endif
+#endif // JS_TRACER
+
+#ifdef DEBUG
+// Return true if enc is a valid Operand 2 encoding and thus can be used as-is
+// in an ARM arithmetic operation that accepts such encoding.
+//
+// This utility does not know (or determine) the actual value that the encoded
+// value represents, and thus cannot be used to ensure the correct operation of
+// encOp2Imm, but it does ensure that the encoded value can be used to encode a
+// valid ARM instruction. decOp2Imm can be used if you also need to check that
+// a literal is correctly encoded (and thus that encOp2Imm is working
+// correctly).
+inline bool
+Assembler::isOp2Imm(uint32_t enc)
+{
+    return ((enc & 0xfff) == enc);
+}
+
+// Decodes operand 2 immediate values (for debug output and assertions).
+inline uint32_t
+Assembler::decOp2Imm(uint32_t enc)
+{
+    NanoAssert(isOp2Imm(enc));
+
+    uint32_t    imm8 = enc & 0xff;
+    uint32_t    rot = 32 - ((enc >> 7) & 0x1e);
+
+    return imm8 << (rot & 0x1f);
+}
+#endif
+
 // Calculate the number of leading zeroes in data.
-uint32_t
+inline uint32_t
 Assembler::CountLeadingZeroes(uint32_t data)
 {
     uint32_t    leading_zeroes;
@@ -88,7 +141,7 @@ Assembler::CountLeadingZeroes(uint32_t data)
     // now we can avoid the cost of the check as we don't intend to support
     // ARMv4 anyway.
 #ifdef TM_MERGE    
-    NanoAssert(AvmCore::config.arch >= 5);
+    NanoAssert(IS_ARM_ARCH_GT_V5());
 #endif
 
 #if defined(__ARMCC__)
@@ -125,6 +178,297 @@ Assembler::CountLeadingZeroes(uint32_t data)
     NanoAssert(((0xffffffff >> leading_zeroes) & data) == data);
 
     return leading_zeroes;
+}
+
+// The ARM instruction set allows some flexibility to the second operand of
+// most arithmetic operations. When operand 2 is an immediate value, it takes
+// the form of an 8-bit value rotated by an even value in the range 0-30.
+//
+// Some values that can be encoded this scheme — such as 0xf000000f — are
+// probably fairly rare in practice and require extra code to detect, so this
+// function implements a fast CLZ-based heuristic to detect any value that can
+// be encoded using just a shift, and not a full rotation. For example,
+// 0xff000000 and 0x000000ff are both detected, but 0xf000000f is not.
+//
+// This function will return true to indicate that the encoding was successful,
+// or false to indicate that the literal could not be encoded as an operand 2
+// immediate. If successful, the encoded value will be written to *enc.
+inline bool
+Assembler::encOp2Imm(uint32_t literal, uint32_t * enc)
+{
+    // The number of leading zeroes in the literal. This is used to calculate
+    // the rotation component of the encoding.
+    uint32_t    leading_zeroes;
+
+    // Components of the operand 2 encoding.
+    int32_t     rot;
+    uint32_t    imm8;
+
+    // Check the literal to see if it is a simple 8-bit value. I suspect that
+    // most literals are in fact small values, so doing this check early should
+    // give a decent speed-up.
+    if (literal < 256)
+    {
+        *enc = literal;
+        return true;
+    }
+
+    // Determine the number of leading zeroes in the literal. This is used to
+    // calculate the required rotation.
+    leading_zeroes = CountLeadingZeroes(literal);
+
+    // We've already done a check to see if the literal is an 8-bit value, so
+    // leading_zeroes must be less than (and not equal to) (32-8)=24. However,
+    // if it is greater than 24, this algorithm will break, so debug code
+    // should use an assertion here to check that we have a value that we
+    // expect.
+    NanoAssert(leading_zeroes < 24);
+
+    // Assuming that we have a field of no more than 8 bits for a valid
+    // literal, we can calculate the required rotation by subtracting
+    // leading_zeroes from (32-8):
+    //
+    // Example:
+    //      0: Known to be zero.
+    //      1: Known to be one.
+    //      X: Either zero or one.
+    //      .: Zero in a valid operand 2 literal.
+    //
+    //  Literal:     [ 1XXXXXXX ........ ........ ........ ]
+    //  leading_zeroes = 0
+    //  Therefore rot (left) = 24.
+    //  Encoded 8-bit literal:                  [ 1XXXXXXX ]
+    //
+    //  Literal:     [ ........ ..1XXXXX XX...... ........ ]
+    //  leading_zeroes = 10
+    //  Therefore rot (left) = 14.
+    //  Encoded 8-bit literal:                  [ 1XXXXXXX ]
+    //
+    // Note, however, that we can only encode even shifts, and so
+    // "rot=24-leading_zeroes" is not sufficient by itself. By ignoring
+    // zero-bits in odd bit positions, we can ensure that we get a valid
+    // encoding.
+    //
+    // Example:
+    //  Literal:     [ 01XXXXXX ........ ........ ........ ]
+    //  leading_zeroes = 1
+    //  Therefore rot (left) = round_up(23) = 24.
+    //  Encoded 8-bit literal:                  [ 01XXXXXX ]
+    rot = 24 - (leading_zeroes & ~1);
+
+    // The imm8 component of the operand 2 encoding can be calculated from the
+    // rot value.
+    imm8 = literal >> rot;
+
+    // The validity of the literal can be checked by reversing the
+    // calculation. It is much easier to decode the immediate than it is to
+    // encode it!
+    if (literal != (imm8 << rot)) {
+        // The encoding is not valid, so report the failure. Calling code
+        // should use some other method of loading the value (such as LDR).
+        return false;
+    }
+
+    // The operand is valid, so encode it.
+    // Note that the ARM encoding is actually described by a rotate to the
+    // _right_, so rot must be negated here. Calculating a left shift (rather
+    // than calculating a right rotation) simplifies the above code.
+    *enc = ((-rot << 7) & 0xf00) | imm8;
+
+    // Assert that the operand was properly encoded.
+    NanoAssert(decOp2Imm(*enc) == literal);
+
+    return true;
+}
+
+// Encode "rd = rn + imm" using an appropriate instruction sequence.
+// Set stat to 1 to update the status flags. Otherwise, set it to 0 or omit it.
+// (The declaration in NativeARM.h defines the default value of stat as 0.)
+//
+// It is not valid to call this function if:
+//   (rd == IP) AND (rn == IP) AND !encOp2Imm(imm) AND !encOp2Imm(-imm)
+// Where: if (encOp2Imm(imm)), imm can be encoded as an ARM operand 2 using the
+// encOp2Imm method.
+void
+Assembler::asm_add_imm(Register rd, Register rn, int32_t imm, int stat /* =0 */)
+{
+    // Operand 2 encoding of the immediate.
+    uint32_t    op2imm;
+
+    NanoAssert(IsGpReg(rd));
+    NanoAssert(IsGpReg(rn));
+    NanoAssert((stat & 1) == stat);
+
+    // Try to encode the value directly as an operand 2 immediate value, then
+    // fall back to loading the value into a register.
+    if (encOp2Imm(imm, &op2imm)) {
+        ADDis(rd, rn, op2imm, stat);
+    } else if (encOp2Imm(-imm, &op2imm)) {
+        // We could not encode the value for ADD, so try to encode it for SUB.
+        // Note that this is valid even if stat is set, _unless_ imm is 0, but
+        // that case is caught above.
+        NanoAssert(imm != 0);
+        SUBis(rd, rn, op2imm, stat);
+    } else {
+        // We couldn't encode the value directly, so use an intermediate
+        // register to encode the value. We will use IP to do this unless rn is
+        // IP; in that case we can reuse rd. This allows every case other than
+        // "ADD IP, IP, =#imm".
+        Register    rm = (rn == IP) ? (rd) : (IP);
+        NanoAssert(rn != rm);
+
+        ADDs(rd, rn, rm, stat);
+        asm_ld_imm(rm, imm);
+    }
+}
+
+// Encode "rd = rn - imm" using an appropriate instruction sequence.
+// Set stat to 1 to update the status flags. Otherwise, set it to 0 or omit it.
+// (The declaration in NativeARM.h defines the default value of stat as 0.)
+//
+// It is not valid to call this function if:
+//   (rd == IP) AND (rn == IP) AND !encOp2Imm(imm) AND !encOp2Imm(-imm)
+// Where: if (encOp2Imm(imm)), imm can be encoded as an ARM operand 2 using the
+// encOp2Imm method.
+void
+Assembler::asm_sub_imm(Register rd, Register rn, int32_t imm, int stat /* =0 */)
+{
+    // Operand 2 encoding of the immediate.
+    uint32_t    op2imm;
+
+    NanoAssert(IsGpReg(rd));
+    NanoAssert(IsGpReg(rn));
+    NanoAssert((stat & 1) == stat);
+
+    // Try to encode the value directly as an operand 2 immediate value, then
+    // fall back to loading the value into a register.
+    if (encOp2Imm(imm, &op2imm)) {
+        SUBis(rd, rn, op2imm, stat);
+    } else if (encOp2Imm(-imm, &op2imm)) {
+        // We could not encode the value for SUB, so try to encode it for ADD.
+        // Note that this is valid even if stat is set, _unless_ imm is 0, but
+        // that case is caught above.
+        NanoAssert(imm != 0);
+        ADDis(rd, rn, op2imm, stat);
+    } else {
+        // We couldn't encode the value directly, so use an intermediate
+        // register to encode the value. We will use IP to do this unless rn is
+        // IP; in that case we can reuse rd. This allows every case other than
+        // "SUB IP, IP, =#imm".
+        Register    rm = (rn == IP) ? (rd) : (IP);
+        NanoAssert(rn != rm);
+
+        SUBs(rd, rn, rm, stat);
+        asm_ld_imm(rm, imm);
+    }
+}
+
+// Encode "rd = rn & imm" using an appropriate instruction sequence.
+// Set stat to 1 to update the status flags. Otherwise, set it to 0 or omit it.
+// (The declaration in NativeARM.h defines the default value of stat as 0.)
+//
+// It is not valid to call this function if:
+//   (rd == IP) AND (rn == IP) AND !encOp2Imm(imm) AND !encOp2Imm(~imm)
+// Where: if (encOp2Imm(imm)), imm can be encoded as an ARM operand 2 using the
+// encOp2Imm method.
+void
+Assembler::asm_and_imm(Register rd, Register rn, int32_t imm, int stat /* =0 */)
+{
+    // Operand 2 encoding of the immediate.
+    uint32_t    op2imm;
+
+    NanoAssert(IsGpReg(rd));
+    NanoAssert(IsGpReg(rn));
+    NanoAssert((stat & 1) == stat);
+
+    // Try to encode the value directly as an operand 2 immediate value, then
+    // fall back to loading the value into a register.
+    if (encOp2Imm(imm, &op2imm)) {
+        ANDis(rd, rn, op2imm, stat);
+    } else if (encOp2Imm(~imm, &op2imm)) {
+        // Use BIC with the inverted immediate.
+        BICis(rd, rn, op2imm, stat);
+    } else {
+        // We couldn't encode the value directly, so use an intermediate
+        // register to encode the value. We will use IP to do this unless rn is
+        // IP; in that case we can reuse rd. This allows every case other than
+        // "AND IP, IP, =#imm".
+        Register    rm = (rn == IP) ? (rd) : (IP);
+        NanoAssert(rn != rm);
+
+        ANDs(rd, rn, rm, stat);
+        asm_ld_imm(rm, imm);
+    }
+}
+
+// Encode "rd = rn | imm" using an appropriate instruction sequence.
+// Set stat to 1 to update the status flags. Otherwise, set it to 0 or omit it.
+// (The declaration in NativeARM.h defines the default value of stat as 0.)
+//
+// It is not valid to call this function if:
+//   (rd == IP) AND (rn == IP) AND !encOp2Imm(imm)
+// Where: if (encOp2Imm(imm)), imm can be encoded as an ARM operand 2 using the
+// encOp2Imm method.
+void
+Assembler::asm_orr_imm(Register rd, Register rn, int32_t imm, int stat /* =0 */)
+{
+    // Operand 2 encoding of the immediate.
+    uint32_t    op2imm;
+
+    NanoAssert(IsGpReg(rd));
+    NanoAssert(IsGpReg(rn));
+    NanoAssert((stat & 1) == stat);
+
+    // Try to encode the value directly as an operand 2 immediate value, then
+    // fall back to loading the value into a register.
+    if (encOp2Imm(imm, &op2imm)) {
+        ORRis(rd, rn, op2imm, stat);
+    } else {
+        // We couldn't encode the value directly, so use an intermediate
+        // register to encode the value. We will use IP to do this unless rn is
+        // IP; in that case we can reuse rd. This allows every case other than
+        // "ORR IP, IP, =#imm".
+        Register    rm = (rn == IP) ? (rd) : (IP);
+        NanoAssert(rn != rm);
+
+        ORRs(rd, rn, rm, stat);
+        asm_ld_imm(rm, imm);
+    }
+}
+
+// Encode "rd = rn ^ imm" using an appropriate instruction sequence.
+// Set stat to 1 to update the status flags. Otherwise, set it to 0 or omit it.
+// (The declaration in NativeARM.h defines the default value of stat as 0.)
+//
+// It is not valid to call this function if:
+//   (rd == IP) AND (rn == IP) AND !encOp2Imm(imm)
+// Where: if (encOp2Imm(imm)), imm can be encoded as an ARM operand 2 using the
+// encOp2Imm method.
+void
+Assembler::asm_eor_imm(Register rd, Register rn, int32_t imm, int stat /* =0 */)
+{
+    // Operand 2 encoding of the immediate.
+    uint32_t    op2imm;
+
+    NanoAssert(IsGpReg(rd));
+    NanoAssert(IsGpReg(rn));
+    NanoAssert((stat & 1) == stat);
+
+    // Try to encode the value directly as an operand 2 immediate value, then
+    // fall back to loading the value into a register.
+    if (encOp2Imm(imm, &op2imm)) {
+        EORis(rd, rn, op2imm, stat);
+    } else {
+        // We couldn't encoder the value directly, so use an intermediate
+        // register to encode the value. We will use IP to do this unless rn is
+        // IP; in that case we can reuse rd. This allows every case other than
+        // "EOR IP, IP, =#imm".
+        Register    rm = (rn == IP) ? (rd) : (IP);
+        NanoAssert(rn != rm);
+
+        EORs(rd, rn, rm, stat);
+        asm_ld_imm(rm, imm);
+    }
 }
 
 // --------------------------------
@@ -205,7 +549,7 @@ Assembler::nFragExit(LInsp guard)
         // the JavaScript JIT but not for the Regular Expression compiler.
         // However, I haven't pushed this further as it only saves a single MOV
         // instruction in genEpilogue.
-        LDi(R2, int(gr));
+        asm_ld_imm(R2, int(gr));
 
         // Set the jmp pointer to the start of the sequence so that patched
         // branches can skip the LDi sequence.
@@ -213,11 +557,11 @@ Assembler::nFragExit(LInsp guard)
     }
 
 #ifdef NJ_VERBOSE
-    if (config.show_stats) {
+    if (_frago->core()->config.show_stats) {
         // load R1 with Fragment *fromFrag, target fragment
         // will make use of this when calling fragenter().
         int fromfrag = int((Fragment*)_thisfrag);
-        LDi(argRegs[1], fromfrag);
+        asm_ld_imm(argRegs[1], fromfrag);
     }
 #endif
 
@@ -871,7 +1215,7 @@ Assembler::asm_quad(LInsp ins)
     NanoAssert(d || rr != UnknownReg);
 
 #ifdef TM_MERGE
-    if (AvmCore::config.vfp &&
+    if (IS_ARM_ARCH_VFP() &&
         rr != UnknownReg)
 #endif
 
@@ -1166,64 +1510,6 @@ bool Assembler::BL_noload(NIns* addr, Register reg)
     }
 }
 
-void
-Assembler::LD32_nochk(Register r, int32_t imm)
-{
-    // If the immediate value will fit into a simple MOV or MVN, use that to
-    // save a word of memory.
-    if (isU8(imm)) {
-        underrunProtect(4);
-
-        // MOV r, #imm
-        *(--_nIns) = (NIns)( COND_AL | (0x3B<<20) | (r<<12) | (imm & 0xFF) );
-        asm_output("mov %s,0x%x",gpn(r), imm);
-
-        return;
-    } else if (isU8(~imm)) {
-        underrunProtect(4);
-
-        // MVN r, #imm
-        *(--_nIns) = (NIns)( COND_AL | (0x3E<<20) | (r<<12) | (~imm & 0xFF) );
-        asm_output("mvn %s,0x%x",gpn(r), ~imm);
-
-        return;
-    }
-
-#ifdef JS_TRACER
-    if (AvmCore::config.thumb2 && (r != PC)) {
-        // On ARMv6T2 and above, we can just emit a movw/movt pair.
-        // Note: The movt is only necessary if the high 16 bits are non-zero.
-        if (((imm >> 16) & 0xFFFF) != 0)
-            MOVT(r, (imm >> 16) & 0xFFFF);
-        MOVW(r, imm & 0xFFFF);
-        return;
-    }
-#endif
-
-    // Because the literal pool is on the same page as the generated code, it
-    // will almost always be within the ±4096 range of a LDR. However, this may
-    // not be the case if _nSlot is at the start of the page and _nIns is at
-    // the end because the PC is 8 bytes ahead of _nIns. This is unlikely to
-    // happen, but if it does occur we can simply waste a word or two of
-    // literal space.
-
-    int offset = PC_OFFSET_FROM(_nSlot, _nIns-1);
-    while (offset <= -4096) {
-        ++_nSlot;
-        offset += sizeof(_nSlot);
-    }
-    NanoAssert(isS12(offset) && (offset < 0));
-
-    // Write the literal.
-    *(_nSlot++) = imm;
-    asm_output("## imm= 0x%x", imm);
-
-    // Load the literal.
-    LDR_nochk(r,PC,offset);
-    NanoAssert(uintptr_t(_nIns) + 8 + offset == uintptr_t(_nSlot-1));
-    NanoAssert(*((int32_t*)_nSlot-1) == imm);
-}
-
 // Emit the code required to load a memory address into a register as follows:
 // d = *(b+off)
 // underrunProtect calls from this function can be disabled by setting chk to
@@ -1284,23 +1570,80 @@ Assembler::asm_ldr_chk(Register d, Register b, int32_t off, bool chk)
 // from this function; this allows the caller to perform the check manually.
 // This function guarantees not to use more than LD32_size bytes of space.
 void
-Assembler::asm_ld_imm(Register d, int32_t imm, bool)
+Assembler::asm_ld_imm(Register d, int32_t imm, bool chk /* = true */)
 {
+    uint32_t    op2imm;
+
     NanoAssert(IsGpReg(d));
-    if (isU8(imm)) {
-        underrunProtect(4);
-        // MOV d, #imm
-        *(--_nIns) = (NIns)( COND_AL | 0x3B<<20 | d<<12 | imm);
-        asm_output("mov %s,0x%x",gpn(d), imm);
-    } else if (isU8(~imm)) {
-        underrunProtect(4);
-        // MVN d, #imm
-        *(--_nIns) = (NIns)( COND_AL | 0x3E<<20 | d<<12 | ~imm);
-        asm_output("mvn %s,0x%x",gpn(d), ~imm);
-    } else {
-        underrunProtect(LD32_size);
-        LD32_nochk(d, imm);
+
+    // Attempt to encode the immediate using the second operand of MOV or MVN.
+    // This is the simplest solution and generates the shortest and fastest
+    // code, but can only encode a limited set of values.
+
+    if (encOp2Imm(imm, &op2imm)) {
+        // Use MOV to encode the literal.
+        MOVis(d, op2imm, 0);
+        return;
     }
+
+    if (encOp2Imm(~imm, &op2imm)) {
+        // Use MVN to encode the inverted literal.
+        MVNis(d, op2imm, 0);
+        return;
+    }
+
+    // Try to use simple MOV, MVN or MOV(W|T) instructions to load the
+    // immediate. If this isn't possible, load it from memory.
+    //  - We cannot use MOV(W|T) on cores older than the introduction of
+    //    Thumb-2 or if the target register is the PC.
+    if (IS_ARM_ARCH_THUMB2() && (d != PC)) {
+        // ARMv6T2 and above have MOVW and MOVT.
+        uint32_t    high_h = (uint32_t)imm >> 16;
+        uint32_t    low_h = imm & 0xffff;
+
+        if (high_h != 0) {
+            // Load the high half-word (if necessary).
+            MOVTi_chk(d, high_h, chk);
+        }
+        // Load the low half-word. This also zeroes the high half-word, and
+        // thus must execute _before_ MOVT, and is necessary even if low_h is 0
+        // because MOVT will not change the existing low half-word.
+        MOVWi_chk(d, low_h, chk);
+
+        return;
+    }
+
+    // We couldn't encode the literal in the instruction stream, so load it
+    // from memory.
+
+    // Because the literal pool is on the same page as the generated code, it
+    // will almost always be within the ±4096 range of a LDR. However, this may
+    // not be the case if _nSlot is at the start of the page and _nIns is at
+    // the end because the PC is 8 bytes ahead of _nIns. This is unlikely to
+    // happen, but if it does occur we can simply waste a word or two of
+    // literal space.
+
+    // We must do the underrunProtect before PC_OFFSET_FROM as underrunProtect
+    // can move the PC if there isn't enough space on the current page!
+    if (chk) {
+        underrunProtect(LD32_size);
+    }
+
+    int offset = PC_OFFSET_FROM(_nSlot, _nIns-1);
+    // If the offset is out of range, waste literal space until it is in range.
+    while (offset <= -4096) {
+        ++_nSlot;
+        offset += sizeof(_nSlot);
+    }
+    NanoAssert(isS12(offset) && (offset < -8));
+
+    // Write the literal.
+    *(_nSlot++) = imm;
+
+    // Load the literal.
+    LDR_nochk(d,PC,offset);
+    NanoAssert(uintptr_t(_nIns) + 8 + offset == uintptr_t(_nSlot-1));
+    NanoAssert(*((int32_t*)_nSlot-1) == imm);
 }
 
 // Branch to target address _t with condition _c, doing underrun
@@ -1391,85 +1734,6 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
         // Emit the conditional branch.
         *(--_nIns) = (NIns)( ((_c)<<28) | (0x51<<20) | (PC<<16) | (PC<<12) | 0x0 );
         asm_output("b%s %p", _c == AL ? "" : condNames[_c], (void*)(_t));
-    }
-}
-
-void
-Assembler::asm_add_imm(Register rd, Register rn, int32_t imm, int stat)
-{
-    int rot = 16;
-    uint32_t immval;
-    bool pos;
-
-    if (imm >= 0) {
-        immval = (uint32_t) imm;
-        pos = true;
-    } else {
-        immval = (uint32_t) (-imm);
-        pos = false;
-    }
-
-    while (immval > 255 &&
-           immval && ((immval & 0x3) == 0))
-    {
-        immval >>= 2;
-        rot--;
-    }
-
-    rot &= 0xf;
-
-    underrunProtect(4 + LD32_size);
-    if (immval < 256) {
-        if (pos) {
-            ALUi_rot(AL, add, stat, rd, rn, immval, rot);
-        } else {
-            ALUi_rot(AL, sub, stat, rd, rn, immval, rot);
-        }
-   } else {
-        // add scratch to rn, after loading the value into scratch.
-        // make sure someone isn't trying to use IP as an operand
-        NanoAssert(rn != IP);
-        ALUr(AL, add, stat, rd, rn, IP);
-        asm_ld_imm(IP, imm);
-    }
-}
-
-void
-Assembler::asm_sub_imm(Register rd, Register rn, int32_t imm, int stat)
-{
-    if (imm > -256 && imm < 256) {
-        underrunProtect(4);
-        if (imm >= 0)
-            ALUi(AL, sub, stat, rd, rn, imm);
-        else
-            ALUi(AL, add, stat, rd, rn, -imm);
-    } else if (imm >= 0) {
-        if (imm <= 510) {
-            /* between 0 and 510, inclusive */
-            int rem = imm - 255;
-            NanoAssert(rem < 256);
-            ALUi(AL, sub, stat, rd, rn, rem & 0xff);
-            ALUi(AL, sub, stat, rd, rn, 0xff);
-        } else {
-            /* more than 510 */
-            NanoAssert(rn != IP);
-            underrunProtect(4 + LD32_size);
-            ALUr(AL, sub, stat, rd, rn, IP);
-            asm_ld_imm(IP, imm);
-        }
-    } else {
-        if (imm >= -510) {
-            /* between -510 and -1, inclusive */
-            int rem = -imm - 255;
-            ALUi(AL, add, stat, rd, rn, rem & 0xff);
-            ALUi(AL, add, stat, rd, rn, 0xff);
-        } else {
-            /* less than -510 */
-            NanoAssert(rn != IP);
-            underrunProtect(4 + LD32_size);
-            ALUr(AL, add, stat, rd, rn, IP);
-            asm_ld_imm(IP, -imm);
-        }
     }
 }
 
@@ -1649,10 +1913,8 @@ Assembler::asm_branch(bool branchOnFalse, LInsp cond, NIns* targ)
     // Ensure that we got a sensible condition code.
     NanoAssert((cc != AL) && (cc != NV));
 
-#ifdef TM_MERGE
     // Ensure that we don't hit floating-point LIR codes if VFP is disabled.
-    NanoAssert(AvmCore::config.vfp || !fp_cond);
-#endif
+    NanoAssert(IS_ARM_ARCH_VFP() || !fp_cond);
 
     // Emit a suitable branch instruction.
     B_cond(cc, targ);
@@ -1784,112 +2046,155 @@ Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
         asm_cmp(ins);
     }
 
-    void
-    Assembler::asm_arith(LInsp ins)
+void
+Assembler::asm_arith(LInsp ins)
+{
+    LOpcode op = ins->opcode();
+    LInsp   lhs = ins->oprnd1();
+    LInsp   rhs = ins->oprnd2();
+
+    RegisterMask    allow = GpRegs;
+
+    // We always need the result register and the first operand register.
+    Register        rr = prepResultReg(ins, allow);
+    Reservation *   rA = getresv(lhs);
+    Register        ra = UnknownReg;
+    Register        rb = UnknownReg;
+
+    // If this is the last use of lhs in reg, we can re-use the result reg.
+    if (!rA || (ra = rA->reg) == UnknownReg)
+        ra = findSpecificRegFor(lhs, rr);
+
+    // Don't re-use the registers we've already allocated.
+    NanoAssert(rr != UnknownReg);
+    NanoAssert(ra != UnknownReg);
+    allow &= ~rmask(rr);
+    allow &= ~rmask(ra);
+
+    // If the rhs is constant, we can use the instruction-specific code to
+    // determine if the value can be encoded in an ARM instruction. If the
+    // value cannot be encoded, it will be loaded into a register.
+    //
+    // Note that the MUL instruction can never take an immediate argument so
+    // even if the argument is constant, we must allocate a register for it.
+    //
+    // Note: It is possible to use a combination of the barrel shifter and the
+    // basic arithmetic instructions to generate constant multiplications.
+    // However, LIR_mul is never invoked with a constant during
+    // trace-tests.js so it is very unlikely to be worthwhile implementing it.
+    if (rhs->isconst() && op != LIR_mul)
     {
-        LOpcode op = ins->opcode();
-        LInsp lhs = ins->oprnd1();
-        LInsp rhs = ins->oprnd2();
+        if ((op == LIR_add || op == LIR_iaddp) && lhs->isop(LIR_ialloc)) {
+            // Add alloc+const. The result should be the address of the
+            // allocated space plus a constant.
+            Register    rs = prepResultReg(ins, allow);
+            int         d = findMemFor(lhs) + rhs->imm32();
 
-        Register rb = UnknownReg;
-        RegisterMask allow = GpRegs;
-        bool forceReg = (op == LIR_mul || !rhs->isconst());
-
-        // Arm can't do an immediate op with immediates
-        // outside of +/-255 (for AND) r outside of
-        // 0..255 for others.
-        if (!forceReg) {
-            if ((op != LIR_lsh) && (op != LIR_rsh) && (LIR_ush) &&
-                rhs->isconst() && !isU8(rhs->imm32()))
-                forceReg = true;
+            NanoAssert(rs != UnknownReg);
+            asm_add_imm(rs, FP, d);
         }
 
-        if (lhs != rhs && forceReg) {
-            if ((rb = asm_binop_rhs_reg(ins)) == UnknownReg) {
-                rb = findRegFor(rhs, allow);
-            }
-            allow &= ~rmask(rb);
-        } else if ((op == LIR_add||op == LIR_addp) && lhs->isop(LIR_alloc) && rhs->isconst()) {
-            // add alloc+const, rr wants the address of the allocated space plus a constant
-            Register rr = prepResultReg(ins, allow);
-            int d = findMemFor(lhs) + rhs->imm32();
-            asm_add_imm(rr, FP, d);
+        int32_t imm32 = rhs->imm32();
+
+        switch (op)
+        {
+            case LIR_iaddp: asm_add_imm(rr, ra, imm32);     break;
+            case LIR_add:   asm_add_imm(rr, ra, imm32, 1);  break;
+            case LIR_sub:   asm_sub_imm(rr, ra, imm32, 1);  break;
+            case LIR_and:   asm_and_imm(rr, ra, imm32);     break;
+            case LIR_or:    asm_orr_imm(rr, ra, imm32);     break;
+            case LIR_xor:   asm_eor_imm(rr, ra, imm32);     break;
+            case LIR_lsh:   LSLi(rr, ra, imm32);            break;
+            case LIR_rsh:   ASRi(rr, ra, imm32);            break;
+            case LIR_ush:   LSRi(rr, ra, imm32);            break;
+
+            default:
+                NanoAssertMsg(0, "Unsupported");
+                break;
         }
 
-        Register rr = prepResultReg(ins, allow);
-        Reservation* rA = getresv(lhs);
-        Register ra;
-        // if this is last use of lhs in reg, we can re-use result reg
-        if (rA == 0 || (ra = rA->reg) == UnknownReg)
-            ra = findSpecificRegFor(lhs, rr);
-        // else, rA already has a register assigned.
-        NanoAssert(ra != UnknownReg);
+        // We've already emitted an instruction, so return now.
+        return;
+    }
 
-        if (forceReg) {
-            if (lhs == rhs)
-                rb = ra;
+    // The rhs is either a register or cannot be encoded as a constant.
 
-            if (op == LIR_add || op == LIR_addp)
-                ADDs(rr, ra, rb, 1);
-            else if (op == LIR_sub)
-                SUB(rr, ra, rb);
-            else if (op == LIR_mul)
-#if NJ_ARM_ARCH >= NJ_ARM_V6
-                MUL(rr, ra, rb);
-#else
-                if (rr == ra) {
+    if (lhs == rhs) {
+        rb = ra;
+    } else {
+        rb = asm_binop_rhs_reg(ins);
+        if (rb == UnknownReg)
+            rb = findRegFor(rhs, allow);
+        allow &= ~rmask(rb);
+    }
+    NanoAssert(rb != UnknownReg);
+
+    switch (op)
+    {
+        case LIR_iaddp: ADDs(rr, ra, rb, 0);    break;
+        case LIR_add:   ADDs(rr, ra, rb, 1);    break;
+        case LIR_sub:   SUBs(rr, ra, rb, 1);    break;
+        case LIR_and:   ANDs(rr, ra, rb, 0);    break;
+        case LIR_or:    ORRs(rr, ra, rb, 0);    break;
+        case LIR_xor:   EORs(rr, ra, rb, 0);    break;
+
+        case LIR_mul:
+            // ARMv5 and earlier cores cannot do a MUL where the first operand
+            // is also the result, so we need a special case to handle that.
+            //
+            // We try to use rb as the first operand by default because it is
+            // common for (rr == ra) and is thus likely to be the most
+            // efficient case; if ra is no longer used after this LIR
+            // instruction, it is re-used for the result register (rr).
+            if (IS_ARM_ARCH_GT_V5() || (rr != rb)) {
+                // Newer cores place no restrictions on the registers used in a
+                // MUL instruction (compared to other arithmetic instructions).
+                MUL(rr, rb, ra);
+            } else {
+                // config.arch is ARMv5 (or below) and rr == rb, so we must
+                // find a different way to encode the instruction.
+
+                // If possible, swap the arguments to avoid the restriction.
+                if (rr != ra) {
+                    // We know that rr == rb, so this will be something like
+                    // rX = rY * rX.
+                    MUL(rr, ra, rb);
+                } else {
+                    // We're trying to do rX = rX * rX, so we must use a
+                    // temporary register to achieve this correctly on ARMv5.
+
+                    // The register allocator will never allocate IP so it will
+                    // be safe to use here.
+                    NanoAssert(ra != IP);
+                    NanoAssert(rr != IP);
+
+                    // In this case, rr == ra == rb.
                     MUL(rr, IP, rb);
                     MOV(IP, ra);
-                } else {
-                MUL(rr, ra, rb);
                 }
-#endif
-            else if (op == LIR_and)
-                AND(rr, ra, rb);
-            else if (op == LIR_or)
-                ORR(rr, ra, rb);
-            else if (op == LIR_xor)
-                EOR(rr, ra, rb);
-            else if (op == LIR_lsh) {
-                LSL(rr, ra, IP);
-                ANDi(IP, rb, 31);
-            } else if (op == LIR_rsh) {
-                ASR(rr, ra, IP);
-                ANDi(IP, rb, 31);
-            } else if (op == LIR_ush) {
-                LSR(rr, ra, IP);
-                ANDi(IP, rb, 31);
-            } else
-                NanoAssertMsg(0, "Unsupported");
-        } else {
-            int c = rhs->imm32();
-            if (op == LIR_add || op == LIR_addp) {
-                asm_add_imm(rr, ra, c, 0);
-            } else if (op == LIR_sub) {
-                asm_sub_imm(rr, ra, c);
-            } else if (op == LIR_and) {
-                if (isU8(c)) {
-                    ANDi(rr, ra, c);
-                } else if (c < 0 && c > -256) {
-                    AND(rr, ra, IP);
-                    ALUi(AL, mvn, 0, IP, 0, (~c)&255);
-                } else {
-                    NanoAssert(0);
-                }
-            } else if (op == LIR_or)
-                ORRi(rr, ra, c);
-            else if (op == LIR_xor)
-                EORi(rr, ra, c);
-            else if (op == LIR_lsh)
-                LSLi(rr, ra, c & 31);
-            else if (op == LIR_rsh)
-                ASRi(rr, ra, c & 31);
-            else if (op == LIR_ush)
-                LSRi(rr, ra, c & 31);
-            else
-                NanoAssertMsg(0, "Unsupported");
-        }
+            }
+            break;
+        
+        // The shift operations need a mask to match the JavaScript
+        // specification because the ARM architecture allows a greater shift
+        // range than JavaScript.
+        case LIR_lsh:
+            LSL(rr, ra, IP);
+            ANDi(IP, rb, 0x1f);
+            break;
+        case LIR_rsh:
+            ASR(rr, ra, IP);
+            ANDi(IP, rb, 0x1f);
+            break;
+        case LIR_ush:
+            LSR(rr, ra, IP);
+            ANDi(IP, rb, 0x1f);
+            break;
+        default:
+            NanoAssertMsg(0, "Unsupported");
+            break;
     }
+}
 
     void
     Assembler::asm_neg_not(LInsp ins)
