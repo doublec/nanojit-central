@@ -233,7 +233,6 @@ verbose_only( extern const char* shiftNames[]; )
     DECLARE_PLATFORM_ASSEMBLER_DEBUG()                                          \
                                                                                 \
     const static Register argRegs[4], retRegs[2];                       \
-    void LD32_nochk(Register r, int32_t imm);                           \
     void BL(NIns*);                                                     \
     bool BL_noload(NIns*, Register);                                    \
     void B_cond_chk(ConditionCode, NIns*, bool);                        \
@@ -621,7 +620,6 @@ enum {
 
 // i386 compat, for Assembler.cpp
 #define MR(d,s) MOV(d,s)
-#define LD(reg,offset,base)    asm_ldr_chk(reg,base,offset,1)
 #define ST(base,offset,reg)    STR(reg,base,offset)
 
 // Load a byte (8 bits). The offset range is ±4095.

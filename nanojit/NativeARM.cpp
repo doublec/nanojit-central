@@ -712,7 +712,7 @@ Assembler::asm_regarg(ArgSize sz, LInsp p, Register r)
                     // load it into the arg reg
                     int d = findMemFor(p);
                     if (p->isop(LIR_alloc)) {
-                        asm_add_imm(r, FP, d, 0);
+                        asm_add_imm(r, FP, d);
                     } else {
                         LDR(r, FP, d);
                     }
@@ -762,7 +762,7 @@ Assembler::asm_stkarg(LInsp arg, int stkd)
         if (!quad) {
             STR(IP, SP, stkd);
             if (arg->isop(LIR_alloc)) {
-                asm_add_imm(IP, FP, d, 0);
+                asm_add_imm(IP, FP, d);
             } else {
                 LDR(IP, FP, d);
             }
@@ -1015,16 +1015,17 @@ void
 Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
 {
     if (i->isop(LIR_alloc)) {
-        int d = disp(resv);
-        asm_add_imm(r, FP, d, 0);
-    }
-    else if (i->isconst()) {
+        asm_add_imm(r, FP, disp(resv));
+    } else if (i->isconst()) {
         if (!resv->arIndex) {
             i->resv()->clear();
         }
-        LDi(r, i->imm32());
+        asm_ld_imm(r, i->imm32());
     }
     else {
+        // We can't easily load immediate values directly into FP registers, so
+        // ensure that memory is allocated for the constant and load it from
+        // memory.    
         int d = findMemFor(i);
 #ifdef NJ_ARM_VFP
         if (IsFpReg(r)) {
@@ -1032,7 +1033,7 @@ Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
                 FLDD(r, FP, d);
             } else {
                 FLDD(r, IP, 0);
-                asm_add_imm(IP, FP, d, 0);
+                asm_add_imm(IP, FP, d);
             }
 #if 0
     // This code tries to use a small constant load to restore the value of r.
@@ -1074,7 +1075,7 @@ Assembler::asm_spill(Register rr, int d, bool pop, bool quad)
                 FSTD(rr, FP, d);
             } else {
                 FSTD(rr, IP, 0);
-                asm_add_imm(IP, FP, d, 0);
+                asm_add_imm(IP, FP, d);
             }
         } else {
             STR(rr, FP, d);
@@ -1088,7 +1089,9 @@ Assembler::asm_spill(Register rr, int d, bool pop, bool quad)
 void
 Assembler::asm_load64(LInsp ins)
 {
-    ///asm_output("<<< load64");
+    //asm_output("<<< load64");
+
+    NanoAssert(ins->isQuad());
 
     LIns* base = ins->oprnd1();
     int offset = ins->disp();
@@ -1099,11 +1102,11 @@ Assembler::asm_load64(LInsp ins)
 
     NanoAssert(IsFpReg(rr));
 
-    if (isS8(offset >> 2) && (offset&3) == 0) {
-        FLDD(rr,rb,offset);
+    if (!isS8(offset >> 2) || (offset&3) != 0) {
+        FLDD(rr,IP,0);
+        asm_add_imm(IP, rb, offset);
     } else {
-            FLDD(rr,IP,0);
-            asm_add_imm(IP, rb, offset, 0);
+        FLDD(rr,rb,offset);
     }
 #else
     Reservation *resv = getresv(ins);
@@ -2317,7 +2320,7 @@ Assembler::asm_arith(LInsp ins)
                 // incoming arg is on stack, and EBP points nearby (see genPrologue)
                 Register r = prepResultReg(ins, GpRegs);
                 int d = (a - abi_regcount) * sizeof(intptr_t) + 8;
-                LD(r, d, FP);
+                LDR(r, FP, d);
             }
         } else {
             // saved param
@@ -2329,11 +2332,7 @@ void
 Assembler::asm_int(LInsp ins)
 {
     Register rr = prepResultReg(ins, GpRegs);
-    int32_t val = ins->imm32();
-    if (val == 0)
-        EOR(rr,rr,rr);
-    else
-        LDi(rr, val);
+    asm_ld_imm(rr, ins->imm32());
 }
 
 void
