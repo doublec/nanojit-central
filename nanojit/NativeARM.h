@@ -230,7 +230,6 @@ verbose_only( extern const char* shiftNames[]; )
     inline bool         isOp2Imm(uint32_t ) { return true; }			\
     inline uint32_t     decOp2Imm(uint32_t ) { return 0; } 
 #endif
-#endif
 
 #define DECLARE_PLATFORM_ASSEMBLER()                                    \
                                                                                 \
