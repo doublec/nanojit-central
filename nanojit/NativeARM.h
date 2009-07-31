@@ -225,7 +225,11 @@ verbose_only( extern const char* shiftNames[]; )
     inline bool         isOp2Imm(uint32_t literal);                     \
     inline uint32_t     decOp2Imm(uint32_t enc);
 #else
-# define DECLARE_PLATFORM_ASSEMBLER_DEBUG()
+// define stubs, for code that defines NJ_VERBOSE without DEBUG
+# define DECLARE_PLATFORM_ASSEMBLER_DEBUG()								\
+    inline bool         isOp2Imm(uint32_t ) { return true; }			\
+    inline uint32_t     decOp2Imm(uint32_t ) { return 0; } 
+#endif
 #endif
 
 #define DECLARE_PLATFORM_ASSEMBLER()                                    \
