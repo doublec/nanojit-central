@@ -320,6 +320,8 @@ namespace nanojit
         LRK_None    // this one is used for unused opcode numbers
     };
 
+    class LIns;
+
     // 0-operand form.  Used for LIR_start and LIR_label.
     class LInsOp0
     {
