@@ -113,7 +113,7 @@ namespace nanojit
     class avmplus::CodegenLIR;
 #endif
 
-    class LabelState MMGC_SUBCLASS_DECL
+    class LabelState
     {
     public:
         RegAlloc regs;
@@ -124,12 +124,11 @@ namespace nanojit
 
     class LabelStateMap
     {
-        GC *gc;
-        avmplus::SortedMap<LIns*, LabelState*, avmplus::LIST_GCObjects> labels;
+        Allocator& alloc;
+        HashMap<LIns*, LabelState*> labels;
     public:
-        LabelStateMap(GC *gc) : gc(gc), labels(gc)
+        LabelStateMap(Allocator& alloc) : alloc(alloc), labels(alloc)
         {}
-        ~LabelStateMap();
 
         void clear() { labels.clear(); }
         void add(LIns *label, NIns *addr, RegAlloc &regs);
@@ -137,6 +136,10 @@ namespace nanojit
     };
 
     typedef SeqBuilder<char*> StringList;
+
+    /** map tracking the register allocation state at each bailout point
+     *  (represented by SideExit*) in a trace fragment. */
+    typedef HashMap<SideExit*, RegAlloc*> RegAllocMap;
 
     /**
      * Information about the activation record for the method is built up
