@@ -147,10 +147,10 @@ namespace nanojit
             DWB(Fragment*) parent;
             DWB(Fragment*) first;
             DWB(Fragment*) peer;
-            DWB(LirBuffer*) lirbuf;
-            LIns*           lastIns;
-            LIns*       spawnedFrom;
-            GuardRecord*    outbound;
+            LirBuffer*     lirbuf;
+            LIns*          lastIns;
+            LIns*          spawnedFrom;
+            GuardRecord*   outbound;
 
             TraceKind kind;
             const void* ip;

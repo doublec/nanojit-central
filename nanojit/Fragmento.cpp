@@ -219,11 +219,6 @@ namespace nanojit
 
     void Fragment::releaseLirBuffer()
     {
-        // tm removed this, why?
-        if (lirbuf) {
-            lirbuf->clear();
-            lirbuf = 0;
-        }
         lastIns = 0;
     }
 

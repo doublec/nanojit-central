@@ -1100,11 +1100,10 @@ namespace nanojit
         LIns* insGuard(LOpcode op, LInsp cond, LIns *x);
     };
 
-    class LirBuffer : public GCFinalizedObject
+    class LirBuffer
     {
         public:
             LirBuffer(Allocator& alloc);
-            virtual ~LirBuffer();
             void        clear();
             void        rewind();
             uintptr_t   makeRoom(size_t szB);   // make room for an instruction
@@ -1157,7 +1156,7 @@ namespace nanojit
 
     class LirBufWriter : public LirWriter
     {
-        DWB(LirBuffer*)    _buf;        // underlying buffer housing the instructions
+        LirBuffer*    _buf;        // underlying buffer housing the instructions
 
         public:
             LirBufWriter(LirBuffer* buf)
