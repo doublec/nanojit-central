@@ -106,8 +106,7 @@ namespace nanojit
     };
 
     typedef avmplus::List<NIns*, avmplus::LIST_NonGCObjects> NInsList;
-    typedef avmplus::SortedMap<LIns*,NIns*,avmplus::LIST_NonGCObjects> InsMap;
-    typedef avmplus::SortedMap<NIns*,LIns*,avmplus::LIST_NonGCObjects> NInsMap;
+    typedef HashMap<NIns*, LIns*> NInsMap;
 
 #ifdef VTUNE
     class avmplus::CodegenLIR;
@@ -243,7 +242,6 @@ namespace nanojit
             }
 
             Allocator           &alloc;
-            AvmCore             *core;
             DWB(CodeAlloc*)     _codeAlloc;
             GC*                 _gc;
             DWB(Fragment*)      _thisfrag;
