@@ -80,7 +80,7 @@ namespace nanojit
             }
             _stats;
 
-            verbose_only( DWB(LabelMap*)        labels; )
+            verbose_only( LabelMap*        labels; )
 
             #ifdef NJ_VERBOSE
             void    drawTrees(char *fileName);

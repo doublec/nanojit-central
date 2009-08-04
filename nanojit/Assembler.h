@@ -165,7 +165,7 @@ namespace nanojit
             void printActivationState(const char* what);
 
             StringList* _outputCache;
-            DWB(LabelMap*) _labelMap;
+            LabelMap*   _labelMap;
 
             // Log controller object.  Contains what-stuff-should-we-print
             // bits, and a sink function for debug printing
