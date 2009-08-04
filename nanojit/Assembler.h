@@ -136,6 +136,8 @@ namespace nanojit
         LabelState *get(LIns *);
     };
 
+    typedef SeqBuilder<char*> StringList;
+
     /**
      * Information about the activation record for the method is built up
      * as we generate machine code.  As part of the prologue, we issue
@@ -172,7 +174,7 @@ namespace nanojit
             avmplus::CodegenLIR *cgen;
             #endif
 
-            Assembler(CodeAlloc* codeAlloc, AvmCore* core, LogControl* logc);
+            Assembler(CodeAlloc* codeAlloc, Allocator& alloc, AvmCore* core, LogControl* logc);
             ~Assembler() {}
 
             void        assemble(Fragment* frag, NInsList& loopJumps);
@@ -237,6 +239,7 @@ namespace nanojit
                 return r->used ? r : 0;
             }
 
+            Allocator           &alloc;
             AvmCore             *core;
             DWB(CodeAlloc*)     _codeAlloc;
             GC*                 _gc;

@@ -116,33 +116,29 @@ namespace nanojit
        LIR. */
     class ReverseLister : public LirFilter
     {
-        GC*          _gc;
+        Allocator&   _alloc;
         LirNameMap*  _names;
         const char*  _title;
-        avmplus::List<char*, avmplus::LIST_NonGCObjects> _strs;
+        StringList   _strs;
         LogControl*  _logc;
     public:
-        ReverseLister(LirFilter* in, GC* gc,
+        ReverseLister(LirFilter* in, Allocator& alloc,
                       LirNameMap* names, LogControl* logc, const char* title)
             : LirFilter(in)
-            , _gc(gc)
+            , _alloc(alloc)
             , _names(names)
             , _title(title)
-            , _strs(gc)
+            , _strs(alloc)
             , _logc(logc)
         { }
 
-        ~ReverseLister()
+        void finish()
         {
             _logc->printf("\n");
             _logc->printf("=== BEGIN %s ===\n", _title);
-            int i, j;
-            const char* prefix = "  ";
-            for (j = 0, i = _strs.size()-1; i >= 0; i--, j++) {
-                char* str = _strs.get(i);
-                _logc->printf("%s%02d: %s\n", prefix, j, str);
-                delete [] str;
-            }
+            int j = 0;
+            for (Seq<char*>* p = _strs.get(); p != NULL; p = p->tail)
+                _logc->printf("  %02d: %s\n", j++, p->head);
             _logc->printf("=== END %s ===\n", _title);
             _logc->printf("\n");
         }
@@ -151,19 +147,10 @@ namespace nanojit
         {
             LInsp i = in->read();
             const char* str = _names->formatIns(i);
-            char* cpy = new char[strlen(str)+1];
+            char* cpy = new (_alloc) char[strlen(str)+1];
             strcpy(cpy, str);
-            _strs.add(cpy);
+            _strs.insert(cpy);
             return i;
-        }
-
-        static void finish(ReverseLister *r)
-        {
-            if (r) {
-                GC* gc = r->_gc;
-                r->~ReverseLister();
-                gc->Free(r);
-            }
         }
     };
 #endif
@@ -173,9 +160,10 @@ namespace nanojit
      *
      *    - merging paths ( build a graph? ), possibly use external rep to drive codegen
      */
-    Assembler::Assembler(CodeAlloc* codeAlloc, AvmCore *core, LogControl* logc)
+    Assembler::Assembler(CodeAlloc* codeAlloc, Allocator& alloc, AvmCore* core, LogControl* logc)
         : hasLoop(0)
         , codeList(0)
+        , alloc(alloc)
         , core(core)
         , _codeAlloc(codeAlloc)
         , _gc(core->gc)
@@ -737,7 +725,6 @@ namespace nanojit
         )
 
         // set up backwards pipeline: assembler -> StackFilter -> LirReader
-        GC *gc = core->gc;
         LirReader bufreader(frag->lastIns);
 
         // Used to construct the pipeline
@@ -748,27 +735,27 @@ namespace nanojit
 
         // INITIAL PRINTING
         verbose_only( if (_logc->lcbits & LC_ReadLIR) {
-        pp_init = new (gc) ReverseLister(prev, gc, frag->lirbuf->names, _logc,
+        pp_init = new (alloc) ReverseLister(prev, alloc, frag->lirbuf->names, _logc,
                                     "Initial LIR");
         prev = pp_init;
         })
 
         /*// STOREFILTER for sp
-        StackFilter storefilter1(prev, gc, frag->lirbuf, frag->lirbuf->sp);
+        StackFilter storefilter1(prev, alloc, frag->lirbuf, frag->lirbuf->sp);
         prev = &storefilter1;
 
         verbose_only( if (_logc->lcbits & LC_AfterSF_SP) {
-        pp_after_sf1 = new ReverseLister(prev, gc, frag->lirbuf->names, _logc,
+        pp_after_sf1 = new (alloc) ReverseLister(prev, alloc, frag->lirbuf->names, _logc,
                                          "After Storefilter(sp)");
         prev = pp_after_sf1;
         })
 
         // STOREFILTER for rp
-        StackFilter storefilter2(prev, gc, frag->lirbuf, frag->lirbuf->rp);
+        StackFilter storefilter2(prev, alloc, frag->lirbuf, frag->lirbuf->rp);
         prev = &storefilter2;
 
         verbose_only( if (_logc->lcbits & LC_AfterSF_RP) {
-        pp_after_sf2 = new ReverseLister(prev, gc, frag->lirbuf->names, _logc,
+        pp_after_sf2 = new (alloc) ReverseLister(prev, alloc, frag->lirbuf->names, _logc,
                                          "After StoreFilter(rp) (final LIR)");
         prev = pp_after_sf2;
         })*/
@@ -783,6 +770,7 @@ namespace nanojit
         verbose_only(_thisfrag->compileNbr++; )
         _inExit = false;
 
+        GC* gc = core->gc;
         LabelStateMap labels(gc);
         NInsMap patches(gc);
         gen(prev, loopJumps, labels, patches);
@@ -808,12 +796,11 @@ namespace nanojit
         }
 
         // If we were accumulating debug info in the various ReverseListers,
-        // destruct them now.  Their destructors cause them to emit whatever
-        // contents they have accumulated.
+        // call finish() to emit whatever contents they have accumulated.
         verbose_only(
-        ReverseLister::finish(pp_init);
-        ReverseLister::finish(pp_after_sf1);
-        ReverseLister::finish(pp_after_sf2);
+        if (pp_init)        pp_init->finish();
+        if (pp_after_sf1)   pp_after_sf1->finish();
+        if (pp_after_sf2)   pp_after_sf2->finish();
         )
     }
 
@@ -1883,9 +1870,9 @@ namespace nanojit
     {
         if (_outputCache)
         {
-            char* str = (char*)_gc->Alloc(VMPI_strlen(s)+1);
+            char* str = new (alloc) char[VMPI_strlen(s)+1];
             VMPI_strcpy(str, s);
-            _outputCache->add(str);
+            _outputCache->insert(str);
         }
         else
         {
