@@ -243,7 +243,6 @@ namespace nanojit
 
             Allocator           &alloc;
             DWB(CodeAlloc*)     _codeAlloc;
-            GC*                 _gc;
             DWB(Fragment*)      _thisfrag;
             RegAllocMap*        _branchStateMap;
 

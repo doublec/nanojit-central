@@ -64,17 +64,15 @@ namespace nanojit
         InsList block;
         bool flushnext;
     public:
-        VerboseBlockReader(LirFilter *in, Assembler *a, LirNameMap *n)
-            : LirFilter(in), assm(a), names(n), block(a->_gc), flushnext(false)
+        VerboseBlockReader(Allocator& alloc, LirFilter *in, Assembler *a, LirNameMap *n)
+            : LirFilter(in), assm(a), names(n), block(alloc), flushnext(false)
         {}
 
         void flush() {
             flushnext = false;
             if (!block.isEmpty()) {
-                for (int j=0,n=block.size(); j < n; j++) {
-                    LIns *i = block[j];
-                    assm->outputf("    %s", names->formatIns(i));
-                }
+                for (Seq<LIns*>* p = block.get(); p != NULL; p = p->tail)
+                    assm->outputf("    %s", names->formatIns(p->head));
                 block.clear();
             }
         }
@@ -165,7 +163,6 @@ namespace nanojit
         , codeList(0)
         , alloc(alloc)
         , _codeAlloc(codeAlloc)
-        , _gc(core->gc)
         , config(core->config)
     {
         nInit(core);
@@ -761,7 +758,7 @@ namespace nanojit
 
         // end of pipeline
         verbose_only(
-        VerboseBlockReader vbr(prev, this, frag->lirbuf->names);
+        VerboseBlockReader vbr(alloc, prev, this, frag->lirbuf->names);
         if (_logc->lcbits & LC_Assembly)
             prev = &vbr;
         )
@@ -958,7 +955,7 @@ namespace nanojit
                    reader->pos()->isop(LIR_xtbl) ||
                    reader->pos()->isop(LIR_live));
 
-        InsList pending_lives(_gc);
+        InsList pending_lives(alloc);
 
         for (LInsp ins = reader->read(); !ins->isop(LIR_start);
                                          ins = reader->read())
@@ -1490,9 +1487,8 @@ namespace nanojit
     {
         // ensure that exprs spanning the loop are marked live at the end of the loop
         reserveSavedRegs();
-        for (int i=0, n=pending_lives.size(); i < n; i++) {
-            findMemFor(pending_lives[i]);
-        }
+        for (Seq<LIns*>* p = pending_lives.get(); p != NULL; p = p->tail)
+            findMemFor(p->head);
 
         // clear this list since we have now dealt with those lifetimes.  extending
         // their lifetimes again later (earlier in the code) serves no purpose.
