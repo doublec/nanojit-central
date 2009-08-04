@@ -160,11 +160,22 @@ namespace nanojit
      */
     Assembler::Assembler(CodeAlloc& codeAlloc, Allocator& alloc, AvmCore* core, LogControl* logc)
         : hasLoop(0)
-        , codeList(0)
+        , codeList(NULL)
         , alloc(alloc)
         , _codeAlloc(codeAlloc)
+        , _thisfrag(NULL)
+        , _branchStateMap(NULL)
+        , _epilogue(NULL)
+        , _err(None)
+    #if PEDANTIC
+        , pedanticTop(NULL)
+    #endif
+    #ifdef VTUNE
+        , cgen(NULL)
+    #endif
         , config(core->config)
     {
+        VMPI_memset(&_stats, 0, sizeof(_stats));
         nInit(core);
         (void)logc;
         verbose_only( _logc = logc; )

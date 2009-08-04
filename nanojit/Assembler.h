@@ -147,7 +147,7 @@ namespace nanojit
      * value.  Temporary values can be placed into the AR as method calls
      * are issued.   Also LIR_alloc instructions will consume space.
      */
-    class Assembler MMGC_SUBCLASS_DECL
+    class Assembler
     {
         friend class VerboseBlockReader;
         public:
@@ -177,7 +177,6 @@ namespace nanojit
             #endif
 
             Assembler(CodeAlloc& codeAlloc, Allocator& alloc, AvmCore* core, LogControl* logc);
-            ~Assembler() {}
 
             void        assemble(Fragment* frag, NInsList& loopJumps);
             void        endAssembly(Fragment* frag, NInsList& loopJumps);
