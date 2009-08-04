@@ -105,7 +105,7 @@ namespace nanojit
         ,UnknownBranch
     };
 
-    typedef avmplus::List<NIns*, avmplus::LIST_NonGCObjects> NInsList;
+    typedef SeqBuilder<NIns*> NInsList;
     typedef HashMap<NIns*, LIns*> NInsMap;
 
 #ifdef VTUNE

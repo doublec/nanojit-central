@@ -819,13 +819,13 @@ namespace nanojit
             SOT = frag->root->fragEntry;
         }
         AvmAssert(SOT != 0);
-        while(!loopJumps.isEmpty())
-        {
-            NIns* loopJump = (NIns*)loopJumps.removeLast();
+        for (Seq<NIns*>* p = loopJumps.get(); p != NULL; p = p->tail) {
+            NIns* loopJump = p->head;
             verbose_only( verbose_outputf("## patching branch at %010lx to %010lx",
                                           loopJump, SOT); )
             nPatchBranch(loopJump, SOT);
         }
+        loopJumps.clear();
 
         NIns* fragEntry = genPrologue();
         verbose_only( outputAddr=true; )
