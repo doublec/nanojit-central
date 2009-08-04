@@ -311,6 +311,7 @@ namespace nanojit {
 
 
 #include "Allocator.h"
+#include "Containers.h"
 #include "Native.h"
 #include "CodeAlloc.h"
 #include "LIR.h"

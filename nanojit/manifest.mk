@@ -65,6 +65,7 @@ avmplus_CXXSRCS := $(avmplus_CXXSRCS) \
   $(curdir)/Allocator.cpp \
   $(curdir)/Assembler.cpp \
   $(curdir)/CodeAlloc.cpp \
+  $(curdir)/Containers.cpp \
   $(curdir)/Fragmento.cpp \
   $(curdir)/LIR.cpp \
   $(curdir)/RegAlloc.cpp \
