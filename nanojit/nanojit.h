@@ -131,10 +131,8 @@ namespace nanojit
      * START AVM bridging definitions
      * -------------------------------------------
      */
-    class Fragment;
     typedef avmplus::AvmCore AvmCore;
     typedef avmplus::OSDep OSDep;
-    typedef avmplus::SortedMap<const void*, Fragment*, avmplus::LIST_GCObjects> FragmentMap;
 
     const uint32_t MAXARGS = 8;
 

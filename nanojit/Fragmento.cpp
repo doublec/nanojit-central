@@ -61,68 +61,15 @@ namespace nanojit
     Fragmento::Fragmento(AvmCore* core, uint32_t cacheSizeLog2, CodeAlloc* codeAlloc)
         :  _core(core),
            _codeAlloc(codeAlloc),
-           _frags(core->GetGC()),
             _max_pages(1 << (calcSaneCacheSize(cacheSizeLog2) - NJ_LOG2_PAGE_SIZE)),
             _pagesGrowth(16)
     {
         NanoAssert(_max_pages > _pagesGrowth); // shrink growth if needed
     }
 
-    Fragmento::~Fragmento()
-    {
-        clearFrags();
-        _frags.clear();
-    }
-
-    void Fragmento::clearFrags()
-    {
-        while (!_frags.isEmpty()) {
-            Fragment *f = _frags.removeLast();
-            Fragment *peer = f->peer;
-            while (peer) {
-                Fragment *next = peer->peer;
-                peer->releaseTreeMem(_codeAlloc);
-                NJ_DELETE(peer);
-                peer = next;
-            }
-            f->releaseTreeMem(_codeAlloc);
-            NJ_DELETE(f);
-        }
-
-        verbose_only( _stats.flushes++ );
-        verbose_only( _stats.compiles = 0 );
-    }
-
     AvmCore* Fragmento::core()
     {
         return _core;
-    }
-
-    Fragment* Fragmento::getAnchor(const void* ip)
-    {
-        Fragment *f = newFrag(ip);
-        Fragment *p = _frags.get(ip);
-        if (p) {
-            f->first = p;
-            /* append at the end of the peer list */
-            Fragment* next;
-            while ((next = p->peer) != NULL)
-                p = next;
-            p->peer = f;
-        } else {
-            f->first = f;
-            _frags.put(ip, f); /* this is the first fragment */
-        }
-        f->anchor = f;
-        f->root = f;
-        f->kind = LoopTrace;
-        verbose_only( addLabel(f, "T", _frags.size()); )
-        return f;
-    }
-
-    Fragment* Fragmento::getLoop(const void* ip)
-    {
-        return _frags.get(ip);
     }
 
 #ifdef NJ_VERBOSE
@@ -172,9 +119,10 @@ namespace nanojit
     //
     // Fragment
     //
-    Fragment::Fragment(const void* _ip) : ip(_ip), codeList(0)
+    Fragment::Fragment(const void* _ip)
     {
-        // Fragment is a gc object which is zero'd by the GC, no need to clear fields
+        VMPI_memset(this, 0, sizeof(*this));
+        this->ip = _ip;
     }
 
     Fragment::~Fragment()
@@ -239,7 +187,6 @@ namespace nanojit
         {
             Fragment* next = branch->nextbranch;
             branch->releaseTreeMem(codeAlloc);  // @todo safer here to recurse in case we support nested trees
-            NJ_DELETE(branch);
             branch = next;
         }
     }

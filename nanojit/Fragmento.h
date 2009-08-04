@@ -60,12 +60,8 @@ namespace nanojit
             enum { MAX_CACHE_SIZE_LOG2 = 30 }; // 640KB^H^H^H^H^H 1GB should be enough for anybody...
 
             Fragmento(AvmCore* core, uint32_t cacheSizeLog2, CodeAlloc *codeAlloc);
-            ~Fragmento();
 
             AvmCore*    core();
-            Fragment*   getLoop(const void* ip);
-            Fragment*   getAnchor(const void* ip);
-            void        clearFrags();   // clear all fragments from the cache
             Fragment*   getMerge(GuardRecord *lr, const void* ip);
             Fragment*   createBranch(GuardRecord *lr, const void* ip);
             Fragment*   newFrag(const void* ip);
@@ -89,7 +85,6 @@ namespace nanojit
         private:
             AvmCore*        _core;
             CodeAlloc*      _codeAlloc;
-            FragmentMap     _frags;     /* map from ip -> Fragment ptr  */
 
             const uint32_t _max_pages;
             const uint32_t _pagesGrowth;
@@ -108,7 +103,7 @@ namespace nanojit
      * It may turn out that that this arrangement causes too much traffic
      * between d and i-caches and that we need to carve up the structure differently.
      */
-    class Fragment : public GCFinalizedObject
+    class Fragment
     {
         public:
             Fragment(const void*);
@@ -135,18 +130,18 @@ namespace nanojit
             verbose_only( const char*   _token; )
             verbose_only( uint64_t      traceTicks; )
             verbose_only( uint64_t      interpTicks; )
-            verbose_only( DWB(Fragment*) eot_target; )
+            verbose_only( Fragment*     eot_target; )
             verbose_only( uint32_t      sid;)
             verbose_only( uint32_t      compileNbr;)
 
-            DWB(Fragment*) treeBranches;
-            DWB(Fragment*) branches;
-            DWB(Fragment*) nextbranch;
-            DWB(Fragment*) anchor;
-            DWB(Fragment*) root;
-            DWB(Fragment*) parent;
-            DWB(Fragment*) first;
-            DWB(Fragment*) peer;
+            Fragment*      treeBranches;
+            Fragment*      branches;
+            Fragment*      nextbranch;
+            Fragment*      anchor;
+            Fragment*      root;
+            Fragment*      parent;
+            Fragment*      first;
+            Fragment*      peer;
             LirBuffer*     lirbuf;
             LIns*          lastIns;
             LIns*          spawnedFrom;

@@ -243,7 +243,7 @@ namespace nanojit
 
             Allocator&          alloc;
             CodeAlloc&          _codeAlloc;
-            DWB(Fragment*)      _thisfrag;
+            Fragment*           _thisfrag;
             RegAllocMap*        _branchStateMap;
 
             NIns        *codeStart, *codeEnd;       // current block we're adding code to
