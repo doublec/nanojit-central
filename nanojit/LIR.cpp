@@ -116,7 +116,6 @@ namespace nanojit
     LirBuffer::~LirBuffer()
     {
         clear();
-        verbose_only(if (names) NJ_DELETE(names);)
     }
 
     void LirBuffer::clear()
@@ -1633,9 +1632,9 @@ namespace nanojit
 
     void LirNameMap::addName(LInsp i, const char* name) {
         if (!names.containsKey(i)) {
-            char *copy = new (allocator) char[VMPI_strlen(name)+1];
+            char *copy = new (alloc) char[VMPI_strlen(name)+1];
             VMPI_strcpy(copy, name);
-            Entry *e = new (allocator) Entry(copy);
+            Entry *e = new (alloc) Entry(copy);
             names.put(i, e);
         }
     }
