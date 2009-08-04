@@ -87,8 +87,8 @@ namespace nanojit
             #endif
 
         private:
-            AvmCore*         _core;
-            DWB(CodeAlloc*) _codeAlloc;
+            AvmCore*        _core;
+            CodeAlloc*      _codeAlloc;
             FragmentMap     _frags;     /* map from ip -> Fragment ptr  */
 
             const uint32_t _max_pages;

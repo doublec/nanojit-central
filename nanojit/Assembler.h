@@ -176,7 +176,7 @@ namespace nanojit
             avmplus::CodegenLIR *cgen;
             #endif
 
-            Assembler(CodeAlloc* codeAlloc, Allocator& alloc, AvmCore* core, LogControl* logc);
+            Assembler(CodeAlloc& codeAlloc, Allocator& alloc, AvmCore* core, LogControl* logc);
             ~Assembler() {}
 
             void        assemble(Fragment* frag, NInsList& loopJumps);
@@ -241,8 +241,8 @@ namespace nanojit
                 return r->used ? r : 0;
             }
 
-            Allocator           &alloc;
-            DWB(CodeAlloc*)     _codeAlloc;
+            Allocator&          alloc;
+            CodeAlloc&          _codeAlloc;
             DWB(Fragment*)      _thisfrag;
             RegAllocMap*        _branchStateMap;
 
