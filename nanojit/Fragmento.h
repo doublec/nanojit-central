@@ -62,7 +62,6 @@ namespace nanojit
             Fragmento(AvmCore* core, uint32_t cacheSizeLog2, CodeAlloc *codeAlloc);
 
             AvmCore*    core();
-            Fragment*   getMerge(GuardRecord *lr, const void* ip);
             Fragment*   createBranch(GuardRecord *lr, const void* ip);
             Fragment*   newFrag(const void* ip);
             Fragment*   newBranch(Fragment *from, const void* ip);
