@@ -1980,14 +1980,8 @@ namespace nanojit
         return i->arg(i->argc()-n-1);
     }
 
-#ifdef TM_MERGE
-    // untested in tamarin-redux
-    void compile(Assembler* assm, Fragment* triggerFrag, Fragmento* frago, Allocator& alloc)
+    void compile(Assembler* assm, Fragment* frag, Allocator& alloc verbose_only(, LabelMap* labels))
     {
-        Fragmento *frago = triggerFrag->lirbuf->_frago;
-        AvmCore *core = frago->core();
-        GC *gc = core->gc;
-
         verbose_only(
         LogControl *logc = assm->_logc;
         bool anyVerb = (logc->lcbits & 0xFFFF) > 0;
@@ -2001,7 +1995,7 @@ namespace nanojit
             logc->printf("========================================"
                          "========================================\n");
             logc->printf("=== BEGIN LIR::compile(%p, %p)\n",
-                         (void*)assm, (void*)triggerFrag);
+                         (void*)assm, (void*)frag);
             logc->printf("===\n");
         })
         /* END decorative preamble */
@@ -2010,95 +2004,45 @@ namespace nanojit
             logc->printf("\n");
             logc->printf("=== Results of liveness analysis:\n");
             logc->printf("===\n");
-            live(alloc, triggerFrag, logc);
+            live(alloc, frag, logc);
         })
 
         /* Set up the generic text output cache for the assembler */
         verbose_only( StringList asmOutput(alloc); )
         verbose_only( assm->_outputCache = &asmOutput; )
 
-        bool treeCompile = core->config.tree_opt && (triggerFrag->kind == BranchTrace);
-        RegAllocMap regMap(gc);
-        NInsList loopJumps(gc);
+        RegAllocMap regMap(alloc);
+        NInsList loopJumps(alloc);
 #ifdef MMGC_MEMORY_INFO
 //        loopJumps.set_meminfo_name("LIR loopjumps");
 #endif
-        assm->beginAssembly(triggerFrag, &regMap);
+        assm->beginAssembly(frag, &regMap);
         if (assm->error())
             return;
 
-        //logc->printf("recompile trigger %X kind %d\n", (int)triggerFrag, triggerFrag->kind);
+        //logc->printf("recompile trigger %X kind %d\n", (int)frag, frag->kind);
 
         verbose_only( if (anyVerb) {
             logc->printf("=== Translating LIR fragments into assembly:\n");
         })
 
-        Fragment* root = triggerFrag;
-        if (treeCompile)
-        {
-            // recompile the entire tree
-            verbose_only( if (anyVerb) {
-               logc->printf("=== -- Compile the entire tree: begin\n");
-            })
-            root = triggerFrag->root;
-            root->fragEntry = 0;
-            root->loopEntry = 0;
-            root->releaseCode(frago);
-
-            // do the tree branches
-            verbose_only( if (anyVerb) {
-               logc->printf("=== -- Do the tree branches\n");
-            })
-            Fragment* frag = root->treeBranches;
-            while (frag)
-            {
-                // compile til no more frags
-                if (frag->lastIns)
-                {
-                    verbose_only( if (anyVerb) {
-                        logc->printf("=== -- Compiling branch %s ip %s\n",
-                                     frago->labels->format(frag),
-                                     frago->labels->format(frag->ip));
-                    })
-                    assm->assemble(frag, loopJumps);
-                    verbose_only(if (asmVerb)
-                        assm->outputf("## compiling branch %s ip %s",
-                                      frago->labels->format(frag),
-                                      frago->labels->format(frag->ip)); )
-
-                    NanoAssert(frag->kind == BranchTrace);
-                    RegAlloc* regs = NJ_NEW(gc, RegAlloc)();
-                    assm->copyRegisters(regs);
-                    assm->releaseRegisters();
-                    SideExit* exit = frag->spawnedFrom;
-                    regMap.put(exit, regs);
-                }
-                frag = frag->treeBranches;
-            }
-            verbose_only( if (anyVerb) {
-               logc->printf("=== -- Compile the entire tree: end\n");
-            })
-        }
-
         // now the the main trunk
         verbose_only( if (anyVerb) {
             logc->printf("=== -- Compile trunk %s: begin\n",
-                         frago->labels->format(root));
+                         labels->format(frag));
         })
-        assm->assemble(root, loopJumps);
+        assm->assemble(frag, loopJumps);
         verbose_only( if (anyVerb) {
             logc->printf("=== -- Compile trunk %s: end\n",
-                         frago->labels->format(root));
+                         labels->format(frag));
         })
 
         verbose_only(
             if (asmVerb)
                 assm->outputf("## compiling trunk %s",
-                              frago->labels->format(root));
+                              labels->format(frag));
         )
-        NanoAssert(!frago->core()->config.tree_opt
-                   || root == root->anchor || root->kind == MergeTrace);
-        assm->endAssembly(root, loopJumps);
+        assm->endAssembly(frag, loopJumps);
 
         // reverse output so that assembly is displayed low-to-high
         // Up to this point, assm->_outputCache has been non-NULL, and so
@@ -2120,8 +2064,8 @@ namespace nanojit
         });
 
         if (assm->error()) {
-            root->fragEntry = 0;
-            root->loopEntry = 0;
+            frag->fragEntry = 0;
+            frag->loopEntry = 0;
         }
 
         /* BEGIN decorative postamble */
@@ -2129,14 +2073,13 @@ namespace nanojit
             logc->printf("\n");
             logc->printf("===\n");
             logc->printf("=== END LIR::compile(%p, %p)\n",
-                         (void*)assm, (void*)triggerFrag);
+                         (void*)assm, (void*)frag);
             logc->printf("========================================"
                          "========================================\n");
             logc->printf("\n");
         });
         /* END decorative postamble */
     }
-#endif // TM_MERGE
 
     LInsp LoadFilter::insLoad(LOpcode v, LInsp base, int32_t disp)
     {
