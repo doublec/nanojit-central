@@ -73,7 +73,6 @@ namespace nanojit
             void            blacklist();
             bool            isBlacklisted()     { return _hits < 0; }
             void            releaseLirBuffer();
-            void            releaseCode(CodeAlloc *alloc);
             void            releaseTreeMem(CodeAlloc *alloc);
             bool            isAnchor() { return anchor == this; }
             bool            isRoot() { return root == this; }
@@ -113,7 +112,6 @@ namespace nanojit
             NIns* loopEntry;
             int32_t calldepth;
             void* vmprivate;
-            CodeList* codeList;
 
         private:
             NIns*           _code;      // ptr to start of code

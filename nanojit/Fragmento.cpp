@@ -40,7 +40,6 @@
  * ***** END LICENSE BLOCK ***** */
 
 #include "nanojit.h"
-#undef MMGC_MEMORY_INFO
 
 namespace nanojit
 {
@@ -73,16 +72,10 @@ namespace nanojit
         lastIns = 0;
     }
 
-    void Fragment::releaseCode(CodeAlloc *codeAlloc)
-    {
-        _code = 0;
-        codeAlloc->freeAll(codeList);
-    }
-
     void Fragment::releaseTreeMem(CodeAlloc *codeAlloc)
     {
         releaseLirBuffer();
-        releaseCode(codeAlloc);
+        _code = 0;
 
         // now do it for all branches
         Fragment* branch = branches;

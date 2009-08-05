@@ -2013,9 +2013,6 @@ namespace nanojit
 
         RegAllocMap regMap(alloc);
         NInsList loopJumps(alloc);
-#ifdef MMGC_MEMORY_INFO
-//        loopJumps.set_meminfo_name("LIR loopjumps");
-#endif
         assm->beginAssembly(frag, &regMap);
         if (assm->error())
             return;
