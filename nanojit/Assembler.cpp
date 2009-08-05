@@ -690,6 +690,7 @@ namespace nanojit
         _activation.lowwatermark = 1;
         _activation.tos = _activation.lowwatermark;
         _activation.highwatermark = _activation.tos;
+        _inExit = false;
 
         counter_reset(native);
         counter_reset(exitnative);
