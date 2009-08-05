@@ -48,50 +48,6 @@ namespace nanojit
 
     using namespace avmplus;
 
-    static uint32_t calcSaneCacheSize(uint32_t in)
-    {
-        if (in < uint32_t(NJ_LOG2_PAGE_SIZE)) return NJ_LOG2_PAGE_SIZE; // at least 1 page
-        if (in > uint32_t(Fragmento::MAX_CACHE_SIZE_LOG2)) return Fragmento::MAX_CACHE_SIZE_LOG2;
-        return in;
-    }
-
-    /**
-     * This is the main control center for creating and managing fragments.
-     */
-    Fragmento::Fragmento(AvmCore* core, uint32_t cacheSizeLog2, CodeAlloc* codeAlloc)
-        :  _core(core),
-           _codeAlloc(codeAlloc),
-            _max_pages(1 << (calcSaneCacheSize(cacheSizeLog2) - NJ_LOG2_PAGE_SIZE)),
-            _pagesGrowth(16)
-    {
-        NanoAssert(_max_pages > _pagesGrowth); // shrink growth if needed
-    }
-
-    AvmCore* Fragmento::core()
-    {
-        return _core;
-    }
-
-#ifdef NJ_VERBOSE
-    void Fragmento::addLabel(Fragment *f, const char *prefix, int id)
-    {
-        char fragname[20];
-        VMPI_sprintf(fragname,"%s%d", prefix, id);
-        labels->add(f, sizeof(Fragment), 0, fragname);
-    }
-#endif
-
-    Fragment *Fragmento::createBranch(GuardRecord *lr, const void* ip)
-    {
-        Fragment *from = lr->from;
-        Fragment *f = newBranch(from, ip);
-        f->kind = BranchTrace;
-        f->calldepth = lr->calldepth;
-        f->treeBranches = f->root->treeBranches;
-        f->root->treeBranches = f;
-        return f;
-    }
-
     //
     // Fragment
     //
@@ -110,35 +66,6 @@ namespace nanojit
     {
         blacklistLevel++;
         _hits = -(1<<blacklistLevel);
-    }
-
-    Fragment *Fragmento::newFrag(const void* ip)
-    {
-        GC *gc = _core->gc;
-        Fragment *f = NJ_NEW(gc, Fragment)(ip);
-        f->blacklistLevel = 5;
-        return f;
-    }
-
-    Fragment *Fragmento::newBranch(Fragment *from, const void* ip)
-    {
-        Fragment *f = newFrag(ip);
-        f->anchor = from->anchor;
-        f->root = from->root;
-        f->xjumpCount = from->xjumpCount;
-        /*// prepend
-        f->nextbranch = from->branches;
-        from->branches = f;*/
-        // append
-        if (!from->branches) {
-            from->branches = f;
-        } else {
-            Fragment *p = from->branches;
-            while (p->nextbranch != 0)
-                p = p->nextbranch;
-            p->nextbranch = f;
-        }
-        return f;
     }
 
     void Fragment::releaseLirBuffer()

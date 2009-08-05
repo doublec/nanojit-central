@@ -46,48 +46,6 @@
 namespace nanojit
 {
     struct GuardRecord;
-    class Assembler;
-
-    struct fragstats;
-    /*
-     *
-     * This is the main control center for creating and managing fragments.
-     */
-    class Fragmento : public GCFinalizedObject
-    {
-        public:
-
-            enum { MAX_CACHE_SIZE_LOG2 = 30 }; // 640KB^H^H^H^H^H 1GB should be enough for anybody...
-
-            Fragmento(AvmCore* core, uint32_t cacheSizeLog2, CodeAlloc *codeAlloc);
-
-            AvmCore*    core();
-            Fragment*   createBranch(GuardRecord *lr, const void* ip);
-            Fragment*   newFrag(const void* ip);
-            Fragment*   newBranch(Fragment *from, const void* ip);
-            verbose_only( void addLabel(Fragment* f, const char *prefix, int id); )
-
-            // stats
-            struct
-            {
-                uint32_t    pages;                  // pages consumed
-                uint32_t    flushes, ilsize, abcsize, compiles, totalCompiles;
-            }
-            _stats;
-
-            verbose_only( LabelMap*        labels; )
-
-            #ifdef NJ_VERBOSE
-            void    drawTrees(char *fileName);
-            #endif
-
-        private:
-            AvmCore*        _core;
-            CodeAlloc*      _codeAlloc;
-
-            const uint32_t _max_pages;
-            const uint32_t _pagesGrowth;
-    };
 
     enum TraceKind {
         LoopTrace,
