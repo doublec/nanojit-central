@@ -1354,6 +1354,7 @@ Assembler::asm_mmq(Register rd, int dd, Register rs, int ds)
 void
 Assembler::nativePageReset()
 {
+    _nSlot = 0;
     _nExitSlot = 0;
 }
 
