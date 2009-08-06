@@ -70,8 +70,6 @@
     #define UNLESS_64BIT(...) __VA_ARGS__
 #endif
 
-    using namespace MMgc;
-
 // Embed no-op macros that let Valgrind work with the JIT.
 #ifdef MOZ_VALGRIND
 #  define JS_VALGRIND

@@ -798,15 +798,14 @@ namespace nanojit
     LIns* FASTCALL callArgN(LInsp i, uint32_t n);
     extern const int8_t operandCount[];
 
-    // make it a GCObject so we can explicitly delete it early
-    class LirWriter : public GCObject
+    class LirWriter
     {
     public:
         LirWriter *out;
 
-        virtual ~LirWriter() {}
         LirWriter(LirWriter* out)
             : out(out) {}
+        virtual ~LirWriter() {}
 
         virtual LInsp ins0(LOpcode v) {
             return out->ins0(v);
@@ -1233,10 +1232,12 @@ namespace nanojit
     public:
         LInsp sp, rp;
         LInsHashSet exprs;
+
         void clear(LInsp p);
     public:
         LoadFilter(LirWriter *out, Allocator& alloc)
-            : LirWriter(out), exprs(alloc) { }
+            : LirWriter(out), sp(NULL), rp(NULL), exprs(alloc)
+        { }
 
         LInsp ins0(LOpcode);
         LInsp insLoad(LOpcode, LInsp base, int32_t disp);
