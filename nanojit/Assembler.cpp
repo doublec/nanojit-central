@@ -865,7 +865,7 @@ namespace nanojit
         // save entry point pointers
         frag->fragEntry = fragEntry;
         frag->setCode(_nIns);
-        PERFM_NVPROF("code", CodeAlloc::size(frag->codeList));
+        PERFM_NVPROF("code", CodeAlloc::size(codeList));
 
         NanoAssertMsgf(_fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
 
