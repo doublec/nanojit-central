@@ -76,7 +76,10 @@ const int NJ_LOG2_PAGE_SIZE = 12;       // 4K
 #define NJ_ARM_V5    3         // v5 (BLX)
 #define NJ_ARM_V6    4         // v6
 #define NJ_ARM_V7    5         // v7
-#define NJ_ARM_ARCH  NJ_ARM_V5
+
+#if !defined(NJ_ARM_ARCH)
+#  define NJ_ARM_ARCH  NJ_ARM_V5
+#endif
 
 // only d0-d7; we'll use d7 as s14-s15 for i2f/u2f/etc.
 #ifdef NJ_ARM_VFP
