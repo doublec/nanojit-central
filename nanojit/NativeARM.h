@@ -56,9 +56,6 @@
 
 namespace nanojit
 {
-
-const int NJ_LOG2_PAGE_SIZE = 12;       // 4K
-
 // If NJ_ARM_VFP is defined, then VFP is assumed to
 // be present.  If it's not defined, then softfloat
 // is used, and NJ_SOFTFLOAT is defined.

@@ -1695,9 +1695,6 @@ namespace nanojit
         NIns *top = this->codeStart;
         if (eip - n < top) {
             codeAlloc();
-            // We are done with the current page.  Tell Valgrind that new code
-            // has been generated.
-            VALGRIND_DISCARD_TRANSLATIONS(pageTop(p), NJ_PAGE_SIZE);
             JMP(eip);
         }
     }
