@@ -111,6 +111,7 @@ namespace nanojit
 
         /** Reusable blocks. */
         CodeList* availblocks;
+        size_t totalAllocated;
 
         /** remove one block from a list */
         static CodeList* removeBlock(CodeList* &list);
@@ -175,6 +176,9 @@ namespace nanojit
 
         /** return the number of bytes in all the code blocks in "code", including block overhead */
         static size_t size(const CodeList* code);
+
+        /** return the total number of bytes held by this CodeAlloc. */
+        size_t size();
 
         /** print out stats about heap usage */
         void logStats();
