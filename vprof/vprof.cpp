@@ -368,7 +368,6 @@ inline uint64_t _rdtsc()
 	// read the cpu cycle counter.  1 tick = 1 cycle on IA32
 	_asm rdtsc;
 }
-#define have_rdtsc
 #elif defined(__GNUC__) && (__i386__ || __x86_64__)
 inline uint64_t _rdtsc() 
 {
@@ -376,12 +375,13 @@ inline uint64_t _rdtsc()
    __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
    return (uint64_t(hi) << 32) | lo;
 }
-#define have_rdtsc
+#else
+// add stub for platforms without it, so fat builds don't fail
+inline uint64_t _rdtsc() { return 0; }
 #endif
 
-#ifdef have_rdtsc
 void* _tprof_before_id=0;
-uint64_t _tprof_before;
+static uint64_t _tprof_before = 0;
 int64_t _tprof_time() 
 {
     uint64_t now = _rdtsc();
@@ -389,5 +389,4 @@ int64_t _tprof_time()
     _tprof_before = now;
     return v/2600; // v = microseconds on a 2.6ghz cpu
 }
-#endif
 
