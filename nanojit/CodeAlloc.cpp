@@ -78,8 +78,9 @@ namespace nanojit
     }
 
     CodeList* CodeAlloc::firstBlock(CodeList* term) {
-        char* end = (char*)alignUp(term, bytesPerPage);
-        return (CodeList*) (end - bytesPerAlloc);
+        // use uintptr_t, rather than char*, to avoid "increases required alignment" warning
+        uintptr_t end = (uintptr_t)alignUp(term, bytesPerPage);
+        return (CodeList*) (end - (uintptr_t)bytesPerAlloc);
     }
 
     int round(size_t x) {
