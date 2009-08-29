@@ -382,6 +382,8 @@ namespace nanojit
 
     void Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
     {
+        uint32_t arg;
+        uint32_t abi_regcount;
         if (i->isop(LIR_alloc)) {
             verbose_only( if (_logc->lcbits & LC_RegAlloc) {
                             outputForEOL("  <= remat %s size %d",
@@ -393,6 +395,21 @@ namespace nanojit
                 i->resv()->clear();
             }
             LDi(r, i->imm32());
+        }
+        else if (i->isop(LIR_param) && i->paramKind() == 0 &&
+            (arg = i->paramArg()) >= (abi_regcount = max_abi_regs[_thisfrag->lirbuf->abi])) {
+            // incoming arg is on stack, can restore it from there instead of spilling
+            if (!resv->arIndex) {
+                i->resv()->clear();
+            }
+            // compute position of argument relative to ebp.  higher argument
+            // numbers are at higher positive offsets.  the first abi_regcount
+            // arguments are in registers, rest on stack.  +8 accomodates the
+            // return address and saved ebp value.  assuming abi_regcount == 0:
+            //    low-addr  ebp
+            //    [frame...][saved-ebp][return-addr][arg0][arg1]...
+            int d = (arg - abi_regcount) * sizeof(intptr_t) + 8;
+            LD(r, d, FP);
         }
         else {
             int d = findMemFor(i);
