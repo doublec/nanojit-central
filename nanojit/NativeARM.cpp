@@ -49,11 +49,6 @@
 extern "C" bool blx_lr_broken();
 #endif
 
-#if defined(AVMPLUS_LINUX)
-#include <asm/unistd.h>
-extern "C" void __clear_cache(char *BEG, char *END);
-#endif
-
 #if defined(FEATURE_NANOJIT) && defined(NANOJIT_ARM)
 
 namespace nanojit

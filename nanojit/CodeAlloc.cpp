@@ -238,14 +238,6 @@ namespace nanojit
 #if defined(AVMPLUS_UNIX) && defined(NANOJIT_ARM)
 #include <asm/unistd.h>
 extern "C" void __clear_cache(char *BEG, char *END);
-
-// apparently Android doesn't provide this -- adding a temporary stub
-#if defined(ANDROID)
-void __clear_cache(char*, char*)
-{
-}
-#endif
-
 #endif
 
 #ifdef AVMPLUS_SPARC
@@ -302,12 +294,20 @@ extern  "C" void sync_instruction_memory(caddr_t v, u_int len);
     }
 
 #elif defined AVMPLUS_UNIX
+    #ifdef ANDROID
+    void CodeAlloc::flushICache(CodeList* &blocks) {
+        for (CodeList *b = blocks; b != 0; b = b->next) {
+			cacheflush((int)start, (int)b->start()+b->size(), 0);
+        }
+    }
+	#else
     // fixme: __clear_cache is a libgcc feature, test for libgcc or gcc
     void CodeAlloc::flushICache(CodeList* &blocks) {
         for (CodeList *b = blocks; b != 0; b = b->next) {
             __clear_cache((char*)b->start(), (char*)b->start()+b->size());
         }
     }
+	#endif
 #endif // AVMPLUS_MAC && NANOJIT_PPC
 
     void CodeAlloc::addBlock(CodeList* &blocks, CodeList* b) {
