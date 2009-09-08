@@ -297,7 +297,7 @@ extern  "C" void sync_instruction_memory(caddr_t v, u_int len);
     #ifdef ANDROID
     void CodeAlloc::flushICache(CodeList* &blocks) {
         for (CodeList *b = blocks; b != 0; b = b->next) {
-			cacheflush((int)start, (int)b->start()+b->size(), 0);
+			cacheflush((int)b->start(), (int)b->start()+b->size(), 0);
         }
     }
 	#else
