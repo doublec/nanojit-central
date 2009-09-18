@@ -89,6 +89,24 @@ static long glock = LOCK_IS_FREE;
 #define Lock(lock) while (_InterlockedCompareExchange(lock, LOCK_IS_TAKEN, LOCK_IS_FREE) == LOCK_IS_TAKEN){};
 #define Unlock(lock) _InterlockedCompareExchange(lock, LOCK_IS_FREE, LOCK_IS_TAKEN);
 
+#ifdef WIN32
+	static void vprof_printf(const char* format, ...)
+	{
+		va_list args;
+		va_start(args, format);
+
+		char buf[1024];
+		vsnprintf(buf, sizeof(buf), format, args);
+		
+		va_end(args);
+
+		printf(buf);
+		::OutputDebugStringA(buf);
+	}
+#else
+	#define vprof_printf printf
+#endif
+
 inline static entry* reverse (entry* s)
 {
     entry_t e, n, p;
@@ -123,40 +141,40 @@ static void dumpProfile (void)
     entry_t e;
 
     entries = reverse(entries);
-    printf ("event avg [min : max] total count\n");
+    vprof_printf ("event avg [min : max] total count\n");
     for (e = entries; e; e = e->next) {
-        printf ("%s", e->file); 
+        vprof_printf ("%s", e->file); 
         if (e->line >= 0) {
-            printf (":%d", e->line);
+            vprof_printf (":%d", e->line);
         } 
-        printf (" %s [%lld : %lld] %lld %lld ", 
+        vprof_printf (" %s [%lld : %lld] %lld %lld ", 
                 f(((double)e->sum)/((double)e->count)), (long long int)e->min, (long long int)e->max, (long long int)e->sum, (long long int)e->count);
         if (e->h) {
             int j = MAXINT;
             for (j = 0; j < e->h->nbins; j ++) {
-                printf ("(%lld < %lld) ", (long long int)e->h->count[j], (long long int)e->h->lb[j]);
+                vprof_printf ("(%lld < %lld) ", (long long int)e->h->count[j], (long long int)e->h->lb[j]);
             }
-            printf ("(%lld >= %lld) ", (long long int)e->h->count[e->h->nbins], (long long int)e->h->lb[e->h->nbins-1]);
+            vprof_printf ("(%lld >= %lld) ", (long long int)e->h->count[e->h->nbins], (long long int)e->h->lb[e->h->nbins-1]);
         }
         if (e->func) {
             int j;
             for (j = 0; j < NUM_EVARS; j++) {
                 if (e->ivar[j] != 0) {
-                    printf ("IVAR%d %d ", j, e->ivar[j]);
+                    vprof_printf ("IVAR%d %d ", j, e->ivar[j]);
                 }
             }
             for (j = 0; j < NUM_EVARS; j++) {
                 if (e->i64var[j] != 0) {
-                    printf ("I64VAR%d %lld ", j, (long long int)e->i64var[j]);
+                    vprof_printf ("I64VAR%d %lld ", j, (long long int)e->i64var[j]);
                 }
             }
             for (j = 0; j < NUM_EVARS; j++) {
                 if (e->dvar[j] != 0) {
-                    printf ("DVAR%d %lf ", j, e->dvar[j]);
+                    vprof_printf ("DVAR%d %lf ", j, e->dvar[j]);
                 }
             }
         }
-        printf ("\n");
+        vprof_printf ("\n");
     }
     entries = reverse(entries);
 }
