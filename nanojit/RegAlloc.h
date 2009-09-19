@@ -52,14 +52,62 @@ namespace nanojit
     class RegAlloc
     {
         public:
-            RegAlloc() { clear(); }
-            void    clear();
-            bool    isFree(Register r);
-            void    addFree(Register r);
-            void    addActive(Register r, LIns* ins);
-            void    useActive(Register r);
-            void    removeActive(Register r);
-            void    retire(Register r);
+            RegAlloc()
+            {
+                clear();
+            }
+
+            void clear()
+            {
+                VMPI_memset(this, 0, sizeof(*this));
+            }
+
+            bool isFree(Register r)
+            {
+                NanoAssert(r != UnknownReg);
+                return (free & rmask(r)) != 0;
+            }
+
+            void addFree(Register r)
+            {
+                NanoAssert(!isFree(r));
+                free |= rmask(r);
+            }
+
+            void addActive(Register r, LIns* v)
+            {
+                //  Count++;
+                NanoAssert(v);
+                NanoAssert(r != UnknownReg);
+                NanoAssert(active[r] == NULL);
+                active[r] = v;
+                useActive(r);
+            }
+
+            void useActive(Register r)
+            {
+                NanoAssert(r != UnknownReg);
+                NanoAssert(active[r] != NULL);
+                usepri[r] = priority++;
+            }
+
+            void removeActive(Register r)
+            {
+                //registerReleaseCount++;
+                NanoAssert(r != UnknownReg);
+                NanoAssert(active[r] != NULL);
+
+                // remove the given register from the active list
+                active[r] = NULL;
+            }
+
+            void retire(Register r)
+            {
+                NanoAssert(r != UnknownReg);
+                NanoAssert(active[r] != NULL);
+                active[r] = NULL;
+                free |= rmask(r);
+            }
 
             int32_t getPriority(Register r) {
                 NanoAssert(r != UnknownReg && active[r]);
