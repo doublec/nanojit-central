@@ -240,8 +240,7 @@ namespace nanojit
         LIns* vic = findVictim(regs, allow);
         NanoAssert(vic);
 
-        Reservation* resv = getresv(vic);
-        NanoAssert(resv);
+        Reservation* resv = vic->resvUsed();
 
         // restore vic
         Register r = resv->reg;
@@ -344,8 +343,7 @@ namespace nanojit
             ins = ar.entry[i];
             if ( !ins )
                 continue;
-            Reservation *r = getresv(ins);
-            NanoAssert(r != 0);
+            Reservation *r = ins->resvUsed();
             if (r->arIndex) {
                 if (ins->isop(LIR_alloc)) {
                     int j=i+1;
@@ -387,8 +385,7 @@ namespace nanojit
                 {
                     LIns* ins = regs->getActive(r);
                     // @todo we should be able to check across RegAlloc's somehow (to include savedGP...)
-                    Reservation *v = getresv(ins);
-                    NanoAssert(v != 0);
+                    Reservation *v = ins->resvUsed();
                     NanoAssertMsg( regs->getActive(v->reg)==ins, "Register record mismatch");
                 }
             }
@@ -405,29 +402,23 @@ namespace nanojit
         if (ia == ib)
         {
             findRegFor(ia, allow);
-            resva = resvb = getresv(ia);
+            resva = resvb = ia->resvUsed();
         }
         else
         {
-            Register rb = UnknownReg;
-            resvb = getresv(ib);
-            if (resvb && (rb = resvb->reg) != UnknownReg) {
-                if (allow & rmask(rb)) {
-                    // ib already assigned to an allowable reg, keep that one
-                    allow &= ~rmask(rb);
-                } else {
-                    // ib assigned to unusable reg, pick a different one below
-                    rb = UnknownReg;
-                }
+            resvb = ib->resv();
+            bool rbDone = (resvb->used && resvb->reg != UnknownReg && (allow & rmask(resvb->reg)));
+            if (rbDone) {
+                // ib already assigned to an allowable reg, keep that one
+                allow &= ~rmask(resvb->reg);
             }
             Register ra = findRegFor(ia, allow);
-            resva = getresv(ia);
-            NanoAssert(error() || (resva != 0 && ra != UnknownReg));
-            if (rb == UnknownReg)
-            {
+            resva = ia->resv();
+            NanoAssert(error() || (resva->used && ra != UnknownReg));
+            if (!rbDone) {
                 allow &= ~rmask(ra);
                 findRegFor(ib, allow);
-                resvb = getresv(ib);
+                resvb = ib->resvUsed();
             }
         }
     }
@@ -525,9 +516,9 @@ namespace nanojit
 
     int Assembler::findMemFor(LIns *i)
     {
-        Reservation* resv = getresv(i);
-        if (!resv)
-            (resv = i->resv())->init();
+        Reservation* resv = i->resv();
+        if (!resv->used)
+            resv->init();
         if (!resv->arIndex) {
             resv->arIndex = arReserve(i);
             NanoAssert(resv->arIndex <= _activation.highwatermark);
@@ -537,8 +528,8 @@ namespace nanojit
 
     Register Assembler::prepResultReg(LIns *i, RegisterMask allow)
     {
-        Reservation* resv = getresv(i);
-        const bool pop = !resv || resv->reg == UnknownReg;
+        Reservation* resv = i->resv();
+        const bool pop = !resv->used || resv->reg == UnknownReg;
         Register rr = findRegFor(i, allow);
         freeRsrcOf(i, pop);
         return rr;
@@ -560,7 +551,7 @@ namespace nanojit
     // detailed description.
     void Assembler::freeRsrcOf(LIns *i, bool pop)
     {
-        Reservation* resv = getresv(i);
+        Reservation* resv = i->resvUsed();
         int index = resv->arIndex;
         Register rr = resv->reg;
 
@@ -591,8 +582,8 @@ namespace nanojit
         // Get vic's resv, check r matches.
         NanoAssert(!_allocator.isFree(r));
         NanoAssert(vic == _allocator.getActive(r));
-        Reservation* resv = getresv(vic);
-        NanoAssert(resv && r == resv->reg);
+        Reservation* resv = vic->resvUsed();
+        NanoAssert(r == resv->reg);
 
         // Free r.
         _allocator.retire(r);
@@ -666,7 +657,6 @@ namespace nanojit
         swapptrs();
         _inExit = true;
 
-        //verbose_only( verbose_outputf("         LIR_xend swapptrs, _nIns is now %08X(%08X), _nExitIns is now %08X(%08X)",_nIns, *_nIns,_nExitIns,*_nExitIns) );
         debug_only( _sv_fpuStkDepth = _fpuStkDepth; _fpuStkDepth = 0; )
 
         nFragExit(guard);
@@ -876,8 +866,7 @@ namespace nanojit
             if (i)
             {
                 // clear reg allocation, preserve stack allocation.
-                Reservation* resv = getresv(i);
-                NanoAssert(resv != 0);
+                Reservation* resv = i->resvUsed();
                 _allocator.retire(r);
                 if (r == resv->reg)
                     resv->reg = UnknownReg;
@@ -1034,7 +1023,7 @@ namespace nanojit
                 // is the address of the stack space.
                 case LIR_alloc: {
                     countlir_alloc();
-                    Reservation *resv = getresv(ins);
+                    Reservation *resv = ins->resvUsed();
                     NanoAssert(resv->arIndex != 0);
                     Register r = resv->reg;
                     if (r != UnknownReg) {
@@ -1479,10 +1468,15 @@ namespace nanojit
             LIns *i = p->head;
             NanoAssert(i->isop(LIR_live) || i->isop(LIR_flive));
             LIns *op1 = i->oprnd1();
+            findMemFor(op1);            
+
+#ifdef TM_MERGE
+        // @todo need to resolve ... fails 64b testing on mac
             if (op1->isconst() || op1->isconstf() || op1->isconstq())
                 findMemFor(op1);
             else
                 findRegFor(op1, i->isop(LIR_flive) ? FpRegs : GpRegs);
+#endif
         }
 
         // clear this list since we have now dealt with those lifetimes.  extending
@@ -1688,7 +1682,8 @@ namespace nanojit
         // @todo speed this up
         LIns* i;
         for (Register r = FirstReg; r <= LastReg; r = nextreg(r)) {
-            if ((rmask(r) & regs) && (i = _allocator.getActive(r))) {
+            i = _allocator.getActive(r);
+            if ((rmask(r) & regs) && i) {
                 evict(r, i);
             }
         }
