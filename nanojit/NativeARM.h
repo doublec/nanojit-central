@@ -90,7 +90,6 @@ namespace nanojit
 #define NJ_MAX_STACK_ENTRY              256
 #define NJ_MAX_PARAMETERS               16
 #define NJ_ALIGN_STACK                  8
-#define NJ_STACK_OFFSET                 0
 
 #define NJ_CONSTANT_POOLS
 const int NJ_MAX_CPOOL_OFFSET = 4096;

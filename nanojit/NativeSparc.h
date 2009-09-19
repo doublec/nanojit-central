@@ -68,7 +68,6 @@
 namespace nanojit
 {
     const int NJ_MAX_REGISTERS = 30; // L0 - L7, I0 - I5, F2 - F14
-    const int NJ_STACK_OFFSET = 0;
 
     const int LARGEST_UNDERRUN_PROT = 32;  // largest value passed to underrunProtect
 
