@@ -178,8 +178,8 @@ namespace nanojit
 
             Assembler(CodeAlloc& codeAlloc, Allocator& alloc, AvmCore* core, LogControl* logc);
 
-            void        assemble(Fragment* frag, NInsList& loopJumps);
-            void        endAssembly(Fragment* frag, NInsList& loopJumps);
+            void        assemble(Fragment* frag);
+            void        endAssembly(Fragment* frag);
             void        beginAssembly(Fragment *frag, RegAllocMap* map);
             void        copyRegisters(RegAlloc* copyTo);
             void        releaseRegisters();
@@ -199,13 +199,11 @@ namespace nanojit
             debug_only( void        registerConsistencyCheck(); )
 
             Stats       _stats;
-            int hasLoop;
             CodeList*   codeList;                   // finished blocks of code.
 
         private:
 
-            void        gen(LirFilter* toCompile, NInsList& loopJumps, LabelStateMap& labels,
-                            NInsMap& patches);
+            void        gen(LirFilter* toCompile, LabelStateMap& labels, NInsMap& patches);
             NIns*       genPrologue();
             NIns*       genEpilogue();
 
@@ -278,7 +276,6 @@ namespace nanojit
             void        asm_load64(LInsp i);
             void        asm_ret(LInsp p);
             void        asm_quad(LInsp i);
-            void        asm_loop(LInsp i, NInsList& loopJumps);
             void        asm_fcond(LInsp i);
             void        asm_cond(LInsp i);
             void        asm_arith(LInsp i);

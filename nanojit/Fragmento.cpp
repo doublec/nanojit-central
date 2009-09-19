@@ -56,36 +56,6 @@ namespace nanojit
         this->ip = _ip;
     }
 
-    Fragment::~Fragment()
-    {
-        onDestroy();
-    }
-
-    void Fragment::blacklist()
-    {
-        blacklistLevel++;
-        _hits = -(1<<blacklistLevel);
-    }
-
-    void Fragment::releaseLirBuffer()
-    {
-        lastIns = 0;
-    }
-
-    void Fragment::releaseTreeMem(CodeAlloc *codeAlloc)
-    {
-        releaseLirBuffer();
-        _code = 0;
-
-        // now do it for all branches
-        Fragment* branch = branches;
-        while(branch)
-        {
-            Fragment* next = branch->nextbranch;
-            branch->releaseTreeMem(codeAlloc);  // @todo safer here to recurse in case we support nested trees
-            branch = next;
-        }
-    }
     #endif /* FEATURE_NANOJIT */
 }
 

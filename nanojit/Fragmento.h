@@ -47,12 +47,6 @@ namespace nanojit
 {
     struct GuardRecord;
 
-    enum TraceKind {
-        LoopTrace,
-        BranchTrace,
-        MergeTrace
-    };
-
     /**
      * Fragments are linear sequences of native code that have a single entry
      * point at the start of the fragment and may have one or more exit points
@@ -69,47 +63,14 @@ namespace nanojit
             NIns*           code()                          { return _code; }
             void            setCode(NIns* codee)            { _code = codee; }
             GuardRecord*    links()                         { return _links; }
-            int32_t&        hits()                          { return _hits; }
-            void            blacklist();
-            bool            isBlacklisted()     { return _hits < 0; }
-            void            releaseLirBuffer();
-            void            releaseTreeMem(CodeAlloc *alloc);
-            bool            isAnchor() { return anchor == this; }
             bool            isRoot() { return root == this; }
-            void            onDestroy();
 
-            verbose_only( uint32_t      _called; )
-            verbose_only( uint32_t      _native; )
-            verbose_only( uint32_t      _exitNative; )
-            verbose_only( uint32_t      _lir; )
-            verbose_only( uint32_t      _lirbytes; )
-            verbose_only( const char*   _token; )
-            verbose_only( uint64_t      traceTicks; )
-            verbose_only( uint64_t      interpTicks; )
-            verbose_only( Fragment*     eot_target; )
-            verbose_only( uint32_t      sid;)
-            verbose_only( uint32_t      compileNbr;)
-
-            Fragment*      treeBranches;
-            Fragment*      branches;
-            Fragment*      nextbranch;
-            Fragment*      anchor;
             Fragment*      root;
-            Fragment*      parent;
-            Fragment*      first;
-            Fragment*      peer;
             LirBuffer*     lirbuf;
             LIns*          lastIns;
-            LIns*          spawnedFrom;
-            GuardRecord*   outbound;
 
-            TraceKind kind;
             const void* ip;
-            uint32_t guardCount;
-            uint32_t xjumpCount;
-            int32_t blacklistLevel;
             NIns* fragEntry;
-            NIns* loopEntry;
             int32_t calldepth;
             void* vmprivate;
 

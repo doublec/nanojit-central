@@ -743,7 +743,7 @@ namespace nanojit
         bool isGuard() const {
             LOpcode op = opcode();
             return op == LIR_x || op == LIR_xf || op == LIR_xt ||
-                   op == LIR_loop || op == LIR_xbarrier || op == LIR_xtbl;
+                   op == op == LIR_xbarrier || op == LIR_xtbl;
         }
         // True if the instruction is a 32-bit or smaller constant integer.
         bool isconst() const { return opcode() == LIR_int; }
@@ -776,7 +776,7 @@ namespace nanojit
             return isGuard() || isBranch() ||
                    (isCall() && !isCse()) ||
                    isStore() ||
-                   isop(LIR_loop) || isop(LIR_label) || isop(LIR_live) ||
+                   isop(LIR_label) || isop(LIR_live) ||
                    isRet();
         }
 

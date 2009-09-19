@@ -731,17 +731,6 @@ namespace nanojit
         }
     }
 
-    void Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
-    {
-        JMP_long(0);
-        loopJumps.add(_nIns);
-
-        // If the target we are looping to is in a different fragment, we have to restore
-        // SP since we will target fragEntry and not loopEntry.
-        if (ins->record()->exit->target != _thisfrag)
-            MR(SP,FP);
-    }
-
     void Assembler::asm_fcond(LInsp ins)
     {
         // only want certain regs

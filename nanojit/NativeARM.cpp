@@ -1996,20 +1996,6 @@ Assembler::asm_branch(bool branchOnFalse, LInsp cond, NIns* targ)
         }
     }
 
-void
-Assembler::asm_loop(LInsp ins, NInsList& loopJumps)
-{
-    // XXX asm_loop should be in Assembler.cpp!
-
-    B_long_placeholder(); // jump to SOT
-    loopJumps.add(_nIns);
-
-    // If the target we are looping to is in a different fragment, we have to restore
-    // SP since we will target fragEntry and not loopEntry.
-    if (ins->record()->exit->target != _thisfrag)
-        MOV(SP,FP);
-}
-
 #ifdef NJ_ARM_VFP
     void
     Assembler::asm_fcond(LInsp ins)

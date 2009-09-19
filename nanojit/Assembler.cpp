@@ -159,8 +159,7 @@ namespace nanojit
      *    - merging paths ( build a graph? ), possibly use external rep to drive codegen
      */
     Assembler::Assembler(CodeAlloc& codeAlloc, Allocator& alloc, AvmCore* core, LogControl* logc)
-        : hasLoop(0)
-        , codeList(NULL)
+        : codeList(NULL)
         , alloc(alloc)
         , _codeAlloc(codeAlloc)
         , _thisfrag(NULL)
@@ -710,7 +709,6 @@ namespace nanojit
         _stats.pages = 0;
         _stats.codeStart = _nIns-1;
         _stats.codeExitStart = _nExitIns-1;
-        //nj_dprintf("pageReset %d start %x exit start %x\n", _stats.pages, (int)_stats.codeStart, (int)_stats.codeExitStart);
 #endif /* PERFM */
 
         _epilogue = genEpilogue();
@@ -720,7 +718,7 @@ namespace nanojit
         verbose_only( asm_output("[epilogue]"); )
     }
 
-    void Assembler::assemble(Fragment* frag,  NInsList& loopJumps)
+    void Assembler::assemble(Fragment* frag)
     {
         if (error()) return;
         _thisfrag = frag;
@@ -775,14 +773,11 @@ namespace nanojit
             prev = &vbr;
         )
 
-        verbose_only(_thisfrag->compileNbr++; )
         _inExit = false;
 
         LabelStateMap labels(alloc);
         NInsMap patches(alloc);
-        gen(prev, loopJumps, labels, patches);
-        frag->loopEntry = _nIns;
-        //nj_dprintf(stderr, "assemble frag %X entry %X\n", (int)frag, (int)frag->fragEntry);
+        gen(prev, labels, patches);
 
         if (!error()) {
             // patch all branches
@@ -811,7 +806,7 @@ namespace nanojit
         )
     }
 
-    void Assembler::endAssembly(Fragment* frag, NInsList& loopJumps)
+    void Assembler::endAssembly(Fragment* frag)
     {
         // don't try to patch code if we are in an error state since we might have partially
         // overwritten the code cache already
@@ -822,22 +817,6 @@ namespace nanojit
             _codeAlloc.free(codeStart, codeEnd);
             return;
         }
-
-        NIns* SOT = 0;
-        if (frag->isRoot()) {
-            SOT = frag->loopEntry;
-            verbose_only( verbose_outputf("%010lx:", (unsigned long)_nIns); )
-        } else {
-            SOT = frag->root->fragEntry;
-        }
-        AvmAssert(SOT != 0);
-        for (Seq<NIns*>* p = loopJumps.get(); p != NULL; p = p->tail) {
-            NIns* loopJump = p->head;
-            verbose_only( verbose_outputf("## patching branch at %010lx to %010lx",
-                                          loopJump, SOT); )
-            nPatchBranch(loopJump, SOT);
-        }
-        loopJumps.clear();
 
         NIns* fragEntry = genPrologue();
         verbose_only( outputAddr=true; )
@@ -926,7 +905,6 @@ namespace nanojit
 #define countlir_label() _nvprof("lir-label",1)
 #define countlir_xcc() _nvprof("lir-xcc",1)
 #define countlir_x() _nvprof("lir-x",1)
-#define countlir_loop() _nvprof("lir-loop",1)
 #define countlir_call() _nvprof("lir-call",1)
 #else
 #define countlir_live()
@@ -952,16 +930,13 @@ namespace nanojit
 #define countlir_label()
 #define countlir_xcc()
 #define countlir_x()
-#define countlir_loop()
 #define countlir_call()
 #endif
 
-    void Assembler::gen(LirFilter* reader,  NInsList& loopJumps, LabelStateMap& labels,
-                        NInsMap& patches)
+    void Assembler::gen(LirFilter* reader, LabelStateMap& labels, NInsMap& patches)
     {
-        // trace must end with LIR_x, LIR_loop, LIR_[f]ret, LIR_xtbl, or LIR_live
+        // trace must end with LIR_x, LIR_[f]ret, LIR_xtbl, or LIR_live
         NanoAssert(reader->pos()->isop(LIR_x) ||
-                   reader->pos()->isop(LIR_loop) ||
                    reader->pos()->isop(LIR_ret) ||
                    reader->pos()->isop(LIR_fret) ||
                    reader->pos()->isop(LIR_xtbl) ||
@@ -1246,7 +1221,6 @@ namespace nanojit
                     }
                     else {
                         // backwards jump
-                        hasLoop = true;
                         handleLoopCarriedExprs(pending_lives);
                         if (!label) {
                             // save empty register state at loop header
@@ -1275,7 +1249,6 @@ namespace nanojit
                     }
                     else {
                         // back edge.
-                        hasLoop = true;
                         handleLoopCarriedExprs(pending_lives);
                         if (!label) {
                             // evict all registers, most conservative approach.
@@ -1301,7 +1274,6 @@ namespace nanojit
                     }
                     else {
                         // we're at the top of a loop
-                        hasLoop = true;
                         NanoAssert(label->addr == 0 && label->regs.isValid());
                         //evictRegs(~_allocator.free);
                         intersectRegisterState(label->regs);
@@ -1344,14 +1316,6 @@ namespace nanojit
                     // generate the side exit branch on the main trace.
                     NIns *exit = asm_exit(ins);
                     JMP( exit );
-                    break;
-                }
-                case LIR_loop:
-                {
-                    countlir_loop();
-                    asm_loop(ins, loopJumps);
-                    assignSavedRegs();
-                    assignParamRegs();
                     break;
                 }
 
