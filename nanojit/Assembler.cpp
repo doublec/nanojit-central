@@ -41,10 +41,6 @@
 
 #ifdef FEATURE_NANOJIT
 
-#ifdef AVMPLUS_PORTING_API
-#include "portapi_nanojit.h"
-#endif
-
 #ifdef VTUNE
 #include "../core/CodegenLIR.h"
 #endif
