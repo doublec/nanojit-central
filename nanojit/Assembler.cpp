@@ -159,7 +159,9 @@ namespace nanojit
         , alloc(alloc)
         , _codeAlloc(codeAlloc)
         , _thisfrag(NULL)
-        , _branchStateMap(NULL)
+        , _branchStateMap(alloc)
+        , _patches(alloc)
+        , _labels(alloc)
         , _epilogue(NULL)
         , _err(None)
     #if PEDANTIC
@@ -189,6 +191,10 @@ namespace nanojit
 
         for(uint32_t i=0; i<NJ_MAX_STACK_ENTRY; i++)
             _activation.entry[i] = 0;
+
+        _branchStateMap.clear();
+        _patches.clear();
+        _labels.clear();
     }
 
     void Assembler::registerResetAll()
@@ -630,22 +636,17 @@ namespace nanojit
     {
         SideExit *exit = guard->record()->exit;
         NIns* at = 0;
-        if (!_branchStateMap->get(exit))
+        if (!_branchStateMap.get(exit))
         {
             at = asm_leave_trace(guard);
         }
         else
         {
-            RegAlloc* captured = _branchStateMap->get(exit);
+            RegAlloc* captured = _branchStateMap.get(exit);
             intersectRegisterState(*captured);
-            verbose_only(
-                verbose_outputf("## merging trunk with %s",
-                    _labelMap->format(exit->target));
-                verbose_outputf("%010lx:", (unsigned long)_nIns);
-            )
             at = exit->target->fragEntry;
             NanoAssert(at != 0);
-            _branchStateMap->remove(exit);
+            _branchStateMap.remove(exit);
         }
         return at;
     }
@@ -701,7 +702,7 @@ namespace nanojit
         return jmpTarget;
     }
 
-    void Assembler::beginAssembly(Fragment *frag, RegAllocMap* branchStateMap)
+    void Assembler::beginAssembly(Fragment *frag)
     {
         _thisfrag = frag;
         _activation.lowwatermark = 1;
@@ -730,7 +731,6 @@ namespace nanojit
 #endif /* PERFM */
 
         _epilogue = genEpilogue();
-        _branchStateMap = branchStateMap;
 
         verbose_only( outputAddr=true; )
         verbose_only( asm_output("[epilogue]"); )
@@ -793,17 +793,15 @@ namespace nanojit
 
         _inExit = false;
 
-        LabelStateMap labels(alloc);
-        NInsMap patches(alloc);
-        gen(prev, labels, patches);
+        gen(prev);
 
         if (!error()) {
             // patch all branches
-            NInsMap::Iter iter(patches);
+            NInsMap::Iter iter(_patches);
             while (iter.next()) {
                 NIns* where = iter.key();
                 LIns* targ = iter.value();
-                LabelState *label = labels.get(targ);
+                LabelState *label = _labels.get(targ);
                 NIns* ntarg = label->addr;
                 if (ntarg) {
                     nPatchBranch(where,ntarg);
@@ -868,8 +866,6 @@ namespace nanojit
         NanoAssertMsgf(_fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
 
         internalReset();  // clear the reservation tables and regalloc
-        NanoAssert( !_branchStateMap || _branchStateMap->isEmpty());
-        _branchStateMap = 0;
     }
 
     void Assembler::releaseRegisters()
@@ -946,13 +942,14 @@ namespace nanojit
 #define countlir_call()
 #endif
 
-    void Assembler::gen(LirFilter* reader, LabelStateMap& labels, NInsMap& patches)
+    void Assembler::gen(LirFilter* reader)
     {
-        // trace must end with LIR_x, LIR_[f]ret, LIR_xtbl, or LIR_live
+        // trace must end with LIR_x, LIR_[f]ret, LIR_xtbl, or LIR_[f]live
         NanoAssert(reader->pos()->isop(LIR_x) ||
                    reader->pos()->isop(LIR_ret) ||
                    reader->pos()->isop(LIR_fret) ||
                    reader->pos()->isop(LIR_xtbl) ||
+                   reader->pos()->isop(LIR_flive) ||
                    reader->pos()->isop(LIR_live));
 
         InsList pending_lives(alloc);
@@ -1007,6 +1004,7 @@ namespace nanojit
                     NanoAssertMsgf(false, "unsupported LIR instruction: %d (~0x40: %d)\n", op, op&~LIR64);
                     break;
 
+                case LIR_flive:
                 case LIR_live: {
                     countlir_live();
                     LInsp op1 = ins->oprnd1();
@@ -1020,7 +1018,7 @@ namespace nanojit
                     if (op1->isop(LIR_alloc)) {
                         findMemFor(op1);
                     } else {
-                        pending_lives.add(op1);
+                        pending_lives.add(ins);
                     }
                     break;
                 }
@@ -1222,7 +1220,7 @@ namespace nanojit
                 {
                     countlir_jmp();
                     LInsp to = ins->getTarget();
-                    LabelState *label = labels.get(to);
+                    LabelState *label = _labels.get(to);
                     // the jump is always taken so whatever register state we
                     // have from downstream code, is irrelevant to code before
                     // this jump.  so clear it out.  we will pick up register
@@ -1238,13 +1236,13 @@ namespace nanojit
                         handleLoopCarriedExprs(pending_lives);
                         if (!label) {
                             // save empty register state at loop header
-                            labels.add(to, 0, _allocator);
+                            _labels.add(to, 0, _allocator);
                         }
                         else {
                             intersectRegisterState(label->regs);
                         }
                         JMP(0);
-                        patches.put(_nIns, to);
+                        _patches.put(_nIns, to);
                     }
                     break;
                 }
@@ -1255,7 +1253,7 @@ namespace nanojit
                     countlir_jcc();
                     LInsp to = ins->getTarget();
                     LIns* cond = ins->oprnd1();
-                    LabelState *label = labels.get(to);
+                    LabelState *label = _labels.get(to);
                     if (label && label->addr) {
                         // forward jump to known label.  need to merge with label's register state.
                         unionRegisterState(label->regs);
@@ -1267,24 +1265,24 @@ namespace nanojit
                         if (!label) {
                             // evict all registers, most conservative approach.
                             evictRegs(~_allocator.free);
-                            labels.add(to, 0, _allocator);
+                            _labels.add(to, 0, _allocator);
                         }
                         else {
                             // evict all registers, most conservative approach.
                             intersectRegisterState(label->regs);
                         }
                         NIns *branch = asm_branch(op == LIR_jf, cond, 0);
-                        patches.put(branch,to);
+                        _patches.put(branch,to);
                     }
                     break;
                 }
                 case LIR_label:
                 {
                     countlir_label();
-                    LabelState *label = labels.get(ins);
+                    LabelState *label = _labels.get(ins);
                     if (!label) {
                         // label seen first, normal target of forward jump, save addr & allocator
-                        labels.add(ins, _nIns, _allocator);
+                        _labels.add(ins, _nIns, _allocator);
                     }
                     else {
                         // we're at the top of a loop
@@ -1477,8 +1475,15 @@ namespace nanojit
     {
         // ensure that exprs spanning the loop are marked live at the end of the loop
         reserveSavedRegs();
-        for (Seq<LIns*>* p = pending_lives.get(); p != NULL; p = p->tail)
-            findMemFor(p->head);
+        for (Seq<LIns*> *p = pending_lives.get(); p != NULL; p = p->tail) {
+            LIns *i = p->head;
+            NanoAssert(i->isop(LIR_live) || i->isop(LIR_flive));
+            LIns *op1 = i->oprnd1();
+            if (op1->isconst() || op1->isconstf() || op1->isconstq())
+                findMemFor(op1);
+            else
+                findRegFor(op1, i->isop(LIR_flive) ? FpRegs : GpRegs);
+        }
 
         // clear this list since we have now dealt with those lifetimes.  extending
         // their lifetimes again later (earlier in the code) serves no purpose.

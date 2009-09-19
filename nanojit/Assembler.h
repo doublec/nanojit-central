@@ -165,7 +165,6 @@ namespace nanojit
             void printActivationState(const char* what);
 
             StringList* _outputCache;
-            LabelMap*   _labelMap;
 
             // Log controller object.  Contains what-stuff-should-we-print
             // bits, and a sink function for debug printing
@@ -178,9 +177,10 @@ namespace nanojit
 
             Assembler(CodeAlloc& codeAlloc, Allocator& alloc, AvmCore* core, LogControl* logc);
 
-            void        assemble(Fragment* frag);
             void        endAssembly(Fragment* frag);
-            void        beginAssembly(Fragment *frag, RegAllocMap* map);
+            void        assemble(Fragment* frag);
+            void        beginAssembly(Fragment *frag);
+
             void        releaseRegisters();
             void        patch(GuardRecord *lr);
             void        patch(SideExit *exit);
@@ -202,7 +202,7 @@ namespace nanojit
 
         private:
 
-            void        gen(LirFilter* toCompile, LabelStateMap& labels, NInsMap& patches);
+            void        gen(LirFilter* toCompile);
             NIns*       genPrologue();
             NIns*       genEpilogue();
 
@@ -241,7 +241,9 @@ namespace nanojit
             Allocator&          alloc;
             CodeAlloc&          _codeAlloc;
             Fragment*           _thisfrag;
-            RegAllocMap*        _branchStateMap;
+            RegAllocMap         _branchStateMap;
+            NInsMap             _patches;
+            LabelStateMap       _labels;
 
             NIns        *codeStart, *codeEnd;       // current block we're adding code to
             NIns        *exitStart, *exitEnd;       // current block for exit stubs
