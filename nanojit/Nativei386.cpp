@@ -281,7 +281,6 @@ namespace nanojit
     {
         // add scratch registers to our free list for the allocator
         a.clear();
-        a.used = 0;
         a.free = SavedRegs | ScratchRegs;
         if (!config.sse2)
             a.free &= ~XmmRegs;
@@ -338,7 +337,7 @@ namespace nanojit
         Register rr = resv->reg;
 
         if (rr != UnknownReg && (rmask(rr) & FpRegs))
-            evict(rr);
+            evict(rr, ins);
 
         if (hi->isconst())
         {
@@ -782,8 +781,8 @@ namespace nanojit
         if (op == LIR_mod) {
             /* LIR_mod expects the LIR_div to be near (no interference from the register allocator) */
             findSpecificRegFor(lhs, EDX);
-            prepResultReg(ins, 1<<EDX);
-            evict(EAX);
+            prepResultReg(ins, rmask(EDX));
+            evictIfActive(EAX);
             return;
         }
 
@@ -797,8 +796,8 @@ namespace nanojit
         case LIR_div:
             forceReg = true;
             rb = findRegFor(rhs, (GpRegs ^ (rmask(EAX)|rmask(EDX))));
-            allow = 1<<EAX;
-            evict(EDX);
+            allow = rmask(EAX);
+            evictIfActive(EDX);
             break;
         case LIR_mul:
             forceReg = true;
@@ -1343,7 +1342,7 @@ namespace nanojit
              * than once.  In this case FST0 will not have been evicted and the multiple pop
              * actions will unbalance the FPU stack.  A quick fix is to always evict FST0 manually.
              */
-            evict(FST0);
+            evictIfActive(FST0);
 #endif
         }
         SUBi(ESP,8);
@@ -1451,7 +1450,7 @@ namespace nanojit
         if (rR) {
             Register rr;
             if ((rr=rR->reg) != UnknownReg && (rmask(rr) & XmmRegs))
-                evict(rr);
+                evict(rr, ins);
         }
         return prepResultReg(ins, rmask(FST0));
     }
@@ -1643,7 +1642,7 @@ namespace nanojit
                 SSE_UCOMISD(r, r);
             }
             else {
-                evict(EAX);
+                evictIfActive(EAX);
                 TEST_AH(mask);
                 LAHF();
                 Reservation *rA, *rB;
@@ -1653,7 +1652,7 @@ namespace nanojit
         }
         else
         {
-            evict(EAX);
+            evictIfActive(EAX);
             TEST_AH(mask);
             FNSTSW_AX();
             NanoAssert(lhs->isQuad() && rhs->isQuad());

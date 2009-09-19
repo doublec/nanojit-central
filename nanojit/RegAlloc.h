@@ -60,9 +60,6 @@ namespace nanojit
             void    useActive(Register r);
             void    removeActive(Register r);
             void    retire(Register r);
-            bool    isValid() {
-                return (free|used) != 0;
-            }
 
             int32_t getPriority(Register r) {
                 NanoAssert(r != UnknownReg && active[r]);
@@ -85,10 +82,9 @@ namespace nanojit
             LIns*   active[sizeof(RegisterMask)*8];  // active[r] = OP that defines r
             int32_t usepri[sizeof(RegisterMask)*8]; // used priority. lower = more likely to spill.
             RegisterMask    free;
-            RegisterMask    used;
             int32_t         priority;
 
-            verbose_only( static void formatRegisters(RegAlloc& regs, char* s, Fragment*); )
+            verbose_only( void formatRegisters(char* s, Fragment*); )
 
             DECLARE_PLATFORM_REGALLOC()
     };

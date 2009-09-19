@@ -225,7 +225,6 @@ namespace nanojit
             }
             NanoAssert((set & allow) != 0);
             Register r = nRegisterAllocFromSet(set);
-            regs.used |= rmask(r);
             return r;
         }
         counter_increment(steals);
@@ -233,7 +232,7 @@ namespace nanojit
         // nothing free, steal one
         // LSRA says pick the one with the furthest use
         LIns* vic = findVictim(regs, allow);
-        NanoAssert(vic != NULL);
+        NanoAssert(vic);
 
         Reservation* resv = getresv(vic);
         NanoAssert(resv);
@@ -484,7 +483,7 @@ namespace nanojit
             {
                 // x87 <-> xmm copy required
                 //_nvprof("fpu-evict",1);
-                evict(r);
+                evict(r, i);
                 r = resv->reg = registerAlloc(prefer);
                 _allocator.addActive(r, i);
             } else
@@ -492,7 +491,7 @@ namespace nanojit
             if (((rmask(r)&GpRegs) && !(allow&GpRegs)) ||
                 ((rmask(r)&FpRegs) && !(allow&FpRegs)))
             {
-                evict(r);
+                evict(r, i);
                 r = resv->reg = registerAlloc(prefer);
                 _allocator.addActive(r, i);
             } else
@@ -571,10 +570,30 @@ namespace nanojit
         i->resv()->clear();
     }
 
-    void Assembler::evict(Register r)
+    void Assembler::evictIfActive(Register r)
     {
-        registerAlloc(rmask(r));
-        _allocator.addFree(r);
+        if (LIns* vic = _allocator.getActive(r)) {
+            evict(r, vic);
+        }
+    }
+
+    void Assembler::evict(Register r, LIns* vic)
+    {
+        // Not free, need to steal.
+        counter_increment(steals);
+
+        // Get vic's resv, check r matches.
+        NanoAssert(!_allocator.isFree(r));
+        NanoAssert(vic == _allocator.getActive(r));
+        Reservation* resv = getresv(vic);
+        NanoAssert(resv && r == resv->reg);
+
+        // Free r.
+        _allocator.retire(r);
+        resv->reg = UnknownReg;
+
+        // Restore vic.
+        asm_restore(vic, resv, r);
     }
 
     void Assembler::patch(GuardRecord *lr)
@@ -851,11 +870,6 @@ namespace nanojit
         internalReset();  // clear the reservation tables and regalloc
         NanoAssert( !_branchStateMap || _branchStateMap->isEmpty());
         _branchStateMap = 0;
-    }
-
-    void Assembler::copyRegisters(RegAlloc* copyTo)
-    {
-        *copyTo = _allocator;
     }
 
     void Assembler::releaseRegisters()
@@ -1273,7 +1287,7 @@ namespace nanojit
                     }
                     else {
                         // we're at the top of a loop
-                        NanoAssert(label->addr == 0 && label->regs.isValid());
+                        NanoAssert(label->addr == 0);
                         //evictRegs(~_allocator.free);
                         intersectRegisterState(label->regs);
                         label->addr = _nIns;
@@ -1607,7 +1621,7 @@ namespace nanojit
                 LIns *i = regs->getActive(r);
                 if (i) {
                     if (canRemat(i)) {
-                        evict(r);
+                        evict(r, i);
                     }
                     else {
                         int32_t pri = regs->getPriority(r);
@@ -1666,9 +1680,10 @@ namespace nanojit
     {
         // generate code to restore callee saved registers
         // @todo speed this up
+        LIns* i;
         for (Register r = FirstReg; r <= LastReg; r = nextreg(r)) {
-            if ((rmask(r) & regs) && _allocator.getActive(r)) {
-                evict(r);
+            if ((rmask(r) & regs) && (i = _allocator.getActive(r))) {
+                evict(r, i);
             }
         }
     }
@@ -1699,7 +1714,7 @@ namespace nanojit
                 if (curins) {
                     //_nvprof("intersect-evict",1);
                     verbose_only( shouldMention=true; )
-                    evict(r);
+                    evict(r, curins);
                 }
 
                 #ifdef NANOJIT_IA32
@@ -1745,7 +1760,7 @@ namespace nanojit
                 if (curins && savedins) {
                     //_nvprof("union-evict",1);
                     verbose_only( shouldMention=true; )
-                    evict(r);
+                    evict(r, curins);
                 }
 
                 #ifdef NANOJIT_IA32
@@ -1756,7 +1771,7 @@ namespace nanojit
                     else {
                         // saved state did not have fpu reg allocated,
                         // so we must evict here to keep x87 stack balanced.
-                        evict(r);
+                        evictIfActive(r);
                     }
                     verbose_only( shouldMention=true; )
                 }
@@ -1776,7 +1791,6 @@ namespace nanojit
             if (i && !(skip&rmask(r)))
                 findSpecificRegFor(i, r);
         }
-        debug_only(saved.used = 0);  // marker that we are no longer in exit path
     }
 
     // scan table for instruction with the lowest priority, meaning it is used
