@@ -1441,6 +1441,41 @@ namespace nanojit
                 #endif // VTUNE
             }
 
+#ifdef NJ_VERBOSE
+            // We have to do final LIR printing inside this loop.  If we do it
+            // before this loop, we we end up printing a lot of dead LIR
+            // instructions.
+            //
+            // We print the LIns after generating the code.  This ensures that
+            // the LIns will appear in debug output *before* the generated
+            // code, because Assembler::outputf() prints everything in reverse.
+            //
+            // Note that some live LIR instructions won't be printed.  Eg. an
+            // immediate won't be printed unless it is explicitly loaded into
+            // a register (as opposed to being incorporated into an immediate
+            // field in another machine instruction).
+            //
+            if (_logc->lcbits & LC_Assembly) {
+                outputf("    %s", _thisfrag->lirbuf->names->formatIns(ins));
+                if (ins->isGuard() && ins->oprnd1()) {
+                    // Special case: code is generated for guard conditions at
+                    // the same time that code is generated for the guard
+                    // itself.  If the condition is only used by the guard, we
+                    // must print it now otherwise it won't get printed.  So
+                    // we do print it now, with an explanatory comment.  If
+                    // the condition *is* used again we'll end up printing it
+                    // twice, but that's ok.
+                    outputf("    %s       # codegen'd with the %s",
+                            _thisfrag->lirbuf->names->formatIns(ins->oprnd1()), lirNames[op]);
+
+                } else if (ins->isop(LIR_cmov) || ins->isop(LIR_qcmov)) {
+                    // Likewise for cmov conditions.
+                    outputf("    %s       # codegen'd with the %s",
+                            _thisfrag->lirbuf->names->formatIns(ins->oprnd1()), lirNames[op]);
+                }
+            }
+#endif
+
             if (error())
                 return;
 
