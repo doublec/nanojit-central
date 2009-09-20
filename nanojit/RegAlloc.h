@@ -119,16 +119,14 @@ namespace nanojit
                 return active[r];
             }
 
-            debug_only( uint32_t    countFree(); )
             debug_only( uint32_t    countActive(); )
             debug_only( void        checkCount(); )
             debug_only( bool        isConsistent(Register r, LIns* v); )
-            debug_only( uint32_t    count; )
             debug_only( RegisterMask managed; )    // bitfield denoting which are under our management
 
             // active & usepri must hold all possible registers
-            LIns*   active[sizeof(RegisterMask)*8];  // active[r] = OP that defines r
-            int32_t usepri[sizeof(RegisterMask)*8]; // used priority. lower = more likely to spill.
+            LIns*   active[LastReg + 1];  // active[r] = OP that defines r
+            int32_t usepri[LastReg + 1]; // used priority. lower = more likely to spill.
             RegisterMask    free;
             int32_t         priority;
 
