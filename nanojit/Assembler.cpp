@@ -185,7 +185,6 @@ namespace nanojit
 
     void Assembler::arReset()
     {
-        _activation.highwatermark = 0;
         _activation.lowwatermark = 0;
         _activation.tos = 0;
 
@@ -335,7 +334,7 @@ namespace nanojit
 
         AR &ar = _activation;
         // check AR entries
-        NanoAssert(ar.highwatermark < NJ_MAX_STACK_ENTRY);
+        NanoAssert(ar.tos < NJ_MAX_STACK_ENTRY);
         LIns* ins = 0;
         RegAlloc* regs = &_allocator;
         for(uint32_t i = ar.lowwatermark; i < ar.tos; i++)
@@ -537,7 +536,7 @@ namespace nanojit
             resv->init();
         if (!resv->arIndex) {
             resv->arIndex = arReserve(i);
-            NanoAssert(resv->arIndex <= _activation.highwatermark);
+            NanoAssert(resv->arIndex <= _activation.tos);
         }
         return disp(resv);
     }
@@ -725,7 +724,6 @@ namespace nanojit
         _thisfrag = frag;
         _activation.lowwatermark = 1;
         _activation.tos = _activation.lowwatermark;
-        _activation.highwatermark = _activation.tos;
         _inExit = false;
 
         counter_reset(native);
@@ -858,7 +856,7 @@ namespace nanojit
 
         // check for resource leaks
         debug_only(
-            for(uint32_t i=_activation.lowwatermark;i<_activation.highwatermark; i++) {
+            for (uint32_t i = _activation.lowwatermark; i < _activation.tos; i++) {
                 NanoAssertMsgf(_activation.entry[i] == 0, "frame entry %d wasn't freed\n",-4*i);
             }
         )
@@ -1631,7 +1629,7 @@ namespace nanojit
             }
         }
         if (i >= (int32_t)ar.tos) {
-            ar.tos = ar.highwatermark = i+1;
+            ar.tos = i+1;
         }
         if (tos+size >= NJ_MAX_STACK_ENTRY) {
             setError(StackFull);
