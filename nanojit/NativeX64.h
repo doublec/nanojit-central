@@ -315,6 +315,7 @@ namespace nanojit
         void asm_qbinop(LIns*);                                             \
         void MR(Register, Register);\
         void JMP(NIns*);\
+        void JMPl(NIns*);\
         void emit(uint64_t op);\
         void emit8(uint64_t op, int64_t val);\
         void emit32(uint64_t op, int64_t val);\

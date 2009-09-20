@@ -243,6 +243,12 @@ namespace nanojit
         emitrr(X64_movqr, d, s);
     }
 
+    void Assembler::JMPl(NIns* target) {
+        NanoAssert(!target || isS32(target - _nIns));
+        underrunProtect(8); // must do this before calculating offset
+        emit32(X64_jmp, target ? target - _nIns : 0);
+    }
+
     void Assembler::JMP(NIns *target) {
         if (!target || isS32(target - _nIns)) {
             underrunProtect(8); // must do this before calculating offset
@@ -1230,8 +1236,33 @@ namespace nanojit
     #endif
     }
 
-    void Assembler::nFragExit(LIns*) {
-        TODO(nFragExit);
+    void Assembler::nFragExit(LIns *guard) {
+        SideExit *exit = guard->record()->exit;
+        Fragment *frag = exit->target;
+        GuardRecord *lr = 0;
+        bool destKnown = (frag && frag->fragEntry);
+        // Generate jump to epilog and initialize lr.
+        // If the guard is LIR_xtbl, use a jump table with epilog in every entry
+        if (guard->isop(LIR_xtbl)) {
+            NanoAssert(!guard->isop(LIR_xtbl));
+        } else {
+            // If the guard already exists, use a simple jump.
+            if (destKnown) {
+                JMP(frag->fragEntry);
+                lr = 0;
+            } else {  // target doesn't exist. Use 0 jump offset and patch later
+                if (!_epilogue)
+                    _epilogue = genEpilogue();
+                lr = guard->record();
+                JMPl(_epilogue);
+                lr->jmp = _nIns;
+            }
+        }
+
+        MR(RSP, RBP);
+
+        // return value is GuardRecord*
+        emit_quad(RAX, uintptr_t(lr));
     }
 
     void Assembler::nInit(AvmCore*)
