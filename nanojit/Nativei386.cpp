@@ -580,13 +580,10 @@ namespace nanojit
 
         // if value already in a reg, use that, otherwise
         // try to get it into XMM regs before FPU regs.
-        Register rv;
         bool pop = value->isUnusedOrHasUnknownReg();
-        if (pop) {
-            rv = findRegFor(value, config.sse2 ? XmmRegs : FpRegs);
-        } else {
-            rv = value->getReg();
-        }
+        Register rv = ( pop
+                      ? findRegFor(value, config.sse2 ? XmmRegs : FpRegs)
+                      : value->getReg() );
 
         if (rmask(rv) & XmmRegs) {
             SSE_STQ(dr, rb, rv);
@@ -1433,7 +1430,7 @@ namespace nanojit
     Register Assembler::asm_prep_fcall(Reservation* /*unused*/, LInsp ins)
     {
         Register rr;
-        if (ins->isUsed() && isKnownReg(rr = ins->getReg()) && (rmask(rr) & XmmRegs)) {
+        if (ins->isUsed() && (rr = ins->getReg(), isKnownReg(rr)) && (rmask(rr) & XmmRegs)) {
             evict(rr, ins);
         }
         return prepResultReg(ins, rmask(FST0));
@@ -1475,7 +1472,7 @@ namespace nanojit
 
             LIns* op1 = ins->oprnd1();
             Register xr;
-            if (op1->isUsed() && isKnownReg(xr = op1->getReg()) && (rmask(xr) & GpRegs))
+            if (op1->isUsed() && (xr = op1->getReg(), isKnownReg(xr)) && (rmask(xr) & GpRegs))
             {
                 LEA(gr, 0x80000000, xr);
             }
