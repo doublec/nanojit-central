@@ -303,6 +303,7 @@ namespace nanojit
             Register    asm_binop_rhs_reg(LInsp ins);
             NIns*       asm_branch(bool branchOnFalse, LInsp cond, NIns* targ);
             void        asm_switch(LIns* ins, NIns* target);
+            void        emitJumpTable(SwitchInfo* si, NIns* target);
             void        assignSavedRegs();
             void        reserveSavedRegs();
             void        assignParamRegs();
@@ -310,6 +311,7 @@ namespace nanojit
 
             // platform specific implementation (see NativeXXX.cpp file)
             void        nInit(AvmCore *);
+            void        nBeginAssembly();
             Register    nRegisterAllocFromSet(RegisterMask set);
             void        nRegisterResetAll(RegAlloc& a);
             void        nFrameRestore(RegisterMask rmask);

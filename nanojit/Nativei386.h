@@ -377,7 +377,7 @@ namespace nanojit
 #define LEA(r,d,b)  do { count_alu(); ALUm(0x8d, r,d,b);            asm_output("lea %s,%d(%s)",gpn(r),d,gpn(b)); } while(0)
 // lea %r, d(%i*4)
 // This addressing mode is not supported by the MODRMSIB macro.
-#define LEAmi4(r,d,i) do { count_alu(); IMM32(d); *(--_nIns) = (2<<6)|(i<<3)|5; *(--_nIns) = (0<<6)|(r<<3)|4; *(--_nIns) = 0x8d;                    asm_output("lea %s, %p(%s*4)", gpn(r), (void*)d, gpn(i)); } while(0)
+#define LEAmi4(r,d,i) do { count_alu(); IMM32(d); *(--_nIns) = (2<<6)|((uint8_t)i<<3)|5; *(--_nIns) = (0<<6)|((uint8_t)r<<3)|4; *(--_nIns) = 0x8d;                    asm_output("lea %s, %p(%s*4)", gpn(r), (void*)d, gpn(i)); } while(0)
 
 #define CDQ()       do { SARi(EDX, 31); MR(EDX, EAX); } while(0)
 

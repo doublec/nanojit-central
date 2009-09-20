@@ -929,7 +929,7 @@ namespace nanojit
     }
 
     void Assembler::asm_ret(LIns *ins) {
-        JMP(_epilogue);
+        genEpilogue();
         assignSavedRegs();
         LIns *value = ins->oprnd1();
         Register r = ins->isop(LIR_ret) ? RAX : XMM0;
@@ -1211,7 +1211,6 @@ namespace nanojit
         // mov rsp, rbp
         // pop rbp
         // ret
-        max_stk_used = 0;
         emit(X64_ret);
         emitr(X64_popr, RBP);
         MR(RSP, RBP);
@@ -1301,8 +1300,12 @@ namespace nanojit
         emit_quad(RAX, uintptr_t(lr));
     }
 
-    void Assembler::nInit(AvmCore*)
-    {}
+    void Assembler::nInit(AvmCore*) {
+    }
+
+    void Assembler::nBeginAssembly() {
+        max_stk_used = 0;
+    }
 
     void Assembler::underrunProtect(ptrdiff_t bytes) {
         NanoAssertMsg(bytes<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small");

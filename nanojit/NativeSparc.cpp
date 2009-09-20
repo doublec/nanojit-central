@@ -75,6 +75,9 @@ namespace nanojit
         has_cmov = true;
     }
 
+    void Assembler::nBeginAssembly() {
+    }
+
     NIns* Assembler::genPrologue()
     {
         /**
@@ -121,8 +124,10 @@ namespace nanojit
             }
         else
             {
-                // target doesn't exit yet.  emit jump to epilog, and set up to patch later.
-                lr = placeGuardRecord(guard);
+                // Target doesn't exit yet. Emit jump to epilog, and set up to patch later.                                  
+                if (!_epilogue)                                                                                              
+                    _epilogue = genEpilogue();                                                                               
+                lr = guard->record();
                 JMP_long((intptr_t)_epilogue);
                 lr->jmp = _nIns;
             }
@@ -1029,9 +1034,7 @@ namespace nanojit
 
     void Assembler::asm_ret(LInsp ins)
     {
-        if (_nIns != _epilogue) {
-            JMP(_epilogue);
-        }
+        genEpilogue();
         assignSavedRegs();
         LIns *val = ins->oprnd1();
         if (ins->isop(LIR_ret)) {

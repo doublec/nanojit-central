@@ -178,6 +178,7 @@ namespace nanojit
         verbose_only( _logc = logc; )
         verbose_only( _outputCache = 0; )
         verbose_only( outlineEOL[0] = '\0'; )
+        verbose_only( outputAddr = false; )
 
         internalReset();
         pageReset();
@@ -753,10 +754,9 @@ namespace nanojit
         _stats.codeExitStart = _nExitIns-1;
 #endif /* PERFM */
 
-        _epilogue = genEpilogue();
-
-        verbose_only( outputAddr=true; )
-        verbose_only( asm_output("[epilogue]"); )
+        _epilogue = NULL;
+        
+        nBeginAssembly();
     }
 
     void Assembler::assemble(Fragment* frag)
@@ -1446,6 +1446,22 @@ namespace nanojit
             debug_only( pageValidate(); )
             debug_only( resourceConsistencyCheck();  )
         }
+    }
+
+    /*
+     * Write a jump table for the given SwitchInfo and store the table
+     * address in the SwitchInfo. Every entry will initially point to
+     * target.
+     */
+    void Assembler::emitJumpTable(SwitchInfo* si, NIns* target)
+    {
+        underrunProtect(si->count * sizeof(NIns*) + 20);
+        _nIns = reinterpret_cast<NIns*>(uintptr_t(_nIns) & ~(sizeof(NIns*) - 1));
+        for (uint32_t i = 0; i < si->count; ++i) {
+            _nIns = (NIns*) (((intptr_t) _nIns) - sizeof(NIns*));
+            *(NIns**) _nIns = target;
+        }
+        si->table = (NIns**) _nIns;
     }
 
     void Assembler::assignSavedRegs()
