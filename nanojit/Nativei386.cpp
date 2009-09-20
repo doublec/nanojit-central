@@ -338,10 +338,8 @@ namespace nanojit
         LIns* lo = ins->oprnd1();
         LIns* hi = ins->oprnd2();
 
-        Reservation *resv = ins->resvUsed();
-        Register rr = resv->reg;
-
-        if (rr != UnknownReg && (rmask(rr) & FpRegs))
+        Register rr = ins->getReg();
+        if (isKnownReg(rr) && (rmask(rr) & FpRegs))
             evict(rr, ins);
 
         if (hi->isconst())
@@ -384,7 +382,7 @@ namespace nanojit
         }
     }
 
-    void Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
+    void Assembler::asm_restore(LInsp i, Reservation* /*unused*/, Register r)
     {
         uint32_t arg;
         uint32_t abi_regcount;
@@ -392,19 +390,19 @@ namespace nanojit
             verbose_only( if (_logc->lcbits & LC_RegAlloc) {
                             outputForEOL("  <= remat %s size %d",
                             _thisfrag->lirbuf->names->formatRef(i), i->size()); } )
-            LEA(r, disp(resv), FP);
+            LEA(r, disp(i), FP);
         }
         else if (i->isconst()) {
-            if (!resv->arIndex) {
-                i->resv()->clear();
+            if (!i->getArIndex()) {
+                i->markAsClear();
             }
             LDi(r, i->imm32());
         }
         else if (i->isop(LIR_param) && i->paramKind() == 0 &&
             (arg = i->paramArg()) >= (abi_regcount = max_abi_regs[_thisfrag->lirbuf->abi])) {
             // incoming arg is on stack, can restore it from there instead of spilling
-            if (!resv->arIndex) {
-                i->resv()->clear();
+            if (!i->getArIndex()) {
+                i->markAsClear();
             }
             // compute position of argument relative to ebp.  higher argument
             // numbers are at higher positive offsets.  the first abi_regcount
@@ -435,7 +433,6 @@ namespace nanojit
         else
         {
             // make sure what is in a register
-            Reservation *rA, *rB;
             Register ra, rb;
             if (base->isop(LIR_alloc)) {
                 rb = FP;
@@ -447,9 +444,7 @@ namespace nanojit
                 ra = findRegFor(value, GpRegs);
                 rb = UnknownReg;
             } else {
-                findRegFor2(GpRegs, value, rA, base, rB);
-                ra = rA->reg;
-                rb = rB->reg;
+                findRegFor2b(GpRegs, value, ra, base, rb);
             }
             ST(rb, dr, ra);
         }
@@ -485,10 +480,9 @@ namespace nanojit
     {
         LIns* base = ins->oprnd1();
         int db = ins->disp();
-        Reservation *resv = ins->resvUsed();
-        Register rr = resv->reg;
+        Register rr = ins->getReg();
 
-        if (rr != UnknownReg && rmask(rr) & XmmRegs)
+        if (isKnownReg(rr) && rmask(rr) & XmmRegs)
         {
             freeRsrcOf(ins, false);
             Register rb = getBaseReg(base, db, GpRegs);
@@ -496,7 +490,7 @@ namespace nanojit
         }
         else
         {
-            int dr = disp(resv);
+            int dr = disp(ins);
             Register rb;
             if (base->isop(LIR_alloc)) {
                 rb = FP;
@@ -504,7 +498,7 @@ namespace nanojit
             } else {
                 rb = findRegFor(base, GpRegs);
             }
-            resv->reg = UnknownReg;
+            ins->setReg(UnknownReg);
 
             // don't use an fpu reg to simply load & store the value.
             if (dr)
@@ -512,7 +506,7 @@ namespace nanojit
 
             freeRsrcOf(ins, false);
 
-            if (rr != UnknownReg)
+            if (isKnownReg(rr))
             {
                 NanoAssert(rmask(rr)&FpRegs);
                 _allocator.retire(rr);
@@ -585,19 +579,18 @@ namespace nanojit
 
         // if value already in a reg, use that, otherwise
         // try to get it into XMM regs before FPU regs.
-        Reservation* rA = value->resv();
         Register rv;
-        int pop = !rA->used || rA->reg==UnknownReg;
+        bool pop = value->isUnusedOrHasUnknownReg();
         if (pop) {
             rv = findRegFor(value, config.sse2 ? XmmRegs : FpRegs);
         } else {
-            rv = rA->reg;
+            rv = value->getReg();
         }
 
         if (rmask(rv) & XmmRegs) {
             SSE_STQ(dr, rb, rv);
         } else {
-            FSTQ(pop, dr, rb);
+            FSTQ(pop?1:0, dr, rb);
         }
     }
 
@@ -707,7 +700,6 @@ namespace nanojit
 
         LInsp lhs = cond->oprnd1();
         LInsp rhs = cond->oprnd2();
-        Reservation *rA, *rB;
 
         NanoAssert((!lhs->isQuad() && !rhs->isQuad()) || (lhs->isQuad() && rhs->isQuad()));
 
@@ -728,9 +720,8 @@ namespace nanojit
         }
         else
         {
-            findRegFor2(GpRegs, lhs, rA, rhs, rB);
-            Register ra = rA->reg;
-            Register rb = rB->reg;
+            Register ra, rb;
+            findRegFor2b(GpRegs, lhs, ra, rhs, rb);
             CMP(ra, rb);
         }
     }
@@ -832,18 +823,17 @@ namespace nanojit
         }
 
         // if we need a register for the rhs and don't have one yet, get it
-        if (forceReg && lhs != rhs && rb == UnknownReg) {
+        if (forceReg && lhs != rhs && !isKnownReg(rb)) {
             rb = findRegFor(rhs, allow);
             allow &= ~rmask(rb);
         }
 
         Register rr = prepResultReg(ins, allow);
-        Reservation* rA = lhs->resv();
-        Register ra;
         // if this is last use of lhs in reg, we can re-use result reg
-        if (!rA->used || (ra = rA->reg) == UnknownReg)
-            ra = findSpecificRegFor(lhs, rr);
-        // else, rA already has a register assigned.
+        // else, lhs already has a register assigned.
+        Register ra = ( lhs->isUnusedOrHasUnknownReg()
+                      ? findSpecificRegFor(lhs, rr)
+                      : lhs->getReg() );
 
         if (forceReg)
         {
@@ -937,12 +927,11 @@ namespace nanojit
         Register rr = prepResultReg(ins, GpRegs);
 
         LIns* lhs = ins->oprnd1();
-        Reservation *rA = lhs->resv();
         // if this is last use of lhs in reg, we can re-use result reg
-        Register ra;
-        if (!rA->used || (ra=rA->reg) == UnknownReg)
-            ra = findSpecificRegFor(lhs, rr);
-        // else, rA already has a register assigned.
+        // else, lhs already has a register assigned.
+        Register ra = ( lhs->isUnusedOrHasUnknownReg()
+                      ? findSpecificRegFor(lhs, rr)
+                      : lhs->getReg() );
 
         if (op == LIR_not)
             NOT(rr);
@@ -989,25 +978,17 @@ namespace nanojit
                     scale = 0;
             }
 
-            Register rleft;
-            Reservation *rL = lhs->resv();
-
             /* Does LHS have a register yet? If not, re-use the result reg.
              * @todo -- If LHS is const, we could eliminate a register use.
              */
-            if (!rL->used || rL->reg == UnknownReg)
-                rleft = findSpecificRegFor(lhs, rr);
-            else
-                rleft = rL->reg;
-
-            Register rright = UnknownReg;
-            Reservation *rR = rhs->resv();
+            Register rleft = ( lhs->isUnusedOrHasUnknownReg()
+                             ? findSpecificRegFor(lhs, rr)
+                             : lhs->getReg() );
 
             /* Does RHS have a register yet? If not, try to re-use the result reg. */
-            if (rr != rleft && (!rR->used || rR->reg == UnknownReg))
-                rright = findSpecificRegFor(rhs, rr);
-            if (rright == UnknownReg)
-                rright = findRegFor(rhs, GpRegs & ~(rmask(rleft)));
+            Register rright = ( rr != rleft && rhs->isUnusedOrHasUnknownReg()
+                              ? findSpecificRegFor(rhs, rr)
+                              : findRegFor(rhs, GpRegs & ~(rmask(rleft))) );
 
             if (op == LIR_ldcb)
                 LD8Zsib(rr, d, rleft, rright, scale);
@@ -1110,13 +1091,12 @@ namespace nanojit
 
     void Assembler::asm_quad(LInsp ins)
     {
-        Reservation *rR = ins->resvUsed();
-        Register rr = rR->reg;
-        if (rr != UnknownReg)
+        Register rr = ins->getReg();
+        if (isKnownReg(rr))
         {
             // @todo -- add special-cases for 0 and 1
             _allocator.retire(rr);
-            rR->reg = UnknownReg;
+            ins->setReg(UnknownReg);
             NanoAssert((rmask(rr) & FpRegs) != 0);
 
             const double d = ins->imm64f();
@@ -1138,7 +1118,7 @@ namespace nanojit
                     _allocator.addFree(gr);
                 } else {
                     findMemFor(ins);
-                    const int d = disp(rR);
+                    const int d = disp(ins);
                     SSE_LDQ(rr, d, FP);
                 }
             } else {
@@ -1149,14 +1129,14 @@ namespace nanojit
                     FLD1();
                 } else {
                     findMemFor(ins);
-                    int d = disp(rR);
+                    int d = disp(ins);
                     FLDQ(d,FP);
                 }
             }
         }
 
         // @todo, if we used xor, ldsd, fldz, etc above, we don't need mem here
-        int d = disp(rR);
+        int d = disp(ins);
         freeRsrcOf(ins, false);
         if (d)
         {
@@ -1177,11 +1157,10 @@ namespace nanojit
         }
         else
         {
-            Reservation *resv = ins->resvUsed();
-            Register rr = resv->reg;
-            if (rr == UnknownReg) {
+            Register rr = ins->getReg();
+            if (!isKnownReg(rr)) {
                 // store quad in spill loc
-                int d = disp(resv);
+                int d = disp(ins);
                 freeRsrcOf(ins, false);
                 Register qr = findRegFor(q, XmmRegs);
                 SSE_MOVDm(d, FP, qr);
@@ -1200,18 +1179,22 @@ namespace nanojit
             LIns *lhs = ins->oprnd1();
 
             Register rr = prepResultReg(ins, XmmRegs);
-            Reservation *rA = lhs->resv();
             Register ra;
 
-            // if this is last use of lhs in reg, we can re-use result reg
-            if (!rA->used || (ra = rA->reg) == UnknownReg) {
-                ra = findSpecificRegFor(lhs, rr);
-            } else if ((rmask(ra) & XmmRegs) == 0) {
-                // it's possible that an earlier instruction has put this in
-                // an x87 FPU register.  If so, ask for a new register.
-                ra = findRegFor(lhs, XmmRegs);
-            }
-            // else, rA already has an XMM register assigned.
+            // if this is last use of lhs in reg, we can re-use result reg                                                   
+            // else, lhs already has a register assigned.                                                                    
+            if (lhs->isUnusedOrHasUnknownReg()) {                                                                            
+                ra = findSpecificRegFor(lhs, rr);                                                                            
+            } else {                                                                                                         
+                ra = lhs->getReg();                                                                                          
+                if ((rmask(ra) & XmmRegs) == 0) {                                                                            
+                    /* We need this case on AMD64, because it's possible that                                                
+                     * an earlier instruction has done a quadword load and reserved a                                        
+                     * GPR.  If so, ask for a new register.                                                                  
+                     */                                                                                                      
+                    ra = findRegFor(lhs, XmmRegs);                                                                           
+                }
+            }                                                                                                            
 
 #if defined __SUNPRO_CC
             // from Sun Studio C++ Readme: #pragma align inside namespace requires mangled names
@@ -1233,13 +1216,13 @@ namespace nanojit
             LIns* lhs = ins->oprnd1();
 
             // lhs into reg, prefer same reg as result
-            Reservation* rA = lhs->resv();
-            // if this is last use of lhs in reg, we can re-use result reg
-            if (!rA->used || rA->reg == UnknownReg)
-                findSpecificRegFor(lhs, rr);
-            // else, rA already has a different reg assigned
 
-            NanoAssert(rA->used && rA->reg==FST0);
+            // if this is last use of lhs in reg, we can re-use result reg
+            // else, lhs already has a different reg assigned
+            if (lhs->isUnusedOrHasUnknownReg())
+                findSpecificRegFor(lhs, rr);
+
+            NanoAssert(lhs->getReg()==FST0);
             // assume that the lhs is in ST(0) and rhs is on stack
             FCHS();
 
@@ -1253,7 +1236,7 @@ namespace nanojit
         if (sz == ARGSIZE_Q)
         {
             // ref arg - use lea
-            if (r != UnknownReg)
+            if (isKnownReg(r))
             {
                 // arg in specific reg
                 int da = findMemFor(p);
@@ -1266,14 +1249,13 @@ namespace nanojit
         }
         else if (sz == ARGSIZE_I || sz == ARGSIZE_U)
         {
-            if (r != UnknownReg) {
+            if (isKnownReg(r)) {
                 // arg goes in specific register
                 if (p->isconst()) {
                     LDi(r, p->imm32());
                 } else {
-                    Reservation* rA = p->resv();
-                    if (rA->used) {
-                        if (rA->reg == UnknownReg) {
+                    if (p->isUsed()) {
+                        if (!p->hasKnownReg()) {
                             // load it into the arg reg
                             int d = findMemFor(p);
                             if (p->isop(LIR_alloc)) {
@@ -1283,7 +1265,7 @@ namespace nanojit
                             }
                         } else {
                             // it must be in a saved reg
-                            MR(r, rA->reg);
+                            MR(r, p->getReg());
                         }
                     }
                     else {
@@ -1307,24 +1289,23 @@ namespace nanojit
     void Assembler::asm_pusharg(LInsp p)
     {
         // arg goes on stack
-        Reservation* rA = p->resv();
-        if (!rA->used && p->isconst())
+        if (!p->isUsed() && p->isconst())
         {
             // small const we push directly
             PUSHi(p->imm32());
         }
-        else if (!rA->used || p->isop(LIR_alloc))
+        else if (!p->isUsed() || p->isop(LIR_alloc))
         {
             Register ra = findRegFor(p, GpRegs);
             PUSHr(ra);
         }
-        else if (rA->reg == UnknownReg)
+        else if (!p->hasKnownReg())
         {
-            PUSHm(disp(rA), FP);
+            PUSHm(disp(p), FP);
         }
         else
         {
-            PUSHr(rA->reg);
+            PUSHr(p->getReg());
         }
     }
 
@@ -1369,20 +1350,18 @@ namespace nanojit
             }
 
             Register rr = prepResultReg(ins, allow);
-            Reservation *rA = lhs->resv();
             Register ra;
 
             // if this is last use of lhs in reg, we can re-use result reg
-            if (!rA->used || (ra = rA->reg) == UnknownReg) {
+            if (lhs->isUnusedOrHasUnknownReg()) {   
                 ra = findSpecificRegFor(lhs, rr);
-            } else if ((rmask(ra) & XmmRegs) == 0) {
+            } else if ((rmask(lhs->getReg()) & XmmRegs) == 0) {
                 // We need this case on AMD64, because it's possible that
                 // an earlier instruction has done a quadword load and reserved a
                 // GPR.  If so, ask for a new register.
                 ra = findRegFor(lhs, XmmRegs);
-            }
-            else {
-                // rA already has a register assigned but maybe not from the allow set
+            } else {                                                                                                         
+                // lhs already has a register assigned but maybe not from the allow set                                      
                 ra = findRegFor(lhs, allow);
             }
 
@@ -1413,13 +1392,13 @@ namespace nanojit
             int db = findMemFor(rhs);
 
             // lhs into reg, prefer same reg as result
-            Reservation* rA = lhs->resv();
-            // last use of lhs in reg, can reuse rr
-            if (!rA->used || rA->reg == UnknownReg)
-                findSpecificRegFor(lhs, rr);
-            // else, rA already has a different reg assigned
 
-            NanoAssert(rA->used && rA->reg==FST0);
+            // last use of lhs in reg, can reuse rr
+            // else, lhs already has a different reg assigned
+            if (lhs->isUnusedOrHasUnknownReg())
+                findSpecificRegFor(lhs, rr);
+
+            NanoAssert(lhs->getReg()==FST0);
             // assume that the lhs is in ST(0) and rhs is on stack
             if (op == LIR_fadd)
                 { FADD(db, FP); }
@@ -1450,12 +1429,11 @@ namespace nanojit
         }
     }
 
-    Register Assembler::asm_prep_fcall(Reservation *rR, LInsp ins)
+    Register Assembler::asm_prep_fcall(Reservation* /*unused*/, LInsp ins)
     {
-        if (rR) {
-            Register rr;
-            if ((rr=rR->reg) != UnknownReg && (rmask(rr) & XmmRegs))
-                evict(rr, ins);
+        Register rr;
+        if (ins->isUsed() && isKnownReg(rr = ins->getReg()) && (rmask(rr) & XmmRegs)) {
+            evict(rr, ins);
         }
         return prepResultReg(ins, rmask(FST0));
     }
@@ -1494,9 +1472,9 @@ namespace nanojit
             SSE_CVTSI2SD(rr, gr);
             SSE_XORPDr(rr,rr);  // zero rr to ensure no dependency stalls
 
-            Reservation* resv = ins->oprnd1()->resv();
+            LIns* op1 = ins->oprnd1();
             Register xr;
-            if (resv->used && (xr = resv->reg) != UnknownReg && (rmask(xr) & GpRegs))
+            if (op1->isUsed() && isKnownReg(xr = op1->getReg()) && (rmask(xr) & GpRegs))
             {
                 LEA(gr, 0x80000000, xr);
             }
@@ -1561,9 +1539,9 @@ namespace nanojit
                 if (branchOnFalse) { JNAE(targ); } else { JAE(targ); }
             }
             NIns *at = _nIns;
-            Reservation *rA, *rB;
-            findRegFor2(XmmRegs, lhs, rA, rhs, rB);
-            SSE_UCOMISD(rA->reg, rB->reg);
+            Register ra, rb;
+            findRegFor2b(XmmRegs, lhs, ra, rhs, rb);
+            SSE_UCOMISD(ra, rb);
             return at;
         }
 
@@ -1597,9 +1575,9 @@ namespace nanojit
             else { // if (c == LIR_fge)
                 SETAE(r);
             }
-            Reservation *rA, *rB;
-            findRegFor2(XmmRegs, lhs, rA, rhs, rB);
-            SSE_UCOMISD(rA->reg, rB->reg);
+            Register ra, rb;
+            findRegFor2b(XmmRegs, lhs, ra, rhs, rb);
+            SSE_UCOMISD(ra, rb);
             return;
         }
         // SETcc only sets low 8 bits, so extend
@@ -1650,9 +1628,9 @@ namespace nanojit
                 evictIfActive(EAX);
                 TEST_AH(mask);
                 LAHF();
-                Reservation *rA, *rB;
-                findRegFor2(XmmRegs, lhs, rA, rhs, rB);
-                SSE_UCOMISD(rA->reg, rB->reg);
+                Register ra, rb;
+                findRegFor2b(XmmRegs, lhs, ra, rhs, rb);
+                SSE_UCOMISD(ra, rb);
             }
         }
         else
@@ -1661,13 +1639,11 @@ namespace nanojit
             TEST_AH(mask);
             FNSTSW_AX();
             NanoAssert(lhs->isQuad() && rhs->isQuad());
-            Reservation *rA;
             if (lhs != rhs)
             {
                 // compare two different numbers
                 int d = findMemFor(rhs);
-                rA = lhs->resv();
-                int pop = !rA->used || rA->reg == UnknownReg;
+                int pop = lhs->isUnusedOrHasUnknownReg();
                 findSpecificRegFor(lhs, FST0);
                 // lhs is in ST(0) and rhs is on stack
                 FCOM(pop, d, FP);
@@ -1675,8 +1651,7 @@ namespace nanojit
             else
             {
                 // compare n to itself, this is a NaN test.
-                rA = lhs->resv();
-                int pop = !rA->used || rA->reg == UnknownReg;
+                int pop = lhs->isUnusedOrHasUnknownReg();
                 findSpecificRegFor(lhs, FST0);
                 // value in ST(0)
                 if (pop)
