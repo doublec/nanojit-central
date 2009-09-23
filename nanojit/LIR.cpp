@@ -106,8 +106,7 @@ namespace nanojit
 #ifdef NJ_VERBOSE
           names(NULL),
 #endif
-          abi(ABI_FASTCALL),
-          state(NULL), param1(NULL), sp(NULL), rp(NULL),
+          abi(ABI_FASTCALL), state(NULL), param1(NULL), sp(NULL), rp(NULL),
           _allocator(alloc)
     {
         rewind();
@@ -164,7 +163,7 @@ namespace nanojit
         LIns*   ins   = insSk->getLIns();
         ins->initLInsSk((LInsp)addrOfLastLInsOnCurrentChunk);
         _unused += sizeof(LInsSk);
-        _stats.lir++;
+        verbose_only(_stats.lir++);
     }
 
     // Make room for a single instruction.
@@ -186,7 +185,7 @@ namespace nanojit
         // the pointer.
         uintptr_t startOfRoom = _unused;
         _unused += szB;
-        _stats.lir++;             // count the instruction
+        verbose_only(_stats.lir++);             // count the instruction
 
         // If there's no more space on this chunk, move to a new one.
         // (This will only occur if the asked-for size filled up exactly to
@@ -803,7 +802,7 @@ namespace nanojit
                     // so assert in debug builds.
                     NanoAssertMsg(0, "Constantly false guard detected");
 #endif
-                    return out->insGuard(LIR_x, out->insImm(1), x);
+                    return out->insGuard(LIR_x, NULL, x);
                 }
             }
             else {
@@ -1161,6 +1160,7 @@ namespace nanojit
             NanoAssert(i->isLInsOp3());
             return hash3(op, i->oprnd1(), i->oprnd2(), i->oprnd3());
         }
+        NanoAssert(0);
     }
 
     inline bool LInsHashSet::equals(LInsp a, LInsp b)
@@ -1202,6 +1202,7 @@ namespace nanojit
             NanoAssert(a->isLInsOp3());
             return a->oprnd1() == b->oprnd1() && a->oprnd2() == b->oprnd2() && a->oprnd3() == b->oprnd3();
         }
+        NanoAssert(0);
     }
 
     void LInsHashSet::grow()
@@ -1881,6 +1882,23 @@ namespace nanojit
 
     LInsp CseFilter::insGuard(LOpcode v, LInsp c, LInsp x)
     {
+        // LIR_xt and LIR_xf guards are CSEable.  Note that we compare the
+        // opcode and condition when determining if two guards are equivalent
+        // -- in find1(), hash1(), equals() and hashcode() -- but we do *not*
+        // compare the GuardRecord.  This works because:
+        // - If guard 1 is taken (exits) then guard 2 is never reached, so
+        //   guard 2 can be removed.
+        // - If guard 1 is not taken then neither is guard 2, so guard 2 can
+        //   be removed.
+        //
+        // The underlying assumptions that are required for this to be safe:
+        // - There's never a path from the side exit of guard 1 back to guard
+        //   2;  for tree-shaped fragments this should be true.
+        // - GuardRecords do not contain information other than what is needed
+        //   to execute a successful exit.  That is currently true.
+        // - The CSE algorithm will always keep guard 1 and remove guard 2
+        //   (not vice versa).  The current algorithm does this.
+        //
         if (isCseOpcode(v)) {
             // conditional guard
             NanoAssert(operandCount[v]==1);
