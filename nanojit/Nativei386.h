@@ -342,7 +342,7 @@ namespace nanojit
 #define XOR(l,r)    do { count_alu(); ALU(0x33, (l),(r));           asm_output("xor %s,%s",gpn(l),gpn(r)); } while(0)
 #define ADD(l,r)    do { count_alu(); ALU(0x03, (l),(r));           asm_output("add %s,%s",gpn(l),gpn(r)); } while(0)
 #define SUB(l,r)    do { count_alu(); ALU(0x2b, (l),(r));           asm_output("sub %s,%s",gpn(l),gpn(r)); } while(0)
-#define MUL(l,r)    do { count_alu(); ALU2(0x0faf,(l),(r));     asm_output("mul %s,%s",gpn(l),gpn(r)); } while(0)
+#define MUL(l,r)    do { count_alu(); ALU2(0x0faf,(l),(r));         asm_output("mul %s,%s",gpn(l),gpn(r)); } while(0)
 #define DIV(r)      do { count_alu(); ALU(0xf7, (Register)7,(r));   asm_output("idiv  edx:eax, %s",gpn(r)); } while(0)
 #define NOT(r)      do { count_alu(); ALU(0xf7, (Register)2,(r));   asm_output("not %s",gpn(r)); } while(0)
 #define NEG(r)      do { count_alu(); ALU(0xf7, (Register)3,(r));   asm_output("neg %s",gpn(r)); } while(0)
@@ -388,12 +388,11 @@ namespace nanojit
 #define SETLE(r)    do { count_alu(); ALU2(0x0f9E,(r),(r));         asm_output("setle %s",gpn(r)); } while(0)
 #define SETG(r)     do { count_alu(); ALU2(0x0f9F,(r),(r));         asm_output("setg %s",gpn(r)); } while(0)
 #define SETGE(r)    do { count_alu(); ALU2(0x0f9D,(r),(r));         asm_output("setge %s",gpn(r)); } while(0)
-#define SETB(r)     do { count_alu(); ALU2(0x0f92,(r),(r));          asm_output("setb %s",gpn(r)); } while(0)
-#define SETBE(r)    do { count_alu(); ALU2(0x0f96,(r),(r));          asm_output("setbe %s",gpn(r)); } while(0)
-#define SETA(r)     do { count_alu(); ALU2(0x0f97,(r),(r));          asm_output("seta %s",gpn(r)); } while(0)
-#define SETAE(r)    do { count_alu(); ALU2(0x0f93,(r),(r));          asm_output("setae %s",gpn(r)); } while(0)
-#define SETC(r)     do { count_alu(); ALU2(0x0f90,(r),(r));          asm_output("setc %s",gpn(r)); } while(0)
-#define SETO(r)     do { count_alu(); ALU2(0x0f92,(r),(r));          asm_output("seto %s",gpn(r)); } while(0)
+#define SETB(r)     do { count_alu(); ALU2(0x0f92,(r),(r));         asm_output("setb %s",gpn(r)); } while(0)
+#define SETBE(r)    do { count_alu(); ALU2(0x0f96,(r),(r));         asm_output("setbe %s",gpn(r)); } while(0)
+#define SETA(r)     do { count_alu(); ALU2(0x0f97,(r),(r));         asm_output("seta %s",gpn(r)); } while(0)
+#define SETAE(r)    do { count_alu(); ALU2(0x0f93,(r),(r));         asm_output("setae %s",gpn(r)); } while(0)
+#define SETO(r)     do { count_alu(); ALU2(0x0f92,(r),(r));         asm_output("seto %s",gpn(r)); } while(0)
 
 #define MREQ(dr,sr) do { count_alu(); ALU2(0x0f44,dr,sr); asm_output("cmove %s,%s", gpn(dr),gpn(sr)); } while(0)
 #define MRNE(dr,sr) do { count_alu(); ALU2(0x0f45,dr,sr); asm_output("cmovne %s,%s", gpn(dr),gpn(sr)); } while(0)
@@ -404,7 +403,6 @@ namespace nanojit
 #define MRB(dr,sr)  do { count_alu(); ALU2(0x0f42,dr,sr); asm_output("cmovb %s,%s", gpn(dr),gpn(sr)); } while(0)
 #define MRBE(dr,sr) do { count_alu(); ALU2(0x0f46,dr,sr); asm_output("cmovbe %s,%s", gpn(dr),gpn(sr)); } while(0)
 #define MRA(dr,sr)  do { count_alu(); ALU2(0x0f47,dr,sr); asm_output("cmova %s,%s", gpn(dr),gpn(sr)); } while(0)
-#define MRNC(dr,sr) do { count_alu(); ALU2(0x0f43,dr,sr); asm_output("cmovnc %s,%s", gpn(dr),gpn(sr)); } while(0)
 #define MRAE(dr,sr) do { count_alu(); ALU2(0x0f43,dr,sr); asm_output("cmovae %s,%s", gpn(dr),gpn(sr)); } while(0)
 #define MRNO(dr,sr) do { count_alu(); ALU2(0x0f41,dr,sr); asm_output("cmovno %s,%s", gpn(dr),gpn(sr)); } while(0)
 
@@ -571,16 +569,11 @@ namespace nanojit
         JMP_long_nochk_offset(tt);  \
     } } while(0)
 
-#define JMP_long_placeholder()  do {\
-    count_jmp();\
-    underrunProtect(5);             \
-    JMP_long_nochk_offset(0xffffffff); } while(0)
-
 // this should only be used when you can guarantee there is enough room on the page
 #define JMP_long_nochk_offset(o) do {\
         verbose_only( NIns* next = _nIns; (void)next; ) \
         IMM32((o)); \
-         *(--_nIns) = JMP32; \
+        *(--_nIns) = JMP32; \
         asm_output("jmp %p",(next+(o))); } while(0)
 
 #define JMP_indirect(r) do { \
@@ -614,8 +607,6 @@ namespace nanojit
 #define JGE(t)  JCC(0x0D, t, "jge")
 #define JNGE(t) JCC(0x0C, t, "jnge")
 
-#define JC(t)   JCC(0x02, t, "jc")
-#define JNC(t)  JCC(0x03, t, "jnc")
 #define JO(t)   JCC(0x00, t, "jo")
 #define JNO(t)  JCC(0x01, t, "jno")
 
@@ -836,7 +827,7 @@ namespace nanojit
 #define FSTP(r)     do { count_fpu(); FPU(0xddd8, r&7);         asm_output("fstp %s",fpn(r)); fpu_pop();} while(0)
 #define FCOMP()     do { count_fpu(); FPUc(0xD8D9);             asm_output("fcomp"); fpu_pop();} while(0)
 #define FCOMPP()    do { count_fpu(); FPUc(0xDED9);             asm_output("fcompp"); fpu_pop();fpu_pop();} while(0)
-#define FLDr(r)     do { count_ldq(); FPU(0xd9c0,r);                asm_output("fld %s",fpn(r)); fpu_push(); } while(0)
+#define FLDr(r)     do { count_ldq(); FPU(0xd9c0,r);            asm_output("fld %s",fpn(r)); fpu_push(); } while(0)
 #define EMMS()      do { count_fpu(); FPUc(0x0f77);             asm_output("emms"); } while (0)
 
 // standard direct call
