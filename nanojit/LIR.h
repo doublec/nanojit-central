@@ -148,10 +148,10 @@ namespace nanojit
         inline bool isIndirect() const {
             return _address < 256;
         }
-        inline uint32_t FASTCALL count_args() const {
+        inline uint32_t count_args() const {
             return _count_args(ARGSIZE_MASK_ANY);
         }
-        inline uint32_t FASTCALL count_iargs() const {
+        inline uint32_t count_iargs() const {
             return _count_args(ARGSIZE_MASK_INT);
         }
         // fargs = args - iargs
@@ -1061,6 +1061,7 @@ namespace nanojit
             return out->insCall(call, args);
         }
         virtual LInsp insAlloc(int32_t size) {
+            NanoAssert(size != 0);
             return out->insAlloc(size);
         }
         virtual LInsp insSkip(size_t size) {
@@ -1074,18 +1075,19 @@ namespace nanojit
         LIns*        ins_choose(LIns* cond, LIns* iftrue, LIns* iffalse, bool use_cmov);
         // Inserts an integer comparison to 0
         LIns*        ins_eq0(LIns* oprnd1);
-        // Inserts a pointer comparison to 0                                                                                 
-        LIns*        ins_peq0(LIns* oprnd1);                                                                                 
+        // Inserts a pointer comparison to 0
+        LIns*        ins_peq0(LIns* oprnd1);
         // Inserts a binary operation where the second operand is an
         // integer immediate.
         LIns*        ins2i(LOpcode op, LIns *oprnd1, int32_t);
         LIns*        qjoin(LInsp lo, LInsp hi);
         LIns*        insImmPtr(const void *ptr);
-        LIns*        insImmWord(intptr_t ptr);                                                                               
-        // Sign or zero extend integers to native integers. On 32-bit this is a no-op.                                       
-        LIns*        ins_i2p(LIns* intIns);                                                                                  
-        LIns*        ins_u2p(LIns* uintIns);                                                                                 
+        LIns*        insImmWord(intptr_t ptr);
+        // Sign or zero extend integers to native integers. On 32-bit this is a no-op.
+        LIns*        ins_i2p(LIns* intIns);
+        LIns*        ins_u2p(LIns* uintIns);
     };
+
 
 #ifdef NJ_VERBOSE
     extern const char* lirNames[];
