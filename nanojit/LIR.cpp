@@ -1160,7 +1160,6 @@ namespace nanojit
             NanoAssert(i->isLInsOp3());
             return hash3(op, i->oprnd1(), i->oprnd2(), i->oprnd3());
         }
-        NanoAssert(0);
     }
 
     inline bool LInsHashSet::equals(LInsp a, LInsp b)
@@ -1202,7 +1201,6 @@ namespace nanojit
             NanoAssert(a->isLInsOp3());
             return a->oprnd1() == b->oprnd1() && a->oprnd2() == b->oprnd2() && a->oprnd3() == b->oprnd3();
         }
-        NanoAssert(0);
     }
 
     void LInsHashSet::grow()
