@@ -162,26 +162,14 @@ namespace nanojit
     Register Assembler::registerAlloc(RegisterMask allow)
     {
         RegAlloc &regs = _allocator;
-//      RegisterMask prefer = livePastCall(_ins) ? saved : scratch;
-        RegisterMask prefer = SavedRegs & allow;
-        RegisterMask free = regs.free & allow;
+        RegisterMask allowedAndFree = allow & regs.free;
 
-        RegisterMask set = prefer;
-        if (set == 0) set = allow;
-
-        if (free)
+        if (allowedAndFree)
         {
-            // at least one is free
-            set &= free;
-
-            // ok we have at least 1 free register so let's try to pick
-            // the best one given the profile of the instruction
-            if (!set)
-            {
-                // desired register class is not free so pick first of any class
-                set = free;
-            }
-            NanoAssert((set & allow) != 0);
+            // At least one usable register is free -- no need to steal.  
+            // Pick a preferred one if possible.
+            RegisterMask preferredAndFree = allowedAndFree & SavedRegs;
+            RegisterMask set = ( preferredAndFree ? preferredAndFree : allowedAndFree );
             Register r = nRegisterAllocFromSet(set);
             return r;
         }
