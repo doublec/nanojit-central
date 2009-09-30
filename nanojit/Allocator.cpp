@@ -51,12 +51,21 @@ namespace nanojit
 
     Allocator::~Allocator()
     {
+        reset();
+    }
+
+    void Allocator::reset()
+    {
         Chunk *c = current_chunk;
         while (c) {
             Chunk *prev = c->prev;
             freeChunk(c);
             c = prev;
         }
+        current_chunk = NULL;
+        current_top = NULL;
+        current_limit = NULL;
+        postReset();
     }
 
     void* Allocator::allocSlow(size_t nbytes)

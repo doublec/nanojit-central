@@ -54,6 +54,7 @@ namespace nanojit
     public:
         Allocator();
         ~Allocator();
+        void reset();
 
         /** alloc memory, never return null. */
         void* alloc(size_t nbytes) {
@@ -66,7 +67,7 @@ namespace nanojit
             return allocSlow(nbytes);
         }
 
-    private:
+    protected:
         void* allocSlow(size_t nbytes);
         void fill(size_t minbytes);
 
@@ -80,13 +81,16 @@ namespace nanojit
         char* current_top;
         char* current_limit;
 
-    // allocator SPI
-    private:
+        // allocator SPI
+
         /** allocate another block from a host provided allocator */
         void* allocChunk(size_t nbytes);
 
         /** free back to the same allocator */
         void freeChunk(void*);
+
+        /** hook for post-reset action. */
+        void postReset();
     };
 }
 
@@ -95,9 +99,19 @@ inline void* operator new(size_t size, nanojit::Allocator &a) {
     return a.alloc(size);
 }
 
+/** global new overload enabling this pattern:  new (allocator) T(...) */
+inline void* operator new(size_t size, nanojit::Allocator *a) {
+    return a->alloc(size);
+}
+
 /** global new[] overload enabling this pattern: new (allocator) T[] */
 inline void* operator new[](size_t size, nanojit::Allocator& a) {
     return a.alloc(size);
+}
+
+/** global new[] overload enabling this pattern: new (allocator) T[] */
+inline void* operator new[](size_t size, nanojit::Allocator* a) {
+    return a->alloc(size);
 }
 
 #endif // __nanojit_Allocator__
