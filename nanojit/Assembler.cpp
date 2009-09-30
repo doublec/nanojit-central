@@ -92,7 +92,7 @@ namespace nanojit
             LInsp i = in->read();
             const char* str = _names->formatIns(i);
             char* cpy = new (_alloc) char[strlen(str)+1];
-            strcpy(cpy, str);
+            VMPI_strcpy(cpy, str);
             _strs.insert(cpy);
             return i;
         }
@@ -454,25 +454,25 @@ namespace nanojit
             } else
 #endif
             {
-                // The post-state register holding 'ins' is 's', the pre-state                                          
-                // register holding 'ins' is 'r'.  For example, if s=eax and                                            
-                // r=ecx:                                                                                               
-                //                                                                                                      
-                // pre-state:   ecx(ins)                                                                                
-                // instruction: mov eax, ecx                                                                            
-                // post-state:  eax(ins)                                                                                
-                //                                                                                                      
-                _allocator.retire(r);                                                                                   
-                Register s = r;                                                                                         
+                // The post-state register holding 'ins' is 's', the pre-state
+                // register holding 'ins' is 'r'.  For example, if s=eax and
+                // r=ecx:
+                //
+                // pre-state:   ecx(ins)
+                // instruction: mov eax, ecx
+                // post-state:  eax(ins)
+                //
+                _allocator.retire(r);
+                Register s = r;
                 r = registerAlloc(prefer);
-                ins->setReg(r);                                                                  
-                _allocator.addActive(r, ins);                                                                           
-                if ((rmask(s) & GpRegs) && (rmask(r) & GpRegs)) {                                                       
-#ifdef NANOJIT_ARM                                                                                                      
-                    MOV(s, r);  // ie. move 'ins' from its pre-state reg to its post-state reg                          
-#else                                                                                                                   
-                    MR(s, r);                                                                                           
-#endif                                                                                                                   
+                ins->setReg(r);
+                _allocator.addActive(r, ins);
+                if ((rmask(s) & GpRegs) && (rmask(r) & GpRegs)) {
+#ifdef NANOJIT_ARM
+                    MOV(s, r);  // ie. move 'ins' from its pre-state reg to its post-state reg
+#else
+                    MR(s, r);
+#endif
                 }
                 else {
                     asm_nongp_copy(s, r);
@@ -697,7 +697,7 @@ namespace nanojit
 #endif /* PERFM */
 
         _epilogue = NULL;
-        
+
         nBeginAssembly();
     }
 
@@ -733,7 +733,7 @@ namespace nanojit
         StackFilter stackfilter(prev, alloc, frag->lirbuf, frag->lirbuf->sp, frag->lirbuf->rp);
         prev = &stackfilter;
 #endif
-        
+
         verbose_only( if (_logc->lcbits & LC_AfterSF) {
         pp_after_sf = new (alloc) ReverseLister(prev, alloc, frag->lirbuf->names, _logc,
                                                 "After StackFilter");
@@ -1902,7 +1902,7 @@ namespace nanojit
         // Add the EOL string to the output, ensuring that we leave enough
         // space for the terminating NULL character, then reset it so it
         // doesn't repeat on the next outputf.
-        strncat(outline, outlineEOL, sizeof(outline)-(strlen(outline)+1));
+        VMPI_strncat(outline, outlineEOL, sizeof(outline)-(strlen(outline)+1));
         outlineEOL[0] = '\0';
 
         output(s);
