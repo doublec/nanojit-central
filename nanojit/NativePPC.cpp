@@ -1279,6 +1279,7 @@ namespace nanojit
         case LIR_qirsh:
         case LIR_qilsh:
         case LIR_qxor:
+        case LIR_qiadd:
             asm_arith(ins);
             break;
         default:
