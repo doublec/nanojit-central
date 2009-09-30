@@ -109,7 +109,7 @@ namespace nanojit
           abi(ABI_FASTCALL), state(NULL), param1(NULL), sp(NULL), rp(NULL),
           _allocator(alloc)
     {
-        rewind();
+        clear();
     }
 
     void LirBuffer::clear()
@@ -122,12 +122,6 @@ namespace nanojit
         for (int i = 0; i < NumSavedRegs; ++i)
             savedRegs[i] = NULL;
         explicitSavedRegs = false;
-    }
-
-    void LirBuffer::rewind()
-    {
-        clear();
-        // pre-allocate the current and the next page we will be using
         chunkAlloc();
     }
 

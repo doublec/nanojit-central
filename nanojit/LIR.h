@@ -1327,7 +1327,6 @@ namespace nanojit
         public:
             LirBuffer(Allocator& alloc);
             void        clear();
-            void        rewind();
             uintptr_t   makeRoom(size_t szB);   // make room for an instruction
 
             debug_only (void validate() const;)
@@ -1438,7 +1437,7 @@ namespace nanojit
 
     class Assembler;
 
-    void compile(Assembler *assm, Fragment *frag verbose_only(, LabelMap*));
+    void compile(Assembler *assm, Fragment *frag verbose_only(, Allocator& alloc, LabelMap*));
     verbose_only(void live(Allocator& alloc, Fragment* frag, LogControl*);)
 
     class StackFilter: public LirFilter
