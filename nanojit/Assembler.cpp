@@ -570,6 +570,8 @@ namespace nanojit
 
     void Assembler::patch(GuardRecord *lr)
     {
+        if (!lr->jmp) // the guard might have been eliminated as redundant
+            return;
         Fragment *frag = lr->exit->target;
         NanoAssert(frag->fragEntry != 0);
         nPatchBranch((NIns*)lr->jmp, frag->fragEntry);

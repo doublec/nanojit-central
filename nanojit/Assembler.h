@@ -315,7 +315,6 @@ namespace nanojit
             void        nBeginAssembly();
             Register    nRegisterAllocFromSet(RegisterMask set);
             void        nRegisterResetAll(RegAlloc& a);
-            void        nFrameRestore(RegisterMask rmask);
             static void nPatchBranch(NIns* branch, NIns* location);
             void        nFragExit(LIns* guard);
 
