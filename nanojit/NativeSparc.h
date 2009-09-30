@@ -39,8 +39,8 @@
  * ***** END LICENSE BLOCK ***** */
 
 
-#ifndef __nanojit_Nativesparc__
-#define __nanojit_Nativesparc__
+#ifndef __nanojit_NativeSparc__
+#define __nanojit_NativeSparc__
 
 
 #define count_instr()
@@ -196,6 +196,7 @@ namespace nanojit
     void nativePageReset(); \
     void nativePageSetup(); \
     void underrunProtect(int bytes); \
+    void asm_align_code(); \
     void asm_cmp(LIns *cond);
 
 #define swapptrs()  { NIns* _tins = _nIns; _nIns=_nExitIns; _nExitIns=_tins; }
@@ -536,6 +537,18 @@ namespace nanojit
     asm_output("ld [%s + %d], %s", gpn(rs1), simm13, gpn(rd)); \
     } while (0)
 
+#define LDUH(rs1, rs2, rd) \
+    do { \
+    Format_3_1(3, rd, 0x2, rs1, 0, rs2); \
+    asm_output("ld [%s + %s], %s", gpn(rs1), gpn(rs2), gpn(rd)); \
+    } while (0)
+
+#define LDUHI(rs1, simm13, rd) \
+    do { \
+    Format_3_1I(3, rd, 0x2, rs1, simm13); \
+    asm_output("ld [%s + %d], %s", gpn(rs1), simm13, gpn(rd)); \
+    } while (0)
+
 #define LDSW(rs1, rs2, rd) \
     do { \
     Format_3_1(3, rd, 0x8, rs1, 0, rs2); \
@@ -678,12 +691,6 @@ namespace nanojit
     do { \
     Format_4_2I(rd, 0x2c, cc2, 0xb, cc1, cc0, simm11); \
     asm_output("movge %d, %s", simm11, gpn(rd)); \
-    } while (0)
-
-#define MOVCSI(simm11, cc2, cc1, cc0, rd) \
-    do { \
-    Format_4_2I(rd, 0x2c, cc2, 5, cc1, cc0, simm11); \
-    asm_output("movcs %d, %s", simm11, gpn(rd)); \
     } while (0)
 
 #define MOVLEUI(simm11, cc2, cc1, cc0, rd) \
@@ -892,6 +899,14 @@ namespace nanojit
       SET32(imm32, L0); \
     }
 
+#define LDUH32(rs1, imm32, rd) \
+    if(isIMM13(imm32)) { \
+      LDUHI(rs1, imm32, rd); \
+    } else { \
+      LDUH(rs1, L0, rd); \
+      SET32(imm32, L0); \
+    }
+
 #define LDSW32(rs1, imm32, rd) \
     if(isIMM13(imm32)) { \
       LDSWI(rs1, imm32, rd); \
@@ -932,4 +947,4 @@ namespace nanojit
 #define MR(d, s)   do { underrunProtect(4); ORI(s, 0, d); } while(0)
 
         }
-#endif // __nanojit_Nativesparc__
+#endif // __nanojit_NativeSparc__
