@@ -2127,6 +2127,7 @@ namespace nanojit
 #endif // NJ_VERBOSE
 
 
+#ifdef FEATURE_NANOJIT
 #ifdef DEBUG
     LIns* SanityFilter::ins1(LOpcode v, LIns* s0)
     {
@@ -2220,5 +2221,6 @@ namespace nanojit
         return out->ins3(v, s0, s1, s2);
     }
 #endif
+#endif // FEATURE_NANOJIT
 
 }
