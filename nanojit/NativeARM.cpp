@@ -659,6 +659,17 @@ Assembler::asm_arg_64(LInsp arg, Register& r, int& stkd)
         NanoAssert(fp_reg != UnknownReg);
     }
 
+#ifdef NJ_ARM_EABI
+    // EABI requires that 64-bit arguments are aligned on even-numbered
+    // registers, as R0:R1 or R2:R3. If the register base is at an
+    // odd-numbered register, advance it. Note that this will push r past
+    // R3 if r is R3 to start with, and will force the argument to go on
+    // the stack.
+    if ((r == R1) || (r == R3)) {
+        r = nextreg(r);
+    }
+#endif
+
     if (r < R3) {
         Register    ra = r;
         Register    rb = nextreg(r);
@@ -839,37 +850,50 @@ Assembler::asm_call(LInsp ins)
     uint32_t argc = call->get_sizes(sizes);
     bool indirect = call->isIndirect();
 
-#ifdef NJ_SOFTFLOAT
-    NanoAssert(ins->isop(LIR_icall));
-#endif
+    // If we aren't using VFP, assert that the LIR operation is an integer
+    // function call.
+    NanoAssert(IS_ARM_ARCH_VFP() || ins->isop(LIR_icall));
 
-#ifdef NJ_ARM_VFP
-    // Sort out where a VFP result goes. See comments in
-    // asm_prep_fcall() for more details as to why this is
-    // necessary here for floating point calls, but not for
-    // integer calls.
-    Reservation *callRes = getresv(ins);
-    if (callRes) { // If callRes==NULL, the result is discarded
-        Register rr = callRes->reg;
-        if (rr == UnknownReg) {
-            // If the result doesn't have a register allocated, then
-            // store R0,R1 directly to the stack slot
-        int d = disp(callRes);
-            NanoAssert(d != 0);
-            freeRsrcOf(ins, false);
-            STR(R1, FP, d+4);
-            STR(R0, FP, d+0);
-        } else {
-            // If the result does have a register allocated, move it
-            // into the appropriate register, and allow prepResultReg()
-            // to work out if any other action (e.g. storing to stack)
-            // is necessary.
-            NanoAssert(IsFpReg(rr));
-            prepResultReg(ins, rmask(rr));
-            FMDRR(rr,R0,R1);
+    // If we're using VFP, and the return type is a double, it'll come back in
+    // R0/R1. We need to either place it in the result fp reg, or store it.
+    // See comments in asm_prep_fcall() for more details as to why this is
+    // necessary here for floating point calls, but not for integer calls.
+    Reservation * callRes = getresv(ins);
+    if (IS_ARM_ARCH_VFP() && callRes) {
+        // Determine the size (and type) of the instruction result.
+        ArgSize         rsize = (ArgSize)(call->_argtypes & ARGSIZE_MASK_ANY);
+
+        // If the result size is a floating-point value, treat the result
+        // specially, as described previously.
+        if (rsize == ARGSIZE_F) {
+            Register        rr = callRes->reg;
+
+            NanoAssert(ins->opcode() == LIR_fcall);
+
+            // We're about to write the result into a register (or a stack
+            // slot). Because we emit code backwards, we must therefore free
+            // it.
+            //freeRsrcOf(ins, rr != UnknownReg);
+
+            if (rr == UnknownReg) {
+                int d = disp(callRes);
+                NanoAssert(d != 0);
+                freeRsrcOf(ins, false);
+
+                // The result doesn't have a register allocated, so store the
+                // result (in R0,R1) directly to its stack slot.
+                STR(R0, FP, d+0);
+                STR(R1, FP, d+4);
+            } else {
+                Register    rr = callRes->reg;
+                NanoAssert(IsFpReg(rr));
+
+                // Copy the result to the (VFP) result register.
+                prepResultReg(ins, rmask(rr));
+                FMDRR(rr, R0, R1);
+            }
         }
     }
-#endif
 
     if (!indirect) {
         verbose_only(if (_logc->lcbits & LC_Assembly)
@@ -913,43 +937,29 @@ Assembler::asm_call(LInsp ins)
         asm_regarg(ARGSIZE_LO, ins->arg(--argc), LR);
     }
 
-    Register r = R0;
-    int stkd = 0;
+    // Encode the arguments, starting at R0 and with an empty argument stack.
+    Register    r = R0;
+    int         stkd = 0;
 
-    // XXX TODO we should go through the args and figure out how much
-    // stack space we'll need, allocate it up front, and then do
-    // SP-relative stores using stkd instead of doing STR_preindex for
-    // every stack write like we currently do in asm_arg.
-
-    for(uint32_t i = 0; i < argc; i++) {
-        uint32_t j = argc - i - 1;
-        ArgSize sz = sizes[j];
-        LInsp arg = ins->arg(j);
-
-#ifdef TM_MERGE
-        NanoAssert(r < R4 || r == UnknownReg);
-#endif
-
-#ifdef NJ_ARM_EABI
-        // arm eabi puts doubles only in R0:1 or R2:3, and 64bit aligned on the stack.
-        if (sz == ARGSIZE_F) {
-            if (r == R1)
-                r = R2;
-            else if (r == R3)
-                r = nextreg(r);
-        }
-#endif
-        asm_arg(sz, arg, r, stkd);
+    // Iterate through the argument list and encode each argument according to
+    // the ABI.
+    // Note that we loop through the arguments backwards as LIR specifies them
+    // in reverse order.
+    uint32_t    i = argc;
+    while(i--) {
+        asm_arg(sizes[i], ins->arg(i), r, stkd);
     }
-    if (stkd > max_out_args)
+
+    if (stkd > max_out_args) {
         max_out_args = stkd;
+    }
 
     if (needToLoadAddr)
         LDi(LR, (int32_t)call->_address);
 }
 
 Register
-Assembler::nRegisterAllocFromSet(int set)
+Assembler::nRegisterAllocFromSet(RegisterMask set)
 {
     NanoAssert(set != 0);
 
