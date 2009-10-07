@@ -68,10 +68,16 @@ const Register Assembler::savedRegs[] = { R4, R5, R6, R7, R8, R9, R10 };
 // NB the thumb2 check (i.e using > v6) is technically 
 // not correct, but its close enough for now).
 #ifdef JS_TRACER
+#   define IS_ARM_ARCH_GT_V4()    (AvmCore::config.arch > 4)
 #   define IS_ARM_ARCH_GT_V5()    (AvmCore::config.arch > 5)
 #   define IS_ARM_ARCH_VFP()      (AvmCore::config.vfp)
 #   define IS_ARM_ARCH_THUMB2()   (AvmCore::config.thumb2)
 #else 
+#   if NJ_ARM_ARCH > NJ_ARM_V4
+#      define IS_ARM_ARCH_GT_V4() (1)
+#   else
+#      define IS_ARM_ARCH_GT_V4() (0)
+#   endif
 #   if NJ_ARM_ARCH > NJ_ARM_V5
 #      define IS_ARM_ARCH_GT_V5() (1)
 #   else
@@ -197,7 +203,7 @@ Assembler::encOp2Imm(uint32_t literal, uint32_t * enc)
     uint32_t    leading_zeroes;
 
     // Components of the operand 2 encoding.
-    int32_t     rot;
+    int32_t    rot;
     uint32_t    imm8;
 
     // Check the literal to see if it is a simple 8-bit value. I suspect that
@@ -507,11 +513,8 @@ Assembler::genPrologue()
     if (amt)
         asm_sub_imm(SP, SP, amt);
 
-    verbose_only(
-    if (_logc->lcbits & LC_Assembly) {
-        outputf("         %p:",_nIns);
-        output("         patch entry");
-    })
+    verbose_only( asm_output("## %p:",(void*)_nIns); )
+    verbose_only( asm_output("## patch entry"); )
     NIns *patchEntry = _nIns;
 
     MOV(FP, SP);
@@ -523,10 +526,9 @@ void
 Assembler::nFragExit(LInsp guard)
 {
     (void)guard;
-#ifdef TM_MERGE
+#if NJ_MERGE
     SideExit *  exit = guard->record()->exit;
     Fragment *  frag = exit->target;
-
     bool        target_is_known = frag && frag->fragEntry;
 
     if (target_is_known) {
@@ -546,13 +548,7 @@ Assembler::nFragExit(LInsp guard)
         // will work correctly.
         JMP_far(_epilogue);
 
-        // Load the guard record pointer into R2. We want it in R0 but we can't
-        // do this at this stage because R0 is used for something else.
-        // I don't understand why I can't load directly into R0. It works for
-        // the JavaScript JIT but not for the Regular Expression compiler.
-        // However, I haven't pushed this further as it only saves a single MOV
-        // instruction in genEpilogue.
-        asm_ld_imm(R2, int(gr));
+        asm_ld_imm(R0, int(gr));
 
         // Set the jmp pointer to the start of the sequence so that patched
         // branches can skip the LDi sequence.
@@ -560,7 +556,7 @@ Assembler::nFragExit(LInsp guard)
     }
 
 #ifdef NJ_VERBOSE
-    if (_frago->core()->config.show_stats) {
+    if (config.show_stats) {
         // load R1 with Fragment *fromFrag, target fragment
         // will make use of this when calling fragenter().
         int fromfrag = int((Fragment*)_thisfrag);
@@ -570,7 +566,7 @@ Assembler::nFragExit(LInsp guard)
 
     // Pop the stack frame.
     MOV(SP, FP);
-#endif
+#endif // TM_MERGE
 }
 
 NIns*
@@ -596,7 +592,12 @@ Assembler::genEpilogue()
     return _nIns;
 }
 
-/* gcc/linux use the ARM EABI; Windows CE uses the legacy abi.
+/*
+ * asm_arg will encode the specified argument according to the current ABI, and
+ * will update r and stkd as appropriate so that the next argument can be
+ * encoded.
+ *
+ * Linux has used ARM's EABI for some time. Windows CE uses the legacy ABI.
  *
  * Under EABI:
  * - doubles are 64-bit aligned both in registers and on the stack.
@@ -614,75 +615,16 @@ Assembler::genEpilogue()
  * - both doubles and 32-bit arguments are placed on stack with 32-bit
  *   alignment.
  */
-
-#ifdef TM_MERGE
-void
-Assembler::asm_arg(ArgSize sz, LInsp p, Register r)
-{
-    // should never be called -- the ARM-specific longer form of
-    // asm_arg is used on ARM.
-    NanoAssert(0);
-}
-#endif
-
-/*
- * asm_arg will update r and stkd to indicate where the next
- * argument should go.  If r == UnknownReg, then the argument
- * is placed on the stack at stkd, and stkd is updated.
- *
- * Note that this currently doesn't actually use stkd on input,
- * except for figuring out alignment; it always pushes to SP.
- * See TODO in asm_call.
- */
 void 
 Assembler::asm_arg(ArgSize sz, LInsp arg, Register& r, int& stkd)
 {
-    if (sz == ARGSIZE_F) {
-#ifdef NJ_SOFTFLOAT
-        NanoAssert(arg->isop(LIR_qjoin));
-#else
-        Register fp_reg = findRegFor(arg, FpRegs);
-        NanoAssert(fp_reg != UnknownReg);
-#endif
+    // The stack pointer must always be at least aligned to 4 bytes.
+    NanoAssert((stkd & 3) == 0);
 
-        if (r < R3) {
-            // put double in two registers
-#ifdef NJ_SOFTFLOAT
-            asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
-            asm_regarg(ARGSIZE_LO, arg->oprnd2(), nextreg(r));
-#else
-            FMRRD(r, nextreg(r), fp_reg);
-#endif
-            r = Register(r+2);                
-#ifndef NJ_ARM_EBAI
-        } else if (r < R4) {
-            // put LSW in R3, MSW on stack
-#ifdef NJ_SOFTFLOAT
-            asm_regarg(ARGSIZE_LO, arg->oprnd1(), r);
-            asm_stkarg(arg->oprnd2(), stkd);
-#else
-            NanoAssert(stkd==0);
-            STR(IP, SP, 0);
-            FMRRD(r, IP, fp_reg);
-#endif
-            r = nextreg(r);
-            stkd += 4;
-#endif /* NJ_ARM_EABI */
-        } else {
-#ifdef NJ_ARM_EABI
-            // put double on stack, 64bit aligned
-            if ((stkd & 7) != 0) stkd += 4;
-#endif
-#ifdef NJ_SOFTFLOAT
-            asm_stkarg(arg->oprnd1(), stkd);
-            asm_stkarg(arg->oprnd2(), stkd+4);
-#else
-            asm_stkarg(arg, stkd);
-#endif
-            stkd += 8;
-        }
-    }
-    else if (sz & ARGSIZE_MASK_INT) {
+    if (sz == ARGSIZE_F) {
+        // This task is fairly complex and so is delegated to asm_arg_64.
+        asm_arg_64(arg, r, stkd);
+    } else if (sz & ARGSIZE_MASK_INT) {
         // pre-assign registers R0-R3 for arguments (if they fit)
         if (r < R4) {
             asm_regarg(sz, arg, r);
@@ -691,11 +633,100 @@ Assembler::asm_arg(ArgSize sz, LInsp arg, Register& r, int& stkd)
             asm_stkarg(arg, stkd);
             stkd += 4;
         }
-    }
-    else {
+    } else {
         NanoAssert(sz == ARGSIZE_Q);
         // shouldn't have 64 bit int params on ARM
         NanoAssert(false);
+    }
+}
+
+// Encode a 64-bit floating-point argument using the appropriate ABI.
+// This function operates in the same way as asm_arg, except that it will only
+// handle arguments where (ArgSize)sz == ARGSIZE_F.
+void
+Assembler::asm_arg_64(LInsp arg, Register& r, int& stkd)
+{
+    // The stack pointer must always be at least aligned to 4 bytes.
+    NanoAssert((stkd & 3) == 0);
+    // The only use for this function when we are using soft floating-point
+    // is for LIR_qjoin.
+    NanoAssert(IS_ARM_ARCH_VFP() || arg->isop(LIR_qjoin));
+
+    Register    fp_reg = UnknownReg;
+
+    if (IS_ARM_ARCH_VFP()) {
+        fp_reg = findRegFor(arg, FpRegs);
+        NanoAssert(fp_reg != UnknownReg);
+    }
+
+    if (r < R3) {
+        Register    ra = r;
+        Register    rb = nextreg(r);
+        r = nextreg(rb);
+            
+#ifdef NJ_ARM_EABI
+        // EABI requires that 64-bit arguments are aligned on even-numbered
+        // registers, as R0:R1 or R2:R3.
+        NanoAssert( ((ra == R0) && (rb == R1)) || ((ra == R2) && (rb == R3)) );
+#endif
+
+        // Put the argument in ra and rb. If the argument is in a VFP register,
+        // use FMRRD to move it to ra and rb. Otherwise, let asm_regarg deal
+        // with the argument as if it were two 32-bit arguments.
+        if (IS_ARM_ARCH_VFP()) {
+            FMRRD(ra, rb, fp_reg);
+        } else {
+            asm_regarg(ARGSIZE_LO, arg->oprnd1(), ra);
+            asm_regarg(ARGSIZE_LO, arg->oprnd2(), rb);
+        }
+        
+#ifndef NJ_ARM_EABI
+    } else if (r == R3) {
+        // We only have one register left, but the legacy ABI requires that we
+        // put 32 bits of the argument in the register (R3) and the remaining
+        // 32 bits on the stack.
+        Register    ra = r;
+        r = nextreg(r);
+
+        // This really just checks that nextreg() works properly, as we know
+        // that r was previously R3.
+        NanoAssert(r == R4);
+
+        // We're splitting the argument between registers and the stack.  This
+        // must be the first time that the stack is used, so stkd must be at 0.
+        NanoAssert(stkd == 0);
+
+        if (IS_ARM_ARCH_VFP()) {
+            // TODO: We could optimize the this to store directly from
+            // the VFP register to memory using "FMRRD ra, fp_reg[31:0]" and
+            // "STR fp_reg[63:32], [SP, #stkd]".
+
+            // Load from the floating-point register as usual, but use IP
+            // as a swap register.
+            STR(IP, SP, 0);
+            stkd += 4;
+            FMRRD(ra, IP, fp_reg);
+        } else {
+            // Without VFP, we can simply use asm_regarg and asm_stkarg to
+            // encode the two 32-bit words as we don't need to load from a VFP
+            // register.
+            asm_regarg(ARGSIZE_LO, arg->oprnd1(), ra);
+            asm_stkarg(arg->oprnd2(), 0);
+            stkd += 4;
+        }
+#endif
+    } else {
+        // The argument won't fit in registers, so pass on to asm_stkarg.
+#ifdef NJ_ARM_EABI
+        // EABI requires that 64-bit arguments are 64-bit aligned.
+        if ((stkd & 7) != 0) {
+            // stkd will always be aligned to at least 4 bytes; this was
+            // asserted on entry to this function.
+            stkd += 4;
+        }
+#endif
+        asm_stkarg(arg, stkd);
+        stkd += 8;
     }
 }
 
@@ -715,7 +746,7 @@ Assembler::asm_regarg(ArgSize sz, LInsp p, Register r)
                     // load it into the arg reg
                     int d = findMemFor(p);
                     if (p->isop(LIR_alloc)) {
-                        asm_add_imm(r, FP, d);
+                        asm_add_imm(r, FP, d, 0);
                     } else {
                         LDR(r, FP, d);
                     }
@@ -748,21 +779,37 @@ void
 Assembler::asm_stkarg(LInsp arg, int stkd)
 {
     Reservation* argRes = getresv(arg);
-    bool quad = arg->isQuad();
+    bool isQuad = arg->isQuad();
 
-    if (argRes && argRes->reg != UnknownReg) {
-#ifdef NJ_ARM_VFP
-        if (!quad) {
+    if (argRes && (argRes->reg != UnknownReg)) {
+        // The argument resides somewhere in registers, so we simply need to
+        // push it onto the stack.    
+        if (!IS_ARM_ARCH_VFP() || !isQuad) {
+            NanoAssert(IsGpReg(argRes->reg));
+                    
             STR(argRes->reg, SP, stkd);
         } else {
+            // According to the comments in asm_arg_64, LIR_qjoin
+            // can have a 64-bit argument even if VFP is disabled. However,
+            // asm_arg_64 will split the argument and issue two 32-bit
+            // arguments to asm_stkarg so we can ignore that case here and
+            // assert that we will never get 64-bit arguments unless VFP is
+            // available.
+            NanoAssert(IS_ARM_ARCH_VFP());
+            NanoAssert(IsFpReg(argRes->reg));
+
+#ifdef NJ_ARM_EABI
+            // EABI requires that 64-bit arguments are 64-bit aligned.
+            NanoAssert((stkd & 7) == 0);
+#endif
+
             FSTD(argRes->reg, SP, stkd);
         }
-#else
-        STR(argRes->reg, SP, stkd);
-#endif
     } else {
+        // The argument does not reside in registers, so we need to get some
+        // memory for it and then copy it onto the stack.
         int d = findMemFor(arg);
-        if (!quad) {
+        if (!isQuad) {
             STR(IP, SP, stkd);
             if (arg->isop(LIR_alloc)) {
                 asm_add_imm(IP, FP, d);
@@ -770,6 +817,11 @@ Assembler::asm_stkarg(LInsp arg, int stkd)
                 LDR(IP, FP, d);
             }
         } else {
+#ifdef NJ_ARM_EABI
+            // EABI requires that 64-bit arguments are 64-bit aligned.
+            NanoAssert((stkd & 7) == 0);
+#endif
+
             STR_preindex(IP, SP, stkd+4);
             LDR(IP, FP, d+4);
             STR_preindex(IP, SP, stkd);
@@ -1011,7 +1063,13 @@ Assembler::asm_store32(LIns *value, int dr, LIns *base)
         ra = rA->reg;
         rb = rB->reg;
     }
-    STR(ra, rb, dr);
+
+    if (!isS12(dr)) {
+        STR(ra, IP, 0);
+        asm_add_imm(IP, rb, dr);
+    } else {
+        STR(ra, rb, dr);
+}
 }
 
 void
@@ -1030,8 +1088,7 @@ Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
         // ensure that memory is allocated for the constant and load it from
         // memory.    
         int d = findMemFor(i);
-#ifdef NJ_ARM_VFP
-        if (IsFpReg(r)) {
+        if (IS_ARM_ARCH_VFP() && IsFpReg(r)) {
             if (isS8(d >> 2)) {
                 FLDD(r, FP, d);
             } else {
@@ -1055,15 +1112,10 @@ Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
         } else {
             LDR(r, FP, d);
         }
-#else
-        LDR(r, FP, d);
-#endif
-
-        verbose_only( if (_logc->lcbits & LC_RegAlloc) {
-                        outputForEOL("  <= restore %s",
-                        _thisfrag->lirbuf->names->formatRef(i)); }
-        )
     }
+    verbose_only(
+        asm_output("        restore %s",_thisfrag->lirbuf->names->formatRef(i));
+        )
 }
 
 void
@@ -1072,8 +1124,7 @@ Assembler::asm_spill(Register rr, int d, bool pop, bool quad)
     (void) pop;
     (void) quad;
     if (d) {
-#ifdef NJ_ARM_VFP
-        if (IsFpReg(rr)) {
+        if (IS_ARM_ARCH_VFP() && IsFpReg(rr)) {
             if (isS8(d >> 2)) {
                 FSTD(rr, FP, d);
             } else {
@@ -1083,9 +1134,6 @@ Assembler::asm_spill(Register rr, int d, bool pop, bool quad)
         } else {
             STR(rr, FP, d);
         }
-#else
-        STR(rr, FP, d);
-#endif
     }
 }
 
@@ -1251,8 +1299,7 @@ Assembler::asm_quad(LInsp ins)
 void
 Assembler::asm_nongp_copy(Register r, Register s)
 {
-#ifdef NJ_ARM_VFP
-    if (IsFpReg(r) && IsFpReg(s)) {
+    if (IS_ARM_ARCH_VFP() && IsFpReg(r) && IsFpReg(s)) {
         // fp->fp
         FCPYD(r, s);
     } else {
@@ -1260,11 +1307,6 @@ Assembler::asm_nongp_copy(Register r, Register s)
         // register, so assert that no calling code is trying to do that.
         NanoAssert(0);
     }
-#else
-    (void)r;
-    (void)s;
-    NanoAssert(0);
-#endif
 }
 
 Register
@@ -1526,12 +1568,10 @@ bool Assembler::BL_noload(NIns* addr, Register reg)
 void
 Assembler::asm_ldr_chk(Register d, Register b, int32_t off, bool chk)
 {
-#ifdef NJ_ARM_VFP
-    if (IsFpReg(d)) {
+    if (IS_ARM_ARCH_VFP() && IsFpReg(d)) {
         FLDD_chk(d,b,off,chk);
         return;
     }
-#endif
 
     NanoAssert(IsGpReg(d));
     NanoAssert(IsGpReg(b));
@@ -1817,6 +1857,8 @@ Assembler::asm_fop(LInsp ins)
     }
 }
 
+#endif
+
 void
 Assembler::asm_fcmp(LInsp ins)
 {
@@ -1836,6 +1878,8 @@ Assembler::asm_fcmp(LInsp ins)
     FMSTAT();
     FCMPD(ra, rb, e_bit);
 }
+
+#ifdef NJ_ARM_VFP
 
 Register
 Assembler::asm_prep_fcall(Reservation*, LInsp)
@@ -1873,9 +1917,7 @@ Assembler::asm_branch(bool branchOnFalse, LInsp cond, NIns* targ)
 {
     LOpcode condop = cond->opcode();
     NanoAssert(cond->isCond());
-#ifdef NJ_SOFTFLOAT
-    NanoAssert((condop < LIR_feq) || (condop > LIR_fge));
-#endif
+    NanoAssert(IS_ARM_ARCH_VFP() || ((condop < LIR_feq) || (condop > LIR_fge)));
 
     // The old "never" condition code has special meaning on newer ARM cores,
     // so use "always" as a sensible default code.
@@ -1930,11 +1972,9 @@ Assembler::asm_branch(bool branchOnFalse, LInsp cond, NIns* targ)
     // asm_[f]cmp will move _nIns so we must do this now.
     NIns *at = _nIns;
 
-#ifdef NJ_ARM_VFP
-    if (fp_cond)
+    if (IS_ARM_ARCH_VFP() && fp_cond)
         asm_fcmp(cond);
     else
-#endif
         asm_cmp(cond);
 
     return at;

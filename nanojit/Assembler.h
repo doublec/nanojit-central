@@ -267,8 +267,8 @@ namespace nanojit
 
             bool        _inExit, vpad2[3];
 
-#ifndef NJ_SOFTFLOAT
             void        asm_fcmp(LIns *cond);
+#ifndef NJ_SOFTFLOAT
             void        asm_setcc(Register res, LIns *cond);
             NIns *      asm_jmpcc(bool brOnFalse, LIns *cond, NIns *target);
 #endif
