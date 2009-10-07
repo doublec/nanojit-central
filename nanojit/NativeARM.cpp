@@ -1239,7 +1239,6 @@ Assembler::asm_store64(LInsp value, int dr, LInsp base)
     //asm_output(">>> store64");
 }
 
-#ifdef NJ_ARM_VFP
 // stick a quad into register rr, where p points to the two
 // 32-bit parts of the quad, optinally also storing at FP+d
 void
@@ -1263,7 +1262,6 @@ Assembler::asm_quad_nochk(Register rr, int32_t imm64_0, int32_t imm64_1)
 
     B_nochk(_nIns+2);
 }
-#endif
 
 void
 Assembler::asm_quad(LInsp ins)
@@ -1272,26 +1270,19 @@ Assembler::asm_quad(LInsp ins)
 
     Reservation *res = getresv(ins);
     int d = disp(res);
+    Register rr = res->reg;
 
     freeRsrcOf(ins, false);
-#ifdef NJ_ARM_VFP
-    Register rr = res->reg;
-    NanoAssert(d || rr != UnknownReg);
 
-#ifdef TM_MERGE
-    if (IS_ARM_ARCH_VFP() &&
-        rr != UnknownReg)
-#endif
-
-    if (rr != UnknownReg) {
-        if (d)
-            FSTD(rr, FP, d);
+    if (IS_ARM_ARCH_VFP() && 
+        rr != UnknownReg) 
+    {
+        if (d) 
+            asm_spill(rr, d, false, true);
 
         underrunProtect(4*4);
         asm_quad_nochk(rr, ins->imm64_0(), ins->imm64_1());
-    } else
-#endif
-    {
+    } else {
         NanoAssert(d);
         // asm_mmq might spill a reg, so don't call it;
         // instead do the equivalent directly.
