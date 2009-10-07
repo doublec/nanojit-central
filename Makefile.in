@@ -1,0 +1,100 @@
+##################
+# autoconf imports
+##################
+
+CC = @CC@
+CXX = @CXX@
+GNU_CC = @GNU_CC@
+NANOJIT_ARCH = @NANOJIT_ARCH@
+DEFS = @DEFS@
+srcdir = @srcdir@
+
+CXXFLAGS=@CXXFLAGS@
+
+#######################
+# normal GNU make rules
+#######################
+
+VPATH = $(srcdir)              \
+        $(srcdir)/nanojit      \
+        $(srcdir)/vprof        \
+        $(srcdir)/lirasm       \
+        $(srcdir)/lirasm/tests
+
+ifdef AVMPLUS_WIN32
+EXE := .exe
+OBJ := .obj
+else
+EXE :=
+OBJ := .o
+endif
+
+NATIVE_SRC=Native$(NANOJIT_ARCH).cpp
+OTHER_SRCS=Allocator.cpp       \
+           Assembler.cpp       \
+           avmplus.cpp         \
+           CodeAlloc.cpp       \
+           Containers.cpp      \
+           Fragmento.cpp       \
+           LIR.cpp             \
+           lirasm.cpp          \
+           RegAlloc.cpp        \
+           VMPI.cpp            \
+           vprof.cpp
+
+
+SRCS := $(OTHER_SRCS) $(NATIVE_SRC)
+HDRS := $(wildcard @srcdir@/nanojit/*.h)
+INS := $(wildcard @srcdir@/lirasm/tests/*.in)
+
+OBJS := $(notdir $(SRCS:.cpp=$(OBJ)))
+OUTS := $(notdir $(INS:.in=.out))
+
+LIRASM := bin/lirasm$(EXE)
+
+CPPFLAGS += $(DEFS)
+CPPFLAGS += -I. -I$(srcdir) -I$(srcdir)/nanojit
+
+#############
+# Build rules
+#############
+
+$(LIRASM): $(OBJS)
+	mkdir -p $(dir $(LIRASM))
+	$(CXX) $(DEFS) $(CPPFLAGS) $(CXXFLAGS) -o $@ $(OBJS)
+	chmod 0755 $(LIRASM)
+
+%$(OBJ): %.cpp $(HDRS) Makefile
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
+
+
+############
+# Test rules
+############
+
+check: $(LIRASM) $(OUTS)
+
+.PHONY: check
+
+%.out: %.in $(LIRASM)
+	@ $(LIRASM) --execute $< >$@ 2>&1 || true
+	@ if cmp -s $@ $(<:.in=.out) ; \
+      then echo "TEST-PASS | lirasm | $(LIRASM) --execute $<" ;              \
+      else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) --execute $<" ;   \
+      echo expected output ;       \
+      cat $(<:.in=.out) ;          \
+      echo actual output ;         \
+      cat $@ ;                     \
+      fi
+	@ rm -f $@
+
+
+###################
+# Reconfigury rules
+###################
+
+$(srcdir)/configure: configure.in
+	cd $(srcdir) && autoconf
+
+Makefile: configure Makefile.in
+	$<
