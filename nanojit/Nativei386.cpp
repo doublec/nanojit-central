@@ -1735,18 +1735,22 @@ namespace nanojit
 
     void Assembler::nativePageSetup()
     {
-        if (!_nIns)      codeAlloc(); // sets _nIns
-        if (!_nExitIns)  codeAlloc(true); // sets _nExitIns
+        if (!_nIns)
+            codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
+        if (!_nExitIns)
+            codeAlloc(exitStart, exitEnd, _nExitIns verbose_only(, exitBytes));
     }
 
     // enough room for n bytes
     void Assembler::underrunProtect(int n)
     {
+        NIns *eip = _nIns;
         NanoAssertMsg(n<=LARGEST_UNDERRUN_PROT, "constant LARGEST_UNDERRUN_PROT is too small");
-        NIns *eip = this->_nIns;
-        NIns *top = this->codeStart;
-        if (eip - n < top) {
-            codeAlloc();
+        if (eip - n < (_inExit ? exitStart : codeStart)) {
+            if (_inExit)
+                codeAlloc(exitStart, exitEnd, _nIns verbose_only(, exitBytes));
+            else
+                codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
             JMP(eip);
         }
     }

@@ -1408,9 +1408,9 @@ void
 Assembler::nativePageSetup()
 {
     if (!_nIns)
-        codeAlloc();
+        codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
     if (!_nExitIns)
-        codeAlloc(true);
+        codeAlloc(exitStart, exitEnd, _nExitIns verbose_only(, exitBytes));
 
     // constpool starts at top of page and goes down,
     // code starts at bottom of page and moves up
@@ -1429,9 +1429,13 @@ Assembler::underrunProtect(int bytes)
     uintptr_t pc = uintptr_t(_nIns);
     if (pc - bytes < top)
     {
-        verbose_only(if (_logc->lcbits & LC_Assembly) outputf("        %p:", _nIns);)
+        verbose_only(verbose_outputf("        %p:", _nIns);)
         NIns* target = _nIns;
-        codeAlloc(_inExit);
+        if (_inExit)
+            codeAlloc(exitStart, exitEnd, _nIns verbose_only(, exitBytes));
+        else
+            codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
+
         _nSlot = _inExit ? exitStart : codeStart;
 
         // _nSlot points to the first empty position in the new code block

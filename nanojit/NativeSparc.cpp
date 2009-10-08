@@ -1008,21 +1008,21 @@ namespace nanojit
     void Assembler::nativePageSetup()
     {
         if (!_nIns)
-            codeAlloc();
+            codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
         if (!_nExitIns)
-            codeAlloc(true);
+            codeAlloc(exitStart, exitEnd, _nExitIns verbose_only(, exitBytes));
     }
 
     void
-    Assembler::underrunProtect(int bytes)
+    Assembler::underrunProtect(int n)
     {
-        int u = bytes + 16;
-               uintptr_t top = (uintptr_t) (_inExit ? exitStart : codeStart);
-               uintptr_t pc = (uintptr_t) _nIns;
-        if (pc-bytes < top) {
-            NIns* target = _nIns;
-            codeAlloc(_inExit);
-            JMP_long_nocheck((intptr_t)target);
+        NIns *eip = _nIns;
+        if (eip - n < (_inExit ? exitStart : codeStart)) {
+            if (_inExit)
+                codeAlloc(exitStart, exitEnd, _nIns verbose_only(, exitBytes));
+            else
+                codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
+            JMP_long_nocheck((intptr_t)eip);
         }
     }
 

@@ -196,21 +196,18 @@ namespace nanojit
         return i->isconst() || i->isconstq() || i->isop(LIR_alloc);
     }
 
-    void Assembler::codeAlloc(bool exitPage)
+    void Assembler::codeAlloc(NIns *&start, NIns *&end, NIns *&eip
+                              verbose_only(, size_t &nBytes))
     {
-        NIns* start;
-        NIns* end;
-
         // save the block we just filled
-        if (exitPage && exitStart) {
-            CodeAlloc::add(codeList, exitStart, exitEnd);
-        } else if (!exitPage && codeStart) {
-            CodeAlloc::add(codeList, codeStart, codeEnd);
-        }
+        if (start)
+            CodeAlloc::add(codeList, start, end);
 
         // CodeAlloc contract: allocations never fail
         _codeAlloc.alloc(start, end);
+        verbose_only( nBytes += (end - start) * sizeof(NIns); )
         NanoAssert(uintptr_t(end) - uintptr_t(start) >= (size_t)LARGEST_UNDERRUN_PROT);
+        eip = end;
 
         #ifdef VTUNE
         if (_nIns && _nExitIns) {
@@ -219,16 +216,6 @@ namespace nanojit
             cgen->jitPushInfo(); // new page requires new entry
         }
         #endif
-        // update pointers with new allocated block.
-        if (exitPage) {
-            exitStart = start;
-            exitEnd = end;
-            _nExitIns = end;
-        } else {
-            codeStart = start;
-            codeEnd = end;
-            _nIns = end;
-        }
     }
 
     void Assembler::reset()
@@ -249,8 +236,8 @@ namespace nanojit
     void Assembler::pageValidate()
     {
         if (error()) return;
-        // _nIns and _nExitIns need to be at least on
-        // one of these pages
+        // _nIns and _nExitIns need to be at least on one of these pages
+
         NanoAssertMsg(_inExit ? containsPtr(exitStart, exitEnd, _nIns) : containsPtr(codeStart, codeEnd, _nIns),
                      "Native instruction pointer overstep paging bounds; check overrideProtect for last instruction");
     }
@@ -803,11 +790,17 @@ namespace nanojit
 
         // save used parts of current block on fragment's code list, free the rest
 #ifdef NANOJIT_ARM
+        // [codeStart, _nSlot) ... gap ... [_nIns, codeEnd)
         _codeAlloc.addRemainder(codeList, exitStart, exitEnd, _nExitSlot, _nExitIns);
         _codeAlloc.addRemainder(codeList, codeStart, codeEnd, _nSlot, _nIns);
+        verbose_only( exitBytes -= (_nExitIns - _nExitSlot) * sizeof(NIns); )
+        verbose_only( codeBytes -= (_nIns - _nSlot) * sizeof(NIns); )
 #else
+        // [codeStart ... gap ... [_nIns, codeEnd))
         _codeAlloc.addRemainder(codeList, exitStart, exitEnd, exitStart, _nExitIns);
         _codeAlloc.addRemainder(codeList, codeStart, codeEnd, codeStart, _nIns);
+        verbose_only( exitBytes -= (_nExitIns - exitStart) * sizeof(NIns); )
+        verbose_only( codeBytes -= (_nIns - codeStart) * sizeof(NIns); )
 #endif
 
         // at this point all our new code is in the d-cache and not the i-cache,

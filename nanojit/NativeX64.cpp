@@ -1385,7 +1385,10 @@ namespace nanojit
             if (pc - bytes - br_size < top) {
                 // really do need a page break
                 verbose_only(if (_logc->lcbits & LC_Assembly) outputf("newpage %p:", pc);)
-                codeAlloc();
+                if (_inExit)
+                    codeAlloc(exitStart, exitEnd, _nIns verbose_only(, exitBytes));
+                else
+                    codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
             }
             // now emit the jump, but make sure we won't need another page break.
             // we're pedantic, but not *that* pedantic.
@@ -1396,7 +1399,10 @@ namespace nanojit
     #else
         if (pc - bytes < top) {
             verbose_only(if (_logc->lcbits & LC_Assembly) outputf("newpage %p:", pc);)
-            codeAlloc();
+            if (_inExit)
+                codeAlloc(exitStart, exitEnd, _nIns verbose_only(, exitBytes));
+            else
+                codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
             // this jump will call underrunProtect again, but since we're on a new
             // page, nothing will happen.
             JMP(pc);
@@ -1410,11 +1416,11 @@ namespace nanojit
 
     void Assembler::nativePageSetup() {
         if (!_nIns) {
-            codeAlloc();
+            codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
             IF_PEDANTIC( pedanticTop = _nIns; )
         }
         if (!_nExitIns) {
-            codeAlloc(true);
+            codeAlloc(exitStart, exitEnd, _nExitIns verbose_only(, exitBytes));
         }
     }
 

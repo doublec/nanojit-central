@@ -1098,7 +1098,11 @@ namespace nanojit
     #else
         if (pc - instr < top) {
             verbose_only(if (_logc->lcbits & LC_Assembly) outputf("newpage %p:", pc);)
-            codeAlloc();
+            if (!_nIns)
+                codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
+            if (!_nExitIns)
+                codeAlloc(exitStart, exitEnd, _nExitIns verbose_only(, exitBytes));
+
             // this jump will call underrunProtect again, but since we're on a new
             // page, nothing will happen.
             br(pc, 0);
@@ -1175,11 +1179,11 @@ namespace nanojit
 
     void Assembler::nativePageSetup() {
         if (!_nIns) {
-            codeAlloc();
+            codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
             IF_PEDANTIC( pedanticTop = _nIns; )
         }
         if (!_nExitIns) {
-            codeAlloc(true);
+            codeAlloc(exitStart, exitEnd, _nExitIns verbose_only(, exitBytes));
         }
     }
 

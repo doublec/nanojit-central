@@ -170,6 +170,8 @@ namespace nanojit
             // Log controller object.  Contains what-stuff-should-we-print
             // bits, and a sink function for debug printing
             LogControl* _logc;
+            size_t codeBytes;
+            size_t exitBytes;
             #endif // NJ_VERBOSE
 
             #ifdef VTUNE
@@ -233,7 +235,9 @@ namespace nanojit
             void        evictIfActive(Register r);
             void        evict(Register r, LIns* vic);
             RegisterMask hint(LIns*i, RegisterMask allow);
-            void        codeAlloc(bool exitPage=false);
+                                                                                                                             
+            void        codeAlloc(NIns *&start, NIns *&end, NIns *&eip
+                                  verbose_only(, size_t &nBytes));
             bool        canRemat(LIns*);
 
             bool isKnownReg(Register r) {
