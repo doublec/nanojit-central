@@ -1190,6 +1190,14 @@ namespace nanojit
     void Assembler::nativePageReset()
     {}
 
+    // Increment the 32-bit profiling counter at pCtr, without
+    // changing any registers.
+    verbose_only(
+    void Assembler::asm_inc_m32(uint32_t* pCtr)
+    {
+    }
+    )
+
     void Assembler::nPatchBranch(NIns *branch, NIns *target) {
         // ppc relative offsets are based on the addr of the branch instruction
         ptrdiff_t bd = target - branch;

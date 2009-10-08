@@ -701,6 +701,16 @@ namespace nanojit
         if (error()) return;
         _thisfrag = frag;
 
+        // check the fragment is starting out with a sane profiling state
+        verbose_only( NanoAssert(frag->nStaticExits == 0); )
+        verbose_only( NanoAssert(frag->nCodeBytes == 0); )
+        verbose_only( NanoAssert(frag->nExitBytes == 0); )
+        verbose_only( NanoAssert(frag->profCount == 0); )
+        verbose_only( if (_logc->lcbits & LC_FragProfile)
+                          NanoAssert(frag->profFragID > 0);
+                      else
+                          NanoAssert(frag->profFragID == 0); )
+
         // Used for debug printing, if needed
         verbose_only(
         ReverseLister *pp_init = NULL;
@@ -894,6 +904,8 @@ namespace nanojit
 
     void Assembler::gen(LirFilter* reader)
     {
+        NanoAssert(_thisfrag->nStaticExits == 0);
+
         // trace must end with LIR_x, LIR_[f]ret, LIR_xtbl, or LIR_[f]live
         NanoAssert(reader->pos()->isop(LIR_x) ||
                    reader->pos()->isop(LIR_ret) ||
@@ -1237,6 +1249,11 @@ namespace nanojit
                 {
                     countlir_label();
                     LabelState *label = _labels.get(ins);
+                    // add profiling inc, if necessary.
+                    verbose_only( if (_logc->lcbits & LC_FragProfile) {
+                        if (ins == _thisfrag->loopLabel)
+                            asm_inc_m32(& _thisfrag->profCount);
+                    })
                     if (!label) {
                         // label seen first, normal target of forward jump, save addr & allocator
                         _labels.add(ins, _nIns, _allocator);
@@ -1273,6 +1290,7 @@ namespace nanojit
                 case LIR_xt:
                 case LIR_xf:
                 {
+                    verbose_only( _thisfrag->nStaticExits++; )
                     countlir_xcc();
                     // we only support cmp with guard right now, also assume it is 'close' and only emit the branch
                     NIns* exit = asm_exit(ins); // does intersectRegisterState()
@@ -1282,6 +1300,7 @@ namespace nanojit
                 }
                 case LIR_x:
                 {
+                    verbose_only( _thisfrag->nStaticExits++; )
                     countlir_x();
                     // generate the side exit branch on the main trace.
                     NIns *exit = asm_exit(ins);

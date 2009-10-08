@@ -149,6 +149,13 @@ namespace nanojit
             }
         }
 
+        // profiling for the exit
+        verbose_only(
+           if (_logc->lcbits & LC_FragProfile) {
+              INCLi( &guard->record()->profCount );
+           }
+        )
+
         // Restore ESP from EBP, undoing SUBi(SP,amt) in the prologue
         MR(SP,FP);
 
@@ -1729,6 +1736,15 @@ namespace nanojit
             }
         }
     }
+
+    // Increment the 32-bit profiling counter at pCtr, without
+    // changing any registers.
+    verbose_only(
+    void Assembler::asm_inc_m32(uint32_t* pCtr)
+    {
+       INCLi(pCtr);
+    }
+    )
 
     void Assembler::nativePageReset()
     {}

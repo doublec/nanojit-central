@@ -271,6 +271,8 @@ namespace nanojit
 
             bool        _inExit, vpad2[3];
 
+            verbose_only( void asm_inc_m32(uint32_t*); )                                                                     
+ 
             void        asm_fcmp(LIns *cond);
 #ifndef NJ_SOFTFLOAT
             void        asm_setcc(Register res, LIns *cond);

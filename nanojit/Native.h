@@ -68,6 +68,40 @@
 #error "unknown nanojit architecture"
 #endif
 
+namespace nanojit {
+
+    class Fragment;
+    struct SideExit;
+    struct SwitchInfo;
+
+    struct GuardRecord
+    {
+        void* jmp;
+        GuardRecord* next;
+        SideExit* exit;
+        // profiling stuff
+        verbose_only( uint32_t profCount; )
+        verbose_only( uint32_t profGuardID; )
+        verbose_only( GuardRecord* nextInFrag; )
+    };
+
+    struct SideExit
+    {
+        GuardRecord* guards;
+        Fragment* from;
+        Fragment* target;
+        SwitchInfo* switchInfo;
+
+        void addGuard(GuardRecord* gr)
+        {
+            NanoAssert(gr->next == NULL);
+            NanoAssert(guards != gr);
+            gr->next = guards;
+            guards = gr;
+        }
+    };
+}
+
     #ifdef NJ_STACK_GROWTH_UP
         #define stack_direction(n)   n
     #else
