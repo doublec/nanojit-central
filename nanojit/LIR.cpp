@@ -1546,6 +1546,13 @@ namespace nanojit
         addName(i, s2);
     }
 
+    void LirNameMap::formatImm(int32_t c, char *buf) {
+        if (c >= 10000 || c <= -10000)
+            VMPI_sprintf(buf,"#%s",labels->format((void*)c));
+        else
+            VMPI_sprintf(buf,"%d", c);
+    }
+
     const char* LirNameMap::formatRef(LIns *ref)
     {
         char buffer[200], *buf=buffer;
@@ -1554,9 +1561,8 @@ namespace nanojit
             const char* name = names.get(ref)->name;
             VMPI_strcat(buf, name);
         }
-        else if (ref->isconstp() &&
-            ((intptr_t)ref->constvalp() >= 10000 || (intptr_t)ref->constvalp() <= -10000)) {
-            VMPI_sprintf(buf, "#%s", labels->format((void*)ref->constvalp()));
+        else if (ref->isconstf()) {
+            VMPI_sprintf(buf, "%g", ref->imm64f());
         }
         else if (ref->isconstq()) {
             int64_t c = ref->imm64();
@@ -1565,15 +1571,8 @@ namespace nanojit
             else
                 VMPI_sprintf(buf, "%dLL", (int)c);
         }
-        else if (ref->isconstf()) {
-            VMPI_sprintf(buf, "%g", ref->imm64f());
-        }
         else if (ref->isconst()) {
-            int32_t c = ref->imm32();
-            if (c >= 10000 || c <= -10000)
-                VMPI_sprintf(buf, "#0x%x", (int)c);
-            else
-                VMPI_sprintf(buf, "%d", (int)c);
+            formatImm(ref->imm32(), buf);
         }
         else {
             if (ref->isCall()) {
@@ -1597,7 +1596,7 @@ namespace nanojit
         {
             case LIR_int:
             {
-                VMPI_sprintf(s, "%s", formatRef(i));
+                VMPI_sprintf(s, "%s = %s %d", formatRef(i), lirNames[op], i->imm32());
                 break;
             }
 
@@ -1608,10 +1607,8 @@ namespace nanojit
 
             case LIR_quad:
             {
-                if (i->imm64() < 10000)
-                    VMPI_sprintf(s, "%s", formatRef(i));
-                else
-                    VMPI_sprintf(s, "#%X:%XLL /* %g */", i->imm64_1(), i->imm64_0(), i->imm64f());
+                VMPI_sprintf(s, "%s = %s #%X:%X /* %g */", formatRef(i), lirNames[op],
+                             i->imm64_1(), i->imm64_0(), i->imm64f());
                 break;
             }
 

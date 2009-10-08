@@ -1147,6 +1147,7 @@ namespace nanojit
         };
         HashMap<LInsp, Entry*> names;
         LabelMap *labels;
+        void formatImm(int32_t c, char *buf);
     public:
 
         LirNameMap(Allocator& alloc, LabelMap *lm)
