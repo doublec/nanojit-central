@@ -1400,7 +1400,7 @@ Assembler::asm_mmq(Register rd, int dd, Register rs, int ds)
 // Increment the 32-bit profiling counter at pCtr, without
 // changing any registers.
 verbose_only(
-void Assembler::asm_inc_m32(uint32_t* pCtr)
+void Assembler::asm_inc_m32(uint32_t* /*pCtr*/)
 {
     // todo: implement this
 }
