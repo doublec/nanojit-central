@@ -190,7 +190,8 @@ namespace nanojit
 #endif
             AssmError   error()    { return _err; }
             void        setError(AssmError e) { _err = e; }
-            void        pageReset();
+
+            void        reset();
 
             debug_only ( void       pageValidate(); )
 
@@ -233,7 +234,6 @@ namespace nanojit
             void        evict(Register r, LIns* vic);
             RegisterMask hint(LIns*i, RegisterMask allow);
             void        codeAlloc(bool exitPage=false);
-            void        internalReset();
             bool        canRemat(LIns*);
 
             bool isKnownReg(Register r) {

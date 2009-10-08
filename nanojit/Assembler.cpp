@@ -130,8 +130,7 @@ namespace nanojit
         verbose_only( outlineEOL[0] = '\0'; )
         verbose_only( outputAddr = false; )
 
-        internalReset();
-        pageReset();
+        reset();
     }
 
     void Assembler::arReset()
@@ -197,13 +196,6 @@ namespace nanojit
         return i->isconst() || i->isconstq() || i->isop(LIR_alloc);
     }
 
-    void Assembler::internalReset()
-    {
-        // readies for a brand spanking new code generation pass.
-        registerResetAll();
-        arReset();
-    }
-
     void Assembler::codeAlloc(bool exitPage)
     {
         NIns* start;
@@ -239,14 +231,18 @@ namespace nanojit
         }
     }
 
-    void Assembler::pageReset()
+    void Assembler::reset()
     {
         _nIns = 0;
         _nExitIns = 0;
         codeStart = codeEnd = 0;
         exitStart = exitEnd = 0;
         _stats.pages = 0;
+        codeList = 0;
+        
         nativePageReset();
+        registerResetAll();
+        arReset();
     }
 
     #ifdef _DEBUG
@@ -673,6 +669,16 @@ namespace nanojit
 
     void Assembler::beginAssembly(Fragment *frag)
     {
+        reset();
+
+        NanoAssert(codeList == 0);
+        NanoAssert(codeStart == 0);
+        NanoAssert(codeEnd == 0);
+        NanoAssert(exitStart == 0);
+        NanoAssert(exitEnd == 0);
+        NanoAssert(_nIns == 0);
+        NanoAssert(_nExitIns == 0);
+
         _thisfrag = frag;
         _activation.lowwatermark = 1;
         _activation.tos = _activation.lowwatermark;
@@ -817,7 +823,8 @@ namespace nanojit
         NanoAssertMsgf(_fpuStkDepth == 0,"_fpuStkDepth %d\n",_fpuStkDepth);
 #endif
 
-        internalReset();  // clear the reservation tables and regalloc
+        debug_only( pageValidate(); )
+        NanoAssert(_branchStateMap.isEmpty());
     }
 
     void Assembler::releaseRegisters()
