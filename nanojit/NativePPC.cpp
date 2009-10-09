@@ -1098,10 +1098,10 @@ namespace nanojit
     #else
         if (pc - instr < top) {
             verbose_only(if (_logc->lcbits & LC_Assembly) outputf("newpage %p:", pc);)
-            if (!_nIns)
+            if (_inExit)
+                codeAlloc(exitStart, exitEnd, _nIns verbose_only(, exitBytes));
+            else
                 codeAlloc(codeStart, codeEnd, _nIns verbose_only(, codeBytes));
-            if (!_nExitIns)
-                codeAlloc(exitStart, exitEnd, _nExitIns verbose_only(, exitBytes));
 
             // this jump will call underrunProtect again, but since we're on a new
             // page, nothing will happen.
