@@ -1200,50 +1200,54 @@ Assembler::asm_store64(LInsp value, int dr, LInsp base)
 {
     //asm_output("<<< store64 (dr: %d)", dr);
 
-    Register rb = findRegFor(base, GpRegs);
+    if (IS_ARM_ARCH_VFP()) {
+        //Reservation *valResv = getresv(value);
+        Register rb = findRegFor(base, GpRegs);
 
-    if (value->isconstq()) {
-        underrunProtect(LD32_size*2 + 8);
+        if (value->isconstq()) {
+            underrunProtect(LD32_size*2 + 8);
 
-        // XXX use another reg, get rid of dependency
-        STR(IP, rb, dr);
-        asm_ld_imm(IP, value->imm64_0());
-        STR(IP, rb, dr+4);
-        asm_ld_imm(IP, value->imm64_1());
+            // XXX use another reg, get rid of dependency
+            STR(IP, rb, dr);
+            asm_ld_imm(IP, value->imm64_0(), false);
+            STR(IP, rb, dr+4);
+            asm_ld_imm(IP, value->imm64_1(), false);
 
-        return;
+            return;
+        }
+
+        Register rv = findRegFor(value, FpRegs);
+
+        NanoAssert(rb != UnknownReg);
+        NanoAssert(rv != UnknownReg);
+
+        Register baseReg = rb;
+        intptr_t baseOffset = dr;
+
+        if (!isS8(dr)) {
+            baseReg = IP;
+            baseOffset = 0;
+        }
+
+        FSTD(rv, baseReg, baseOffset);
+
+        if (!isS8(dr)) {
+            asm_add_imm(IP, rb, dr);
+        }
+
+        // if it's a constant, make sure our baseReg/baseOffset location
+        // has the right value
+        if (value->isconstq()) {
+            underrunProtect(4*4);
+            asm_quad_nochk(rv, value->imm64_0(), value->imm64_1());
+        }
+    } else {
+        int da = findMemFor(value);
+        Register rb = findRegFor(base, GpRegs);
+        // *(uint64_t*)(rb+dr) = *(uint64_t*)(FP+da)
+        asm_mmq(rb, dr, FP, da);
     }
 
-#ifdef NJ_ARM_VFP
-    Register rv = findRegFor(value, FpRegs);
-
-    NanoAssert(rb != UnknownReg);
-    NanoAssert(rv != UnknownReg);
-
-    Register baseReg = rb;
-    intptr_t baseOffset = dr;
-
-    if (!isS8(dr)) {
-        baseReg = IP;
-        baseOffset = 0;
-    }
-
-    FSTD(rv, baseReg, baseOffset);
-
-    if (!isS8(dr)) {
-        asm_add_imm(IP, rb, dr);
-    }
-
-    // if it's a constant, make sure our baseReg/baseOffset location
-    // has the right value
-    if (value->isconstq()) {
-        underrunProtect(4*4);
-        asm_quad_nochk(rv, value->imm64_0(), value->imm64_1());
-    }
-#else
-    int da = findMemFor(value);
-    asm_mmq(rb, dr, FP, da);
-#endif
     //asm_output(">>> store64");
 }
 
