@@ -137,9 +137,7 @@ Assembler::CountLeadingZeroes(uint32_t data)
     // run-time check on config.arch and fall back to the C routine, but for
     // now we can avoid the cost of the check as we don't intend to support
     // ARMv4 anyway.
-#ifdef TM_MERGE    
-    NanoAssert(IS_ARM_ARCH_GT_V5());
-#endif
+    NanoAssert(IS_ARM_ARCH_GT_V4());
 
 #if defined(__ARMCC__)
     // ARMCC can do this with an intrinsic.
@@ -845,7 +843,6 @@ void
 Assembler::asm_call(LInsp ins)
 {
     const CallInfo* call = ins->callInfo();
-    bool needToLoadAddr = false;
     ArgSize sizes[MAXARGS];
     uint32_t argc = call->get_sizes(sizes);
     bool indirect = call->isIndirect();
@@ -904,18 +901,14 @@ Assembler::asm_call(LInsp ins)
         // interlock in the "long" branch sequence by manually loading the
         // target address into LR ourselves before setting up the parameters
         // in other registers.
-#if NJ_ARM_ARCH >= NJ_ARM_V5
-        needToLoadAddr = BL_noload((NIns*)call->_address, LR);
-#else
-        BL((NIns*)call->_address);
-#endif
+        BranchWithLink((NIns*)call->_address);
+
     } else {
         // Indirect call: we assign the address arg to LR since it's not
         // used for regular arguments, and is otherwise scratch since it's
         // clobberred by the call. On v4/v4T, where we have to manually do
         // the equivalent of a BLX, move LR into IP before corrupting LR
         // with the return address.
-#if NJ_ARM_ARCH >= NJ_ARM_V5
         if (blx_lr_bug) {
             // workaround for msft device emulator bug (blx lr emulated as no-op)
             underrunProtect(8);
@@ -924,16 +917,6 @@ Assembler::asm_call(LInsp ins)
         } else {
             BLX(LR);
         }
-#else
-        underrunProtect(8); // keep next instr (BX or MOV PC,IP) and MOV LR,PC in the same page
-    #if NJ_ARM_ARCH == NJ_ARM_V4T
-        BX(IP);
-    #else
-        MOV(PC,IP);
-    #endif
-        MOV(LR,PC);
-        MOV(IP,LR);
-#endif
         asm_regarg(ARGSIZE_LO, ins->arg(--argc), LR);
     }
 
@@ -953,9 +936,6 @@ Assembler::asm_call(LInsp ins)
     if (stkd > max_out_args) {
         max_out_args = stkd;
     }
-
-    if (needToLoadAddr)
-        LDi(LR, (int32_t)call->_address);
 }
 
 Register
@@ -1466,123 +1446,116 @@ Assembler::underrunProtect(int bytes)
     }
 }
 
-/* Emits a call sequence to the given address.
- * If the address is in range, a BL[X] to the address is generated,
- * with the bottom bit of the address being used to correctly deal
- * with interworking.
- *
- * Emits an indirect jump if the address is not in range. The exact
- * sequence of code generated in this case depends on the architecture
- * version, and may corrupt the IP register:
- *     - for v4:     MOV LR,PC; LDR PC,=addr
- *     - for v4T:    LDR IP,=addr; MOV LR,PC; BX IP  (if calling Thumb)
- *                or MOV LR,PC; LDR PC,=addr         (if calling ARM)
- *     - for v5:     LDR IP,=addr; BLX IP
- *
- * Note that on v4T, if the address is in range of BL[X], but requires
- * interworking, then the indirect jump sequence is emitted instead,
- * because v4T does not have the BLX instruction.
- *
- * Note that for v5+, it may be possible to avoid the interlock between
- * the LDR and BLX by using BL_noload() instead of BL(), and then doing
- * the load of the address into a register yourself.
- */
 void
-Assembler::BL(NIns* addr)
+Assembler::JMP_far(NIns* addr)
 {
-    if (BL_noload(addr, IP)) {
-        LDi(IP, (intptr_t)addr);
+    // Even if a simple branch is all that is required, this function must emit
+    // two words so that the branch can be arbitrarily patched later on.
+    underrunProtect(8);
+
+    intptr_t offs = PC_OFFSET_FROM(addr,_nIns-2);
+
+    if (isS24(offs>>2)) {
+        // Emit a BKPT to ensure that we reserve enough space for a full 32-bit
+        // branch patch later on. The BKPT should never be executed.
+        BKPT_nochk();
+
+        // B [PC+offs]
+        *(--_nIns) = (NIns)( COND_AL | (0xA<<24) | ((offs>>2) & 0xFFFFFF) );
+
+        asm_output("b %p", (void*)addr);
+    } else {
+        // Insert the target address as a constant in the instruction stream.
+        *(--_nIns) = (NIns)((addr));
+        // ldr pc, [pc, #-4] // load the address into pc, reading it from [pc-4] (e.g.,
+        // the next instruction)
+        *(--_nIns) = (NIns)( COND_AL | (0x51<<20) | (PC<<16) | (PC<<12) | (4));
+
+        asm_output("ldr pc, =%p", (void*)addr);
     }
 }
 
-
-/* Emits a BL[X] to the given address if it is in range, correctly
- * dealing with interworking by using the bottom bit of the address.
- *
- * Emits an indirect jump, possibly using the given register, if the
- * address is not in range. This jump will be suitable for all
- * interworking situations. The format of the jump depends on the
- * architecture version:
- *     - for v4:     MOV LR,PC; LDR PC,=addr
- *     - for v4T:    MOV LR,PC; BX reg        [*]  (if calling Thumb)
- *                or MOV LR,PC; LDR PC,=addr       (if calling ARM)
- *     - for v5+:    BLX reg                  [*]
- * Note that reg is not allowed to be LR on v4T architectures.
- *
- * Further note: on v4T, if the address is in range of BL[X], but
- * requires interworking, then the indirect jump sequence is emitted
- * instead, because v4T does not have the BLX instruction.
- *
- * This function returns 'true' if the sequences marked [*] above are
- * generated, indicating that the caller must load the address into
- * the register themselves for this code sequence to work.
- * In all other cases, 'false' is returned, indicating the caller
- * need take no further action.
- */
-bool Assembler::BL_noload(NIns* addr, Register reg)
+// Perform a branch with link, and ARM/Thumb exchange if necessary. The actual
+// BLX instruction is only available from ARMv5 onwards, but as we don't
+// support anything older than that this function will not attempt to output
+// pre-ARMv5 sequences.
+//
+// Note: This function is not designed to be used with branches which will be
+// patched later, though it will work if the patcher knows how to patch the
+// generated instruction sequence.
+void
+Assembler::BranchWithLink(NIns* addr)
 {
-    intptr_t offs;
-    int bit0,bit1;
+    // Most branches emitted by TM are loaded through a register, so always
+    // reserve enough space for the LDR sequence. This should give us a slight
+    // net gain over reserving the exact amount required for shorter branches.
+    // This _must_ be called before PC_OFFSET_FROM as it can move _nIns!
+    underrunProtect(4+LD32_size);
 
-    underrunProtect(4);
-    offs = PC_OFFSET_FROM(addr,_nIns-1);
-    bit0 = offs & 1;
-    bit1 = (offs >> 1) & 1;
-    offs >>= 2;
-#if NJ_ARM_ARCH <= NJ_ARM_V4
-    NanoAssert(bit0 == 0);
-#endif
+    // Calculate the offset from the instruction that is about to be
+    // written (at _nIns-1) to the target.
+    intptr_t offs = PC_OFFSET_FROM(addr,_nIns-1);
 
-#if NJ_ARM_ARCH == NJ_ARM_V4T
-    if (isS24(offs) && bit0==0) {
-#else
-    if (isS24(offs)) {
-#endif
-#if NJ_ARM_ARCH >= NJ_ARM_V5
-        if (bit0) {
-            *(--_nIns) = (NIns)( 0xFA000000 | (bit1 << 24) | (offs & 0xFFFFFF) );
-            asm_output("blx %p", addr);
-        } else
-#endif
-        {
-            *(--_nIns) = (NIns)( COND_AL | (0xB<<24) | (offs & 0xFFFFFF) );
-            asm_output("bl %p", addr);
-        }
-        return false;
-    } else {
-#if NJ_ARM_ARCH <= NJ_ARM_V4
-        (void)reg;
-        underrunProtect(4 + LD32_size); // keep LDR PC and MOV LR,PC in same page
-        LDi(PC,(uintptr_t)addr);
-        MOV(LR,PC);
-        return false;
-#elif NJ_ARM_ARCH == NJ_ARM_V4T
-        NanoAssert(reg != LR);
-        NanoAssert(reg != PC);
-        if (bit0==1) {
-            underrunProtect(8); // keep BX and MOV LR,PC in same page
-            BX(reg);
-            MOV(LR,PC);
-            return true;
+    // ARMv5 and above can use BLX <imm> for branches within ±32MB of the
+    // PC and BLX Rm for long branches.
+    if (isS24(offs>>2)) {
+        // the value we need to stick in the instruction; masked,
+        // because it will be sign-extended back to 32 bits.
+        intptr_t offs2 = (offs>>2) & 0xffffff;
+
+        if (((intptr_t)addr & 1) == 0) {
+            // The target is ARM, so just emit a BL.
+
+            // BL target
+            *(--_nIns) = (NIns)( (COND_AL) | (0xB<<24) | (offs2) );
+            asm_output("bl %p", (void*)addr);
         } else {
-            underrunProtect(4 + LD32_size); // keep LDR PC and MOV LR,PC in same page
-            LDi(PC,(uintptr_t)addr);
-            MOV(LR,PC);
-            return false;
+            // The target is Thumb, so emit a BLX.
+
+            // We need to emit an ARMv5+ instruction, so assert that we have a
+            // suitable processor. Note that we don't support ARMv4(T), but
+            // this serves as a useful sanity check.
+            NanoAssert(IS_ARM_ARCH_GT_V4());
+
+            // The (pre-shifted) value of the "H" bit in the BLX encoding.
+            uint32_t    H = (offs & 0x2) << 23;
+
+            // BLX addr
+            *(--_nIns) = (NIns)( (0xF << 28) | (0x5<<25) | (H) | (offs2) );
+            asm_output("blx %p", (void*)addr);
         }
-#else // v5+
-        NanoAssert(reg != PC);
-        if (blx_lr_bug) {
-            // workaround for msft device emulator bug (blx lr emulated as no-op)
-            underrunProtect(8);
-            BLX(IP);
-            MOV(IP,LR);
-            return true;
-        }
-        BLX(reg);
-        return true;
-#endif
+    } else {
+        // Load the target address into IP and branch to that. We've already
+        // done underrunProtect, so we can skip that here.
+        BLX(IP, false);
+
+        // LDR IP, =addr
+        asm_ld_imm(IP, (int32_t)addr, false);
     }
+}
+
+// This is identical to BranchWithLink(NIns*) but emits a branch to an address
+// held in a register rather than a literal address.
+inline void
+Assembler::BLX(Register addr, bool chk /* = true */)
+{
+    // We need to emit an ARMv5+ instruction, so assert that we have a suitable
+    // processor. Note that we don't support ARMv4(T), but this serves as a
+    // useful sanity check.
+    NanoAssert(IS_ARM_ARCH_GT_V4());
+
+    NanoAssert(IsGpReg(addr));
+    // There is a bug in the WinCE device emulator which stops "BLX LR" from
+    // working as expected. Assert that we never do that!
+    if (blx_lr_bug) { NanoAssert(addr != LR); }
+
+    if (chk) {
+        underrunProtect(4);
+    }
+
+    // BLX IP
+    *(--_nIns) = (NIns)( (COND_AL) | (0x12<<20) | (0xFFF<<8) | (0x3<<4) | (addr) );
+    asm_output("blx ip");
 }
 
 // Emit the code required to load a memory address into a register as follows:

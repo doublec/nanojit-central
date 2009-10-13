@@ -235,8 +235,10 @@ verbose_only( extern const char* shiftNames[]; )
     DECLARE_PLATFORM_ASSEMBLER_DEBUG()                                          \
                                                                                 \
     const static Register argRegs[4], retRegs[2];                       \
-    void BL(NIns*);                                                     \
-    bool BL_noload(NIns*, Register);                                    \
+                                                                                \
+    void        BranchWithLink(NIns* addr);                                     \
+    inline void BLX(Register addr, bool chk = true);                            \
+    void        JMP_far(NIns*);                                                 \
     void B_cond_chk(ConditionCode, NIns*, bool);                        \
     void underrunProtect(int bytes);                                    \
     void nativePageReset();                                             \
@@ -307,13 +309,6 @@ typedef enum {
         asm_output("bx %s", gpn(_r)); } while(0)
 #endif
 
-#if NJ_ARM_ARCH >= NJ_ARM_V5
-#define BLX(_r)  do {                                                    \
-        underrunProtect(4);                                             \
-        NanoAssert(IsGpReg(_r));                                        \
-        *(--_nIns) = (NIns)( COND_AL | (0x12<<20) | (0xFFF<<8) | (3<<4) | (_r)); \
-        asm_output("blx %s", gpn(_r)); } while(0)
-#endif
 /*
  * ALU operations
  */
@@ -695,6 +690,7 @@ enum {
 #define BKPTi_nochk(id) do {                                \
         NanoAssert((id & 0xffff) == id);                    \
         *(--_nIns) = BKPTi_insn(id);                        \
+        } while (0)
 
 // NOP
 #if NJ_ARM_ARCH >= NJ_ARM_V7
