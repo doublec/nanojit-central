@@ -571,22 +571,14 @@ Assembler::nFragExit(LInsp guard)
 NIns*
 Assembler::genEpilogue()
 {
-    // On v5 and above, this generates the following sequence:
-    //   MOV SP,FP
-    //   LDMFD SP!,{SavedRegs,FP,PC}
-    // which will always handle interworking correctly.
-    //
-    // On v4T, LR is loaded instead of PC, and then a BX LR is executed.
-    //
-    // On v4 (and below), interworking is not required, and the v5+ code
-    // sequence is used.
-#if NJ_ARM_ARCH != NJ_ARM_V4T
-    RegisterMask savingMask = SavedRegs | rmask(FP) | rmask(PC);
-#else
-    RegisterMask savingMask = SavedRegs | rmask(FP) | rmask(LR);
-    BX(LR);
-#endif
-    POP_mask(savingMask);
+    // On ARMv5+, loading directly to PC correctly handles interworking.
+    // Note that we don't support anything older than ARMv5.
+    NanoAssert(IS_ARM_ARCH_GT_V4());
+
+    RegisterMask savingMask = rmask(FP) | rmask(PC);
+
+    POP_mask(savingMask); // regs
+
     MOV(SP,FP);
     return _nIns;
 }
