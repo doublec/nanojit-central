@@ -1157,32 +1157,40 @@ Assembler::asm_load64(LInsp ins)
     LIns* base = ins->oprnd1();
     int offset = ins->disp();
 
-#ifdef NJ_ARM_VFP
-    Register rr = prepResultReg(ins, FpRegs);
-    Register rb = findRegFor(base, GpRegs);
-
-    NanoAssert(IsFpReg(rr));
-
-    if (!isS8(offset >> 2) || (offset&3) != 0) {
-        FLDD(rr,IP,0);
-        asm_add_imm(IP, rb, offset);
-    } else {
-        FLDD(rr,rb,offset);
-    }
-#else
     Reservation *resv = getresv(ins);
+    NanoAssert(resv);
+    Register rr = resv->reg;
     int d = disp(resv);
 
-    NanoAssert(resv->reg == UnknownReg && d != 0);
     Register rb = findRegFor(base, GpRegs);
-    // *(FP+dr) <- *(rb+db)
-    asm_mmq(FP, d, rb, offset);
-
-    // bug https://bugzilla.mozilla.org/show_bug.cgi?id=477228
-    // make sure we release the instruction's stack slot *after*
-    // any findRegFor() since that call can trigger a spill
+    NanoAssert(IsGpReg(rb));
     freeRsrcOf(ins, false);
-#endif
+
+    //output("--- load64: Finished register allocation.");
+
+    if (IS_ARM_ARCH_VFP() && rr != UnknownReg) {
+        // VFP is enabled and the result will go into a register.
+        NanoAssert(IsFpReg(rr));
+
+        if (!isS8(offset >> 2) || (offset&3) != 0) {
+            FLDD(rr,IP,0);
+            asm_add_imm(IP, rb, offset);
+        } else {
+            FLDD(rr,rb,offset);
+        }
+    } else {
+        // Either VFP is not available or the result needs to go into memory;
+        // in either case, VFP instructions are not required. Note that the
+        // result will never be loaded into registers if VFP is not available.
+        NanoAssert(resv->reg == UnknownReg);
+        NanoAssert(d != 0);
+
+        // Check that the offset is 8-byte (64-bit) aligned.
+        NanoAssert((d & 0x7) == 0);
+
+        // *(uint64_t*)(FP+d) = *(uint64_t*)(rb+offset)
+        asm_mmq(FP, d, rb, offset);
+    }
 
     //asm_output(">>> load64");
 }
