@@ -499,10 +499,11 @@ Assembler::genPrologue()
     // NJ_RESV_OFFSET is space at the top of the stack for us
     // to use for parameter passing (8 bytes at the moment)
     uint32_t stackNeeded = max_out_args + STACK_GRANULARITY * _activation.tos;
-    uint32_t savingCount = NumSavedRegs + 2;
-    uint32_t savingMask = SavedRegs | rmask(FP) | rmask(LR);
+    uint32_t savingCount = 2;
 
-    // so for alignment purposes we've pushed  return addr, fp, and savingCount registers
+    uint32_t savingMask = rmask(FP) | rmask(LR);
+
+    // so for alignment purposes we've pushed return addr and fp
     uint32_t stackPushed = STACK_GRANULARITY * savingCount;
     uint32_t aligned = alignUp(stackNeeded + stackPushed, NJ_ALIGN_STACK);
     int32_t amt = aligned - stackPushed;
