@@ -487,6 +487,7 @@ Assembler::nInit(AvmCore*)
 
 void Assembler::nBeginAssembly()
 {
+    max_out_args = 0;
 }
 
 NIns*
@@ -524,10 +525,9 @@ Assembler::genPrologue()
 void
 Assembler::nFragExit(LInsp guard)
 {
-    (void)guard;
-#if NJ_MERGE
     SideExit *  exit = guard->record()->exit;
     Fragment *  frag = exit->target;
+
     bool        target_is_known = frag && frag->fragEntry;
 
     if (target_is_known) {
@@ -565,7 +565,6 @@ Assembler::nFragExit(LInsp guard)
 
     // Pop the stack frame.
     MOV(SP, FP);
-#endif // TM_MERGE
 }
 
 NIns*
