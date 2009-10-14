@@ -80,7 +80,7 @@ HDRS := $(wildcard @srcdir@/nanojit/*.h)
 INS := $(wildcard @srcdir@/lirasm/tests/*.in)
 
 OBJS := $(notdir $(SRCS:.cpp=$(OBJ_SUFFIX)))
-OUTS := $(notdir $(INS:.in=.out))
+OUTS := $(filter-out random.out, $(notdir $(INS:.in=.out)))
 
 LIRASM := bin/lirasm$(EXE_SUFFIX)
 
@@ -104,9 +104,15 @@ $(LIRASM): $(OBJS)
 # Test rules
 ############
 
-check: $(LIRASM) $(OUTS)
+.PHONY: check random-check
 
-.PHONY: check
+check: $(LIRASM) $(OUTS) random-check
+
+random-check:
+	@ if $(LIRASM) --execute --random 1000 ; \
+	  then echo "TEST-PASS | lirasm | $(LIRASM) --random 1000 --execute" ; \
+	  else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) --random 1000 --execute" ; \
+	  fi
 
 %.out: %.in $(LIRASM)
 	@ $(LIRASM) --execute $< | tr -d "\r" >$@ 2>&1 || true
