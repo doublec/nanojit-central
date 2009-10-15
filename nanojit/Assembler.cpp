@@ -226,7 +226,7 @@ namespace nanojit
         exitStart = exitEnd = 0;
         _stats.pages = 0;
         codeList = 0;
-        
+
         nativePageReset();
         registerResetAll();
         arReset();
@@ -236,8 +236,7 @@ namespace nanojit
     void Assembler::pageValidate()
     {
         if (error()) return;
-        // _nIns and _nExitIns need to be at least on one of these pages
-
+        // _nIns needs to be at least on one of these pages
         NanoAssertMsg(_inExit ? containsPtr(exitStart, exitEnd, _nIns) : containsPtr(codeStart, codeEnd, _nIns),
                      "Native instruction pointer overstep paging bounds; check overrideProtect for last instruction");
     }
@@ -919,7 +918,7 @@ namespace nanojit
 
         InsList pending_lives(alloc);
 
-        for (LInsp ins = reader->read(); !ins->isop(LIR_start);
+        for (LInsp ins = reader->read(); !ins->isop(LIR_start) && !error();
                                          ins = reader->read())
         {
             /* What's going on here: we're visiting all the LIR instructions

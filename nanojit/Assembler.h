@@ -78,7 +78,7 @@ namespace nanojit
 			#define AVMPLUS_ALIGN16(type) type __attribute__ ((aligned (16)))
 		#endif
 	#endif
-	
+
     struct Stats
     {
         counter_define(steals;)

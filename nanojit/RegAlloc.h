@@ -120,7 +120,6 @@ namespace nanojit
         }
 
         debug_only( uint32_t    countActive(); )
-        debug_only( void        checkCount(); )
         debug_only( bool        isConsistent(Register r, LIns* v); )
         debug_only( RegisterMask managed; )    // bitfield denoting which are under our management
 

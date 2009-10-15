@@ -1115,7 +1115,6 @@ namespace nanojit
         void add(const void *p, size_t size, size_t align, const char *name);
         const char *dup(const char *);
         const char *format(const void *p);
-        void clear();
     };
 
     class LirNameMap

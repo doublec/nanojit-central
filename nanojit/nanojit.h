@@ -88,7 +88,6 @@ namespace nanojit
      * -------------------------------------------
      */
     typedef avmplus::AvmCore AvmCore;
-    typedef avmplus::OSDep OSDep;
 
     const uint32_t MAXARGS = 8;
 

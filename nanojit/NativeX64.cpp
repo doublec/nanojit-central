@@ -293,8 +293,8 @@ namespace nanojit
         if (rA == 0 || (ra = rA->reg) == UnknownReg) {
             ra = findSpecificRegFor(a, rr);
         } else if (!(allow & rmask(ra))) {
-            // rA already has a register assigned, but it's not valid
-            // to make sure floating point operations stay in FPU registers
+            // rA already has a register assigned, but it's not valid.
+            // To make sure floating point operations stay in FPU registers
             // as much as possible, make sure that only a few opcodes are
             // reserving GPRs.
             NanoAssert(a->isop(LIR_quad) || a->isop(LIR_ldq) || a->isop(LIR_ldqc)|| a->isop(LIR_u2f) || a->isop(LIR_float));

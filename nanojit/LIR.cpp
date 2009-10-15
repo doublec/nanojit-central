@@ -1537,7 +1537,7 @@ namespace nanojit
 
     void LirNameMap::copyName(LInsp i, const char *s, int suffix) {
         char s2[200];
-        if (isdigit(s[VMPI_strlen(s)-1])) {
+        if (VMPI_isdigit(s[VMPI_strlen(s)-1])) {
             // if s ends with a digit, add '_' to clarify the suffix
             VMPI_sprintf(s2,"%s_%d", s, suffix);
         } else {
@@ -1576,7 +1576,16 @@ namespace nanojit
         }
         else {
             if (ref->isCall()) {
+#if !defined NANOJIT_64BIT
+                if (ref->isop(LIR_callh)) {
+                    // we've presumably seen the other half already
+                    ref = ref->oprnd1();
+                } else {
+#endif
                 copyName(ref, ref->callInfo()->_name, funccounts.add(ref->callInfo()));
+#if !defined NANOJIT_64BIT
+                }
+#endif
             } else {
                 NanoAssert(size_t(ref->opcode()) < sizeof(lirNames) / sizeof(lirNames[0]));
                 copyName(ref, lirNames[ref->opcode()], lircounts.add(ref->opcode()));
@@ -1917,7 +1926,7 @@ namespace nanojit
     {
         verbose_only(
         LogControl *logc = assm->_logc;
-        bool anyVerb = (logc->lcbits & 0xFFFF) > 0;
+        bool anyVerb = (logc->lcbits & 0xFFFF & ~LC_FragProfile) > 0;
         bool asmVerb = (logc->lcbits & 0xFFFF & LC_Assembly) > 0;
         bool liveVerb = (logc->lcbits & 0xFFFF & LC_Liveness) > 0;
         )
@@ -1993,6 +2002,9 @@ namespace nanojit
 
         if (assm->error())
             frag->fragEntry = 0;
+
+        verbose_only( frag->nCodeBytes += assm->codeBytes; )
+        verbose_only( frag->nExitBytes += assm->exitBytes; )
 
         /* BEGIN decorative postamble */
         verbose_only( if (anyVerb) {
@@ -2124,7 +2136,6 @@ namespace nanojit
 #endif // NJ_VERBOSE
 
 
-#ifdef FEATURE_NANOJIT
 #ifdef DEBUG
     LIns* SanityFilter::ins1(LOpcode v, LIns* s0)
     {
@@ -2218,6 +2229,5 @@ namespace nanojit
         return out->ins3(v, s0, s1, s2);
     }
 #endif
-#endif // FEATURE_NANOJIT
 
 }
