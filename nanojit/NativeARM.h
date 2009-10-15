@@ -195,6 +195,9 @@ static const RegisterMask GpRegs = 0xFFFF;
 static const RegisterMask AllowableFlagRegs = 1<<R0 | 1<<R1 | 1<<R2 | 1<<R3 | 1<<R4 | 1<<R5 | 1<<R6 | 1<<R7 | 1<<R8 | 1<<R9 | 1<<R10;
 static const bool CalleeRegsNeedExplicitSaving = true;  // genPrologue() does it for us
 
+#define isS12(offs) ((-(1<<12)) <= (offs) && (offs) < (1<<12))
+#define isU12(offs) (((offs) & 0xfff) == (offs))
+
 static inline bool isValidDisplacement(int32_t d) {
     return isS12(d);
 }
@@ -301,14 +304,12 @@ typedef enum {
 #define END_NATIVE_CODE(x)                      \
     (x) = (dictwordp*)_nIns; }
 
-#if NJ_ARM_ARCH >= NJ_ARM_V4T
 // BX
 #define BX(_r)  do {                                                    \
         underrunProtect(4);                                             \
         NanoAssert(IsGpReg(_r));                                        \
         *(--_nIns) = (NIns)( COND_AL | (0x12<<20) | (0xFFF<<8) | (1<<4) | (_r)); \
         asm_output("bx %s", gpn(_r)); } while(0)
-#endif
 
 /*
  * ALU operations
@@ -348,13 +349,13 @@ enum {
         NanoAssert(IsGpReg(rd) && IsGpReg(rl));\
         NanoAssert(isOp2Imm(op2imm));\
         *(--_nIns) = (NIns) ((cond)<<28 | OP_IMM | (ARM_##op)<<21 | (S)<<20 | (rl)<<16 | (rd)<<12 | (op2imm));\
-        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn)\
-            asm_output("%s%s%s %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), decOp2Imm(op2imm));\
-        else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {\
+        if (ARM_##op == ARM_mov || ARM_##op == ARM_mvn) {               \
+            asm_output("%s%s%s %s, #0x%X", #op, condNames[cond], (S)?"s":"", gpn(rd), decOp2Imm(op2imm));\
+        } else if (ARM_##op >= ARM_tst && ARM_##op <= ARM_cmn) {         \
             NanoAssert(S==1);\
-            asm_output("%s%s %s, #%d", #op, condNames[cond], gpn(rl), decOp2Imm(op2imm));\
+            asm_output("%s%s %s, #0x%X", #op, condNames[cond], gpn(rl), decOp2Imm(op2imm));\
         } else {                                                        \
-            asm_output("%s%s%s %s, %s, #%d", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), decOp2Imm(op2imm));\
+            asm_output("%s%s%s %s, %s, #0x%X", #op, condNames[cond], (S)?"s":"", gpn(rd), gpn(rl), decOp2Imm(op2imm));\
         } \
     } while (0)
 
@@ -557,7 +558,6 @@ enum {
 #define CMP(_l,_r)  ALUr(AL, cmp, 1, 0, _l, _r)
 #define CMN(_l,_r)  ALUr(AL, cmn, 1, 0, _l, _r)
 
-
 // MOV
 #define MOVis_chk(_d,_op2imm,_stat,_chk)    ALUi_chk(AL, mov, _stat, _d, 0, op2imm, _chk)
 #define MOVis(_d,_op2imm,_stat)             MOVis_chk(_d,_op2imm,_stat,1)
@@ -736,8 +736,6 @@ enum {
 // PC always points to current instruction + 8, so when calculating pc-relative
 // offsets, use PC+8.
 #define PC_OFFSET_FROM(target,frompc) ((intptr_t)(target) - ((intptr_t)(frompc) + 8))
-#define isS12(offs) ((-(1<<12)) <= (offs) && (offs) < (1<<12))
-#define isU12(offs) (((offs) & 0xfff) == (offs))
 
 #define B_cond(_c,_t)                           \
     B_cond_chk(_c,_t,1)
@@ -762,6 +760,7 @@ enum {
 #define BCS(t)  B_cond(CS,t)
 
 #define JMP(t) B(t)
+#define JMP_nochk(t) B_nochk(t)
 
 // emit a placeholder that will be filled in later by nPatchBranch
 #define B_long_placeholder() B(0)
