@@ -235,7 +235,7 @@ namespace nanojit
             void        evictIfActive(Register r);
             void        evict(Register r, LIns* vic);
             RegisterMask hint(LIns*i, RegisterMask allow);
-                                                                                                                             
+
             void        codeAlloc(NIns *&start, NIns *&end, NIns *&eip
                                   verbose_only(, size_t &nBytes));
             bool        canRemat(LIns*);
@@ -271,13 +271,9 @@ namespace nanojit
 
             bool        _inExit, vpad2[3];
 
-            verbose_only( void asm_inc_m32(uint32_t*); )                                                                     
- 
-            void        asm_fcmp(LIns *cond);
-#ifndef NJ_SOFTFLOAT
+            verbose_only( void asm_inc_m32(uint32_t*); )
             void        asm_setcc(Register res, LIns *cond);
             NIns *      asm_jmpcc(bool brOnFalse, LIns *cond, NIns *target);
-#endif
             void        asm_mmq(Register rd, int dd, Register rs, int ds);
             NIns*       asm_exit(LInsp guard);
             NIns*       asm_leave_trace(LInsp guard);

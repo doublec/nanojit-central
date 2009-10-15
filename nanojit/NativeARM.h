@@ -249,6 +249,7 @@ verbose_only( extern const char* shiftNames[]; )
     void asm_cmpi(Register, int32_t imm);                               \
     void asm_ldr_chk(Register d, Register b, int32_t off, bool chk);    \
     void asm_cmp(LIns *cond);                                           \
+    void        asm_fcmp(LIns *cond);                                           \
     void asm_ld_imm(Register d, int32_t imm, bool chk = true);                           \
     void asm_arg(ArgSize sz, LInsp arg, Register& r, int& stkd);        \
     void        asm_arg_64(LInsp arg, Register& r, int& stkd);                  \
