@@ -103,8 +103,8 @@ namespace nanojit
             SUBi(SP, amt);
         }
 
-        verbose_only( outputAddr=true; asm_output("[patch entry]"); )
-        NIns *patchEntry = _nIns;
+        verbose_only( outputAddr=true; asm_output("[frag entry]"); )
+        NIns *fragEntry = _nIns;
         MR(FP, SP); // Establish our own FP.
         PUSHr(FP); // Save caller's FP.
 
@@ -113,7 +113,7 @@ namespace nanojit
             for (int i = 0; i < NumSavedRegs; ++i)
                 PUSHr(savedRegs[i]);
         }
-        return patchEntry;
+        return fragEntry;
     }
 
     void Assembler::nFragExit(LInsp guard)
@@ -271,12 +271,6 @@ namespace nanojit
             btr RegAlloc::free[ecx], eax    // free &= ~rmask(i)
             mov r, eax
         }
-    #elif defined WIN64
-        unsigned long tr, fr;
-        _BitScanForward(&tr, set);
-        _bittestandreset(&fr, tr);
-        regs.free = fr;
-        r = tr;
     #else
         asm(
             "bsf    %1, %%eax\n\t"
@@ -693,7 +687,7 @@ namespace nanojit
     void Assembler::asm_switch(LIns* ins, NIns* exit)
     {
         LIns* diff = ins->oprnd1();
-        findSpecificRegFor(diff, EBX);
+        findSpecificRegFor(diff, EDX);
         JMP(exit);
     }
 
