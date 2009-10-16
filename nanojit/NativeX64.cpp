@@ -981,6 +981,10 @@ namespace nanojit
 
     void Assembler::asm_ret(LIns *ins) {
         genEpilogue();
+
+        // Restore RSP from RBP, undoing SUB(RSP,amt) in the prologue
+        MR(RSP,FP);
+
         assignSavedRegs();
         LIns *value = ins->oprnd1();
         Register r = ins->isop(LIR_ret) ? RAX : XMM0;
@@ -1267,12 +1271,10 @@ namespace nanojit
     }
 
     NIns* Assembler::genEpilogue() {
-        // mov rsp, rbp
         // pop rbp
         // ret
         emit(X64_ret);
         emitr(X64_popr, RBP);
-        MR(RSP, RBP);
         return _nIns;
     }
 
