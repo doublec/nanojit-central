@@ -487,6 +487,10 @@ namespace nanojit
     {
         int d = disp(ins);
         Register r = ins->getReg();
+#ifdef TM_MERGE
+        // fails on ppc see https://bugzilla.mozilla.org/show_bug.cgi?id=522755
+        bool quad = ins->opcode() == LIR_iparam || ins->isQuad();
+#endif
         bool quad = /*ins->opcode() == LIR_iparam ||*/ ins->isQuad();
         verbose_only( if (d && (_logc->lcbits & LC_RegAlloc)) {
                          outputForEOL("  <= spill %s",
@@ -736,6 +740,7 @@ namespace nanojit
         })
 
 #ifdef TM_MERGE
+        // fails acceptance suite, see https://bugzilla.mozilla.org/show_bug.cgi?id=522591
         // STACKFILTER
         StackFilter stackfilter(prev, alloc, frag->lirbuf, frag->lirbuf->sp, frag->lirbuf->rp);
         prev = &stackfilter;
@@ -1276,7 +1281,6 @@ namespace nanojit
                 case LIR_xbarrier: {
                     break;
                 }
-#if TM_MERGE
 #ifdef NANOJIT_IA32
                 case LIR_xtbl: {
                     NIns* exit = asm_exit(ins); // does intersectRegisterState()
@@ -1287,7 +1291,6 @@ namespace nanojit
                  case LIR_xtbl:
                     NanoAssertMsg(0, "Not supported for this architecture");
                     break;
-#endif
 #endif
                 case LIR_xt:
                 case LIR_xf:
@@ -1515,9 +1518,8 @@ namespace nanojit
             NanoAssert(i->isop(LIR_live) || i->isop(LIR_flive));
             LIns *op1 = i->oprnd1();
             findMemFor(op1);            
-
 #ifdef TM_MERGE
-        // @todo need to resolve ... fails 64b testing on mac
+            // fails 64b testing on mac..see https://bugzilla.mozilla.org/show_bug.cgi?id=518493
             if (op1->isconst() || op1->isconstf() || op1->isconstq())
                 findMemFor(op1);
             else
