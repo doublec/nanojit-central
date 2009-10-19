@@ -487,15 +487,10 @@ namespace nanojit
     {
         int d = disp(ins);
         Register r = ins->getReg();
-#ifdef TM_MERGE
-        // fails on ppc see https://bugzilla.mozilla.org/show_bug.cgi?id=522755
-        bool quad = ins->opcode() == LIR_iparam || ins->isQuad();
-#endif
-        bool quad = /*ins->opcode() == LIR_iparam ||*/ ins->isQuad();
         verbose_only( if (d && (_logc->lcbits & LC_RegAlloc)) {
                          outputForEOL("  <= spill %s",
                                       _thisfrag->lirbuf->names->formatRef(ins)); } )
-        asm_spill(r, d, pop, quad);
+        asm_spill(r, d, pop, ins->isQuad());
     }
 
     // NOTE: Because this function frees slots on the stack, it is not safe to
