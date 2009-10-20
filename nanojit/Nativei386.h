@@ -149,7 +149,6 @@ namespace nanojit
     static const RegisterMask x87Regs = 1<<FST0;
     static const RegisterMask FpRegs = x87Regs | XmmRegs;
     static const RegisterMask ScratchRegs = 1<<EAX | 1<<ECX | 1<<EDX | FpRegs;
-    static const bool CalleeRegsNeedExplicitSaving = true;
 
     static const RegisterMask AllowableFlagRegs = 1<<EAX |1<<ECX | 1<<EDX | 1<<EBX;
 
@@ -173,8 +172,6 @@ namespace nanojit
 
     #define DECLARE_PLATFORM_ASSEMBLER()    \
         const static Register argRegs[2], retRegs[2]; \
-        bool x87Dirty;                      \
-        bool pad[3];\
         void nativePageReset();\
         void nativePageSetup();\
         void underrunProtect(int);\

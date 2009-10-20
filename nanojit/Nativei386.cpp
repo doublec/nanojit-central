@@ -90,8 +90,6 @@ namespace nanojit
         uint32_t stackPushed =
             STACK_GRANULARITY + // returnaddr
             STACK_GRANULARITY; // ebp
-        if (!_thisfrag->lirbuf->explicitSavedRegs)
-            stackPushed += NumSavedRegs * STACK_GRANULARITY;
 
         uint32_t aligned = alignUp(stackNeeded + stackPushed, NJ_ALIGN_STACK);
         uint32_t amt = aligned - stackPushed;
@@ -108,11 +106,6 @@ namespace nanojit
         MR(FP, SP); // Establish our own FP.
         PUSHr(FP); // Save caller's FP.
 
-        if (!_thisfrag->lirbuf->explicitSavedRegs) {
-            PUSHr(FP); // dummy
-            for (int i = 0; i < NumSavedRegs; ++i)
-                PUSHr(savedRegs[i]);
-        }
         return fragEntry;
     }
 
@@ -166,11 +159,6 @@ namespace nanojit
     NIns *Assembler::genEpilogue()
     {
         RET();
-        if (!_thisfrag->lirbuf->explicitSavedRegs) {
-            for (int i = NumSavedRegs - 1; i >= 0; --i)
-                POPr(savedRegs[i]);
-            POPr(FP); // dummy
-        }
         POPr(FP); // Restore caller's FP.
 
         return  _nIns;

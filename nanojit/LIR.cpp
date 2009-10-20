@@ -121,7 +121,6 @@ namespace nanojit
         _stats.lir = 0;
         for (int i = 0; i < NumSavedRegs; ++i)
             savedRegs[i] = NULL;
-        explicitSavedRegs = false;
         chunkAlloc();
     }
 
@@ -277,7 +276,6 @@ namespace nanojit
         if (kind) {
             NanoAssert(arg < NumSavedRegs);
             _buf->savedRegs[arg] = ins;
-            _buf->explicitSavedRegs = true;
         }
         return ins;
     }
