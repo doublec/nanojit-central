@@ -928,7 +928,7 @@ namespace nanojit
         int32_t argc = ci->get_sizes(sizes);
 
 #ifdef NJ_SOFTFLOAT
-        if (op == LIR_fcall || op == LIR_qcall)
+        if (!ARM_VFP && (op == LIR_fcall || op == LIR_qcall))
             op = LIR_callh;
 #endif
 
@@ -1582,7 +1582,7 @@ namespace nanojit
                     ref = ref->oprnd1();
                 } else {
 #endif
-                copyName(ref, ref->callInfo()->_name, funccounts.add(ref->callInfo()));
+                    copyName(ref, ref->callInfo()->_name, funccounts.add(ref->callInfo()));
 #if !defined NANOJIT_64BIT
                 }
 #endif

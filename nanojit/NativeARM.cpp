@@ -634,7 +634,7 @@ Assembler::asm_arg_64(LInsp arg, Register& r, int& stkd)
         Register    ra = r;
         Register    rb = nextreg(r);
         r = nextreg(rb);
-            
+
 #ifdef NJ_ARM_EABI
         // EABI requires that 64-bit arguments are aligned on even-numbered
         // registers, as R0:R1 or R2:R3.
@@ -650,7 +650,7 @@ Assembler::asm_arg_64(LInsp arg, Register& r, int& stkd)
             asm_regarg(ARGSIZE_LO, arg->oprnd1(), ra);
             asm_regarg(ARGSIZE_LO, arg->oprnd2(), rb);
         }
-        
+
 #ifndef NJ_ARM_EABI
     } else if (r == R3) {
         // We only have one register left, but the legacy ABI requires that we
@@ -754,10 +754,10 @@ Assembler::asm_stkarg(LInsp arg, int stkd)
 
     if (argRes && (argRes->reg != UnknownReg)) {
         // The argument resides somewhere in registers, so we simply need to
-        // push it onto the stack.    
+        // push it onto the stack.
         if (!ARM_VFP || !isQuad) {
             NanoAssert(IsGpReg(argRes->reg));
-                    
+
             STR(argRes->reg, SP, stkd);
         } else {
             // According to the comments in asm_arg_64, LIR_qjoin
@@ -866,7 +866,6 @@ Assembler::asm_call(LInsp ins)
         // target address into LR ourselves before setting up the parameters
         // in other registers.
         BranchWithLink((NIns*)call->_address);
-
     } else {
         // Indirect call: we assign the address arg to LR since it's not
         // used for regular arguments, and is otherwise scratch since it's
@@ -1022,7 +1021,7 @@ Assembler::asm_store32(LIns *value, int dr, LIns *base)
         asm_add_imm(IP, rb, dr);
     } else {
         STR(ra, rb, dr);
-}
+    }
 }
 
 void
@@ -1039,7 +1038,7 @@ Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
     else {
         // We can't easily load immediate values directly into FP registers, so
         // ensure that memory is allocated for the constant and load it from
-        // memory.    
+        // memory.
         int d = findMemFor(i);
         if (ARM_VFP && IsFpReg(r)) {
             if (isS8(d >> 2)) {
@@ -1231,7 +1230,7 @@ Assembler::asm_quad(LInsp ins)
 
     if (ARM_VFP && rr != UnknownReg)
     {
-        if (d) 
+        if (d)
             asm_spill(rr, d, false, true);
 
         underrunProtect(4*4);
@@ -1687,10 +1686,10 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
 
     // optimistically check if this will fit in 24 bits
     if (_chk && isS24(offs>>2) && (_t != 0)) {
-            underrunProtect(4);
+        underrunProtect(4);
         // recalculate the offset, because underrunProtect may have
         // moved _nIns to a new page
-            offs = PC_OFFSET_FROM(_t,_nIns-1);
+        offs = PC_OFFSET_FROM(_t,_nIns-1);
     }
 
     // Emit one of the following patterns:
@@ -1827,6 +1826,7 @@ Assembler::asm_fcmp(LInsp ins)
     LInsp lhs = ins->oprnd1();
     LInsp rhs = ins->oprnd2();
     LOpcode op = ins->opcode();
+
     NanoAssert(op >= LIR_feq && op <= LIR_fge);
 
     Reservation *rA, *rB;
@@ -1942,104 +1942,105 @@ Assembler::asm_branch(bool branchOnFalse, LInsp cond, NIns* targ)
     return at;
 }
 
-    void
-    Assembler::asm_cmp(LIns *cond)
-    {
-        LOpcode condop = cond->opcode();
+void
+Assembler::asm_cmp(LIns *cond)
+{
+    LOpcode condop = cond->opcode();
 
-        // LIR_ov recycles the flags set by arithmetic ops
-        if ((condop == LIR_ov))
-            return;
+    // LIR_ov recycles the flags set by arithmetic ops
+    if ((condop == LIR_ov))
+        return;
 
-        LInsp lhs = cond->oprnd1();
-        LInsp rhs = cond->oprnd2();
-        Reservation *rA, *rB;
+    LInsp lhs = cond->oprnd1();
+    LInsp rhs = cond->oprnd2();
+    Reservation *rA, *rB;
 
-        // Not supported yet.
-        NanoAssert(!lhs->isQuad() && !rhs->isQuad());
+    // Not supported yet.
+    NanoAssert(!lhs->isQuad() && !rhs->isQuad());
 
-        // ready to issue the compare
-        if (rhs->isconst()) {
-            int c = rhs->imm32();
-            if (c == 0 && cond->isop(LIR_eq)) {
-                Register r = findRegFor(lhs, GpRegs);
-                TST(r,r);
-                // No 64-bit immediates so fall-back to below
-            } else if (!rhs->isQuad()) {
-                Register r = getBaseReg(lhs, c, GpRegs);
-                asm_cmpi(r, c);
-            } else {
-                NanoAssert(0);
-            }
+    // ready to issue the compare
+    if (rhs->isconst()) {
+        int c = rhs->imm32();
+        if (c == 0 && cond->isop(LIR_eq)) {
+            Register r = findRegFor(lhs, GpRegs);
+            TST(r,r);
+            // No 64-bit immediates so fall-back to below
+        } else if (!rhs->isQuad()) {
+            Register r = getBaseReg(lhs, c, GpRegs);
+            asm_cmpi(r, c);
         } else {
-            findRegFor2(GpRegs, lhs, rA, rhs, rB);
-            Register ra = rA->reg;
-            Register rb = rB->reg;
-            CMP(ra, rb);
+            NanoAssert(0);
+        }
+    } else {
+        findRegFor2(GpRegs, lhs, rA, rhs, rB);
+        Register ra = rA->reg;
+        Register rb = rB->reg;
+        CMP(ra, rb);
+    }
+}
+
+void
+Assembler::asm_cmpi(Register r, int32_t imm)
+{
+    if (imm < 0) {
+        if (imm > -256) {
+            ALUi(AL, cmn, 1, 0, r, -imm);
+        } else {
+            underrunProtect(4 + LD32_size);
+            CMP(r, IP);
+            asm_ld_imm(IP, imm);
+        }
+    } else {
+        if (imm < 256) {
+            ALUi(AL, cmp, 1, 0, r, imm);
+        } else {
+            underrunProtect(4 + LD32_size);
+            CMP(r, IP);
+            asm_ld_imm(IP, imm);
         }
     }
-
-    void
-    Assembler::asm_cmpi(Register r, int32_t imm)
-    {
-        if (imm < 0) {
-            if (imm > -256) {
-                ALUi(AL, cmn, 1, 0, r, -imm);
-            } else {
-                underrunProtect(4 + LD32_size);
-                CMP(r, IP);
-                asm_ld_imm(IP, imm);
-            }
-        } else {
-            if (imm < 256) {
-                ALUi(AL, cmp, 1, 0, r, imm);
-            } else {
-                underrunProtect(4 + LD32_size);
-                CMP(r, IP);
-                asm_ld_imm(IP, imm);
-            }
-        }
-    }
+}
 
 #if ARM_VFP==1
-    void
-    Assembler::asm_fcond(LInsp ins)
-    {
-        // only want certain regs
-        Register r = prepResultReg(ins, AllowableFlagRegs);
+void
+Assembler::asm_fcond(LInsp ins)
+{
+    // only want certain regs
+    Register r = prepResultReg(ins, AllowableFlagRegs);
 
-        switch (ins->opcode()) {
-            case LIR_feq: SETEQ(r); break;
-            case LIR_flt: SETLO(r); break; // } note: VFP LT/LE operations require use of
-            case LIR_fle: SETLS(r); break; // } unsigned LO/LS condition codes!
-            case LIR_fge: SETGE(r); break;
-            case LIR_fgt: SETGT(r); break;
-            default: NanoAssert(0); break;
-        }
-        asm_fcmp(ins);
+    switch (ins->opcode()) {
+        case LIR_feq: SETEQ(r); break;
+        case LIR_flt: SETLO(r); break; // } note: VFP LT/LE operations require use of
+        case LIR_fle: SETLS(r); break; // } unsigned LO/LS condition codes!
+        case LIR_fge: SETGE(r); break;
+        case LIR_fgt: SETGT(r); break;
+        default: NanoAssert(0); break;
     }
+
+    asm_fcmp(ins);
+}
 #endif
 
-    void
-    Assembler::asm_cond(LInsp ins)
+void
+Assembler::asm_cond(LInsp ins)
+{
+    Register r = prepResultReg(ins, AllowableFlagRegs);
+    switch(ins->opcode())
     {
-        Register r = prepResultReg(ins, AllowableFlagRegs);
-        switch(ins->opcode())
-        {
-            case LIR_eq:  SETEQ(r); break;
-            case LIR_ov:  SETVS(r); break;
-            case LIR_lt:  SETLT(r); break;
-            case LIR_le:  SETLE(r); break;
-            case LIR_gt:  SETGT(r); break;
-            case LIR_ge:  SETGE(r); break;
-            case LIR_ult: SETLO(r); break;
-            case LIR_ule: SETLS(r); break;
-            case LIR_ugt: SETHI(r); break;
-            case LIR_uge: SETHS(r); break;
-            default:        NanoAssert(0);  break;
-        }
-        asm_cmp(ins);
+        case LIR_eq:  SETEQ(r); break;
+        case LIR_ov:  SETVS(r); break;
+        case LIR_lt:  SETLT(r); break;
+        case LIR_le:  SETLE(r); break;
+        case LIR_gt:  SETGT(r); break;
+        case LIR_ge:  SETGE(r); break;
+        case LIR_ult: SETLO(r); break;
+        case LIR_ule: SETLS(r); break;
+        case LIR_ugt: SETHI(r); break;
+        case LIR_uge: SETHS(r); break;
+        default:      NanoAssert(0);  break;
     }
+    asm_cmp(ins);
+}
 
 void
 Assembler::asm_arith(LInsp ins)
@@ -2191,133 +2192,133 @@ Assembler::asm_arith(LInsp ins)
     }
 }
 
-    void
-    Assembler::asm_neg_not(LInsp ins)
-    {
-        LOpcode op = ins->opcode();
-        Register rr = prepResultReg(ins, GpRegs);
+void
+Assembler::asm_neg_not(LInsp ins)
+{
+    LOpcode op = ins->opcode();
+    Register rr = prepResultReg(ins, GpRegs);
 
-        LIns* lhs = ins->oprnd1();
-        Reservation *rA = getresv(lhs);
-        // if this is last use of lhs in reg, we can re-use result reg
-        Register ra;
-        if (rA == 0 || (ra=rA->reg) == UnknownReg)
-            ra = findSpecificRegFor(lhs, rr);
-        // else, rA already has a register assigned.
-        NanoAssert(ra != UnknownReg);
+    LIns* lhs = ins->oprnd1();
+    Reservation *rA = getresv(lhs);
+    // if this is last use of lhs in reg, we can re-use result reg
+    Register ra;
+    if (rA == 0 || (ra=rA->reg) == UnknownReg)
+        ra = findSpecificRegFor(lhs, rr);
+    // else, rA already has a register assigned.
+    NanoAssert(ra != UnknownReg);
 
-        if (op == LIR_not)
-            MVN(rr, ra);
-        else
-            RSBS(rr, ra);
+    if (op == LIR_not)
+        MVN(rr, ra);
+    else
+        RSBS(rr, ra);
+}
+
+void
+Assembler::asm_ld(LInsp ins)
+{
+    LOpcode op = ins->opcode();
+    LIns* base = ins->oprnd1();
+    int d = ins->disp();
+
+    Register rr = prepResultReg(ins, GpRegs);
+    Register ra = getBaseReg(base, d, GpRegs);
+
+    // these will always be 4-byte aligned
+    if (op == LIR_ld || op == LIR_ldc) {
+        LDR(rr, ra, d);
+        return;
     }
 
-    void
-    Assembler::asm_ld(LInsp ins)
-    {
-        LOpcode op = ins->opcode();
-        LIns* base = ins->oprnd1();
-        int d = ins->disp();
-
-        Register rr = prepResultReg(ins, GpRegs);
-        Register ra = getBaseReg(base, d, GpRegs);
-
-        // these will always be 4-byte aligned
-        if (op == LIR_ld || op == LIR_ldc) {
-            LDR(rr, ra, d);
-            return;
-        }
-
-        // these will be 2 or 4-byte aligned
-        if (op == LIR_ldcs) {
-            LDRH(rr, ra, d);
-            return;
-        }
-
-        // aaand this is just any byte.
-        if (op == LIR_ldcb) {
-            LDRB(rr, ra, d);
-            return;
-        }
-
-        NanoAssertMsg(0, "Unsupported instruction in asm_ld");
+    // these will be 2 or 4-byte aligned
+    if (op == LIR_ldcs) {
+        LDRH(rr, ra, d);
+        return;
     }
 
-    void
-    Assembler::asm_cmov(LInsp ins)
-    {
-        NanoAssert(ins->opcode() == LIR_cmov);
-        LIns* condval = ins->oprnd1();
-        LIns* iftrue  = ins->oprnd2();
-        LIns* iffalse = ins->oprnd3();
-
-        NanoAssert(condval->isCmp());
-        NanoAssert(!iftrue->isQuad() && !iffalse->isQuad());
-
-        const Register rr = prepResultReg(ins, GpRegs);
-
-        // this code assumes that neither LD nor MR nor MRcc set any of the condition flags.
-        // (This is true on Intel, is it true on all architectures?)
-        const Register iffalsereg = findRegFor(iffalse, GpRegs & ~rmask(rr));
-        switch (condval->opcode()) {
-            // note that these are all opposites...
-            case LIR_eq:    MOVNE(rr, iffalsereg);  break;
-            case LIR_ov:    MOVVC(rr, iffalsereg);   break;
-            case LIR_lt:    MOVGE(rr, iffalsereg);  break;
-            case LIR_le:    MOVGT(rr, iffalsereg);  break;
-            case LIR_gt:    MOVLE(rr, iffalsereg);  break;
-            case LIR_ge:    MOVLT(rr, iffalsereg);  break;
-            case LIR_ult:   MOVHS(rr, iffalsereg);  break;
-            case LIR_ule:   MOVHI(rr, iffalsereg);  break;
-            case LIR_ugt:   MOVLS(rr, iffalsereg);  break;
-            case LIR_uge:   MOVLO(rr, iffalsereg);  break;
-            default: debug_only( NanoAssert(0) ); break;
-        }
-        /*const Register iftruereg =*/ findSpecificRegFor(iftrue, rr);
-        asm_cmp(condval);
+    // aaand this is just any byte.
+    if (op == LIR_ldcb) {
+        LDRB(rr, ra, d);
+        return;
     }
 
-    void
-    Assembler::asm_qhi(LInsp ins)
-    {
-        Register rr = prepResultReg(ins, GpRegs);
-        LIns *q = ins->oprnd1();
-        int d = findMemFor(q);
-        LDR(rr, FP, d+4);
-    }
+    NanoAssertMsg(0, "Unsupported instruction in asm_ld");
+}
 
-    void
-    Assembler::asm_qlo(LInsp ins)
-    {
-        Register rr = prepResultReg(ins, GpRegs);
-        LIns *q = ins->oprnd1();
-        int d = findMemFor(q);
-        LDR(rr, FP, d);
-    }
+void
+Assembler::asm_cmov(LInsp ins)
+{
+    NanoAssert(ins->opcode() == LIR_cmov);
+    LIns* condval = ins->oprnd1();
+    LIns* iftrue  = ins->oprnd2();
+    LIns* iffalse = ins->oprnd3();
 
-    void
-    Assembler::asm_param(LInsp ins)
-    {
-        uint32_t a = ins->paramArg();
-        uint32_t kind = ins->paramKind();
-        if (kind == 0) {
-            // ordinary param
-            AbiKind abi = _thisfrag->lirbuf->abi;
-            uint32_t abi_regcount = abi == ABI_CDECL ? 4 : abi == ABI_FASTCALL ? 2 : abi == ABI_THISCALL ? 1 : 0;
-            if (a < abi_regcount) {
-                // incoming arg in register
-                prepResultReg(ins, rmask(argRegs[a]));
-            } else {
-                // incoming arg is on stack, and EBP points nearby (see genPrologue)
-                Register r = prepResultReg(ins, GpRegs);
-                int d = (a - abi_regcount) * sizeof(intptr_t) + 8;
-                LDR(r, FP, d);
-            }
+    NanoAssert(condval->isCmp());
+    NanoAssert(!iftrue->isQuad() && !iffalse->isQuad());
+
+    const Register rr = prepResultReg(ins, GpRegs);
+
+    // this code assumes that neither LD nor MR nor MRcc set any of the condition flags.
+    // (This is true on Intel, is it true on all architectures?)
+    const Register iffalsereg = findRegFor(iffalse, GpRegs & ~rmask(rr));
+    switch (condval->opcode()) {
+        // note that these are all opposites...
+        case LIR_eq:    MOVNE(rr, iffalsereg);  break;
+        case LIR_ov:    MOVVC(rr, iffalsereg);  break;
+        case LIR_lt:    MOVGE(rr, iffalsereg);  break;
+        case LIR_le:    MOVGT(rr, iffalsereg);  break;
+        case LIR_gt:    MOVLE(rr, iffalsereg);  break;
+        case LIR_ge:    MOVLT(rr, iffalsereg);  break;
+        case LIR_ult:   MOVHS(rr, iffalsereg);  break;
+        case LIR_ule:   MOVHI(rr, iffalsereg);  break;
+        case LIR_ugt:   MOVLS(rr, iffalsereg);  break;
+        case LIR_uge:   MOVLO(rr, iffalsereg);  break;
+        default: debug_only( NanoAssert(0) );   break;
+    }
+    /*const Register iftruereg =*/ findSpecificRegFor(iftrue, rr);
+    asm_cmp(condval);
+}
+
+void
+Assembler::asm_qhi(LInsp ins)
+{
+    Register rr = prepResultReg(ins, GpRegs);
+    LIns *q = ins->oprnd1();
+    int d = findMemFor(q);
+    LDR(rr, FP, d+4);
+}
+
+void
+Assembler::asm_qlo(LInsp ins)
+{
+    Register rr = prepResultReg(ins, GpRegs);
+    LIns *q = ins->oprnd1();
+    int d = findMemFor(q);
+    LDR(rr, FP, d);
+}
+
+void
+Assembler::asm_param(LInsp ins)
+{
+    uint32_t a = ins->paramArg();
+    uint32_t kind = ins->paramKind();
+    if (kind == 0) {
+        // ordinary param
+        AbiKind abi = _thisfrag->lirbuf->abi;
+        uint32_t abi_regcount = abi == ABI_CDECL ? 4 : abi == ABI_FASTCALL ? 2 : abi == ABI_THISCALL ? 1 : 0;
+        if (a < abi_regcount) {
+            // incoming arg in register
+            prepResultReg(ins, rmask(argRegs[a]));
         } else {
-            // saved param
-            prepResultReg(ins, rmask(savedRegs[a]));
+            // incoming arg is on stack, and EBP points nearby (see genPrologue)
+            Register r = prepResultReg(ins, GpRegs);
+            int d = (a - abi_regcount) * sizeof(intptr_t) + 8;
+            LDR(r, FP, d);
         }
+    } else {
+        // saved param
+        prepResultReg(ins, rmask(savedRegs[a]));
     }
+}
 
 void
 Assembler::asm_int(LInsp ins)

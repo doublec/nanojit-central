@@ -1258,20 +1258,20 @@ namespace nanojit
             Register rr = prepResultReg(ins, XmmRegs);
             Register ra;
 
-            // if this is last use of lhs in reg, we can re-use result reg                                                   
-            // else, lhs already has a register assigned.                                                                    
-            if (lhs->isUnusedOrHasUnknownReg()) {                                                                            
-                ra = findSpecificRegFor(lhs, rr);                                                                            
-            } else {                                                                                                         
-                ra = lhs->getReg();                                                                                          
-                if ((rmask(ra) & XmmRegs) == 0) {                                                                            
-                    /* We need this case on AMD64, because it's possible that                                                
-                     * an earlier instruction has done a quadword load and reserved a                                        
-                     * GPR.  If so, ask for a new register.                                                                  
-                     */                                                                                                      
-                    ra = findRegFor(lhs, XmmRegs);                                                                           
+            // if this is last use of lhs in reg, we can re-use result reg
+            // else, lhs already has a register assigned.
+            if (lhs->isUnusedOrHasUnknownReg()) {
+                ra = findSpecificRegFor(lhs, rr);
+            } else {
+                ra = lhs->getReg();
+                if ((rmask(ra) & XmmRegs) == 0) {
+                    /* We need this case on AMD64, because it's possible that
+                     * an earlier instruction has done a quadword load and reserved a
+                     * GPR.  If so, ask for a new register.
+                     */
+                    ra = findRegFor(lhs, XmmRegs);
                 }
-            }                                                                                                            
+            }
 
             SSE_XORPD(rr, negateMask);
 

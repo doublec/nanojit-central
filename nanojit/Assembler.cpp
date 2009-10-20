@@ -657,15 +657,15 @@ namespace nanojit
         verbose_only( codeBytes = 0; )
         verbose_only( exitBytes = 0; )
 
-        reset();                                                                                                              
-                                                                                                                              
-        NanoAssert(codeList == 0);                                                                                            
-        NanoAssert(codeStart == 0);                                                                                           
-        NanoAssert(codeEnd == 0);                                                                                             
-        NanoAssert(exitStart == 0);                                                                                           
-        NanoAssert(exitEnd == 0);                                                                                             
-        NanoAssert(_nIns == 0);                                                                                               
-        NanoAssert(_nExitIns == 0);                                                                                           
+        reset();
+
+        NanoAssert(codeList == 0);
+        NanoAssert(codeStart == 0);
+        NanoAssert(codeEnd == 0);
+        NanoAssert(exitStart == 0);
+        NanoAssert(exitEnd == 0);
+        NanoAssert(_nIns == 0);
+        NanoAssert(_nExitIns == 0);
 
         _thisfrag = frag;
         _activation.lowwatermark = 1;
@@ -1579,7 +1579,7 @@ namespace nanojit
         }
         output(&outline[0]);
     }
- #endif
+#endif
 
     bool canfit(int32_t size, int32_t loc, AR &ar) {
         for (int i=0; i < size; i++) {
