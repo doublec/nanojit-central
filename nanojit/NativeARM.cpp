@@ -548,7 +548,6 @@ Assembler::genEpilogue()
 
     POP_mask(savingMask); // regs
 
-    MOV(SP,FP);
     return _nIns;
 }
 
@@ -793,9 +792,9 @@ Assembler::asm_stkarg(LInsp arg, int stkd)
             NanoAssert((stkd & 7) == 0);
 #endif
 
-            STR_preindex(IP, SP, stkd+4);
+            STR(IP, SP, stkd+4);
             LDR(IP, FP, d+4);
-            STR_preindex(IP, SP, stkd);
+            STR(IP, SP, stkd);
             LDR(IP, FP, d);
         }
     }
@@ -817,22 +816,17 @@ Assembler::asm_call(LInsp ins)
     // R0/R1. We need to either place it in the result fp reg, or store it.
     // See comments in asm_prep_fcall() for more details as to why this is
     // necessary here for floating point calls, but not for integer calls.
-    Reservation * callRes = getresv(ins);
-    if (ARM_VFP && callRes) {
+    if (ARM_VFP) {
         // Determine the size (and type) of the instruction result.
         ArgSize         rsize = (ArgSize)(call->_argtypes & ARGSIZE_MASK_ANY);
 
         // If the result size is a floating-point value, treat the result
         // specially, as described previously.
         if (rsize == ARGSIZE_F) {
+            Reservation *   callRes = getresv(ins);
             Register        rr = callRes->reg;
 
             NanoAssert(ins->opcode() == LIR_fcall);
-
-            // We're about to write the result into a register (or a stack
-            // slot). Because we emit code backwards, we must therefore free
-            // it.
-            //freeRsrcOf(ins, rr != UnknownReg);
 
             if (rr == UnknownReg) {
                 int d = disp(callRes);
@@ -844,7 +838,6 @@ Assembler::asm_call(LInsp ins)
                 STR(R0, FP, d+0);
                 STR(R1, FP, d+4);
             } else {
-                Register    rr = callRes->reg;
                 NanoAssert(IsFpReg(rr));
 
                 // Copy the result to the (VFP) result register.
@@ -1230,8 +1223,7 @@ Assembler::asm_quad(LInsp ins)
 
     if (ARM_VFP && rr != UnknownReg)
     {
-        if (d)
-            asm_spill(rr, d, false, true);
+        asm_spill(rr, d, false, true);
 
         underrunProtect(4*4);
         asm_quad_nochk(rr, ins->imm64_0(), ins->imm64_1());
@@ -1647,6 +1639,7 @@ Assembler::asm_ld_imm(Register d, int32_t imm, bool chk /* = true */)
 
     // Write the literal.
     *(_nSlot++) = imm;
+    asm_output("## imm= 0x%x", imm);
 
     // Load the literal.
     LDR_nochk(d,PC,offset);
@@ -1677,13 +1670,6 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
     int32_t offs = PC_OFFSET_FROM(_t,_nIns-1);
     //nj_dprintf("B_cond_chk target: 0x%08x offset: %d @0x%08x\n", _t, offs, _nIns-1);
 
-    #ifdef TM_MERGE
-    // We don't patch conditional branches, and nPatchBranch can't cope with
-    // them. We should therefore check that they are not generated at this
-    // stage.
-    NanoAssert((_t != 0) || (_c == AL));
-    #endif
-
     // optimistically check if this will fit in 24 bits
     if (_chk && isS24(offs>>2) && (_t != 0)) {
         underrunProtect(4);
@@ -1706,9 +1692,9 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
     //      be patched, so the nPatchBranch function doesn't need to know where
     //      the literal pool is located.
     //          LDRcc   PC, #lit
-    //          ; #lit is in the literal pool at ++_nSlot
+    //          ; #lit is in the literal pool at _nSlot
     //
-    //  --- Long conditional branch (if !samepage(_nIns-1, _nSlot)).
+    //  --- Long conditional branch (if the slot isn't on the same page as the instruction).
     //          LDRcc   PC, #lit
     //          B       skip        ; Jump over the literal data.
     //  lit:    #target
@@ -1745,7 +1731,9 @@ Assembler::B_cond_chk(ConditionCode _c, NIns* _t, bool _chk)
     }
 }
 
-#if ARM_VFP==1
+/*
+ * VFP
+ */
 
 void
 Assembler::asm_i2f(LInsp ins)
@@ -1818,8 +1806,6 @@ Assembler::asm_fop(LInsp ins)
     }
 }
 
-#endif
-
 void
 Assembler::asm_fcmp(LInsp ins)
 {
@@ -1840,8 +1826,6 @@ Assembler::asm_fcmp(LInsp ins)
     FMSTAT();
     FCMPD(ra, rb, e_bit);
 }
-
-#if ARM_VFP==1
 
 Register
 Assembler::asm_prep_fcall(Reservation*, LInsp)
@@ -1869,7 +1853,6 @@ Assembler::asm_prep_fcall(Reservation*, LInsp)
      */
     return UnknownReg;
 }
-#endif // ARM_VFP
 
 /* Call this with targ set to 0 if the target is not yet known and the branch
  * will be patched up later.
@@ -1891,7 +1874,6 @@ Assembler::asm_branch(bool branchOnFalse, LInsp cond, NIns* targ)
     // Select the appropriate ARM condition code to match the LIR instruction.
     switch (condop)
     {
-#if ARM_VFP==1
         // Floating-point conditions. Note that the VFP LT/LE conditions
         // require use of the unsigned condition codes, even though
         // float-point comparisons are always signed.
@@ -1900,7 +1882,7 @@ Assembler::asm_branch(bool branchOnFalse, LInsp cond, NIns* targ)
         case LIR_fle:   cc = LS;    fp_cond = true;     break;
         case LIR_fge:   cc = GE;    fp_cond = true;     break;
         case LIR_fgt:   cc = GT;    fp_cond = true;     break;
-#endif
+
         // Standard signed and unsigned integer comparisons.
         case LIR_eq:    cc = EQ;    fp_cond = false;    break;
         case LIR_ov:    cc = VS;    fp_cond = false;    break;
@@ -2001,7 +1983,6 @@ Assembler::asm_cmpi(Register r, int32_t imm)
     }
 }
 
-#if ARM_VFP==1
 void
 Assembler::asm_fcond(LInsp ins)
 {
@@ -2019,7 +2000,6 @@ Assembler::asm_fcond(LInsp ins)
 
     asm_fcmp(ins);
 }
-#endif
 
 void
 Assembler::asm_cond(LInsp ins)
