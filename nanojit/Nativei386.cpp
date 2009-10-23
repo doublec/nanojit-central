@@ -78,6 +78,7 @@ namespace nanojit
     }
 
     void Assembler::nBeginAssembly() {
+        max_stk_args = 0;
     }
 
     NIns* Assembler::genPrologue()
@@ -85,7 +86,7 @@ namespace nanojit
         /**
          * Prologue
          */
-        uint32_t stackNeeded = STACK_GRANULARITY * _activation.tos;
+        uint32_t stackNeeded = max_stk_args + STACK_GRANULARITY * _activation.tos;
 
         uint32_t stackPushed =
             STACK_GRANULARITY + // returnaddr
@@ -177,7 +178,8 @@ namespace nanojit
             iargs --;
         }
 
-        uint32_t max_regs = max_abi_regs[call->_abi];
+        AbiKind abi = call->_abi;
+        uint32_t max_regs = max_abi_regs[abi];
         if (max_regs > iargs)
             max_regs = iargs;
 
@@ -195,14 +197,23 @@ namespace nanojit
 #endif
 
         if (pushsize) {
-            // stack re-alignment
-            // only pop our adjustment amount since callee pops args in FASTCALL mode
-            extra = alignUp(pushsize, align) - pushsize;
-            if (call->_abi == ABI_CDECL) {
-                // with CDECL only, caller pops args
-                ADDi(SP, extra+pushsize);
-            } else if (extra > 0) {
-                ADDi(SP, extra);
+            if (config.fixed_esp) {
+                // In case of fastcall, stdcall and thiscall the callee cleans up the stack,
+                // and since we reserve max_stk_args words in the prolog to call functions
+                // and don't adjust the stack pointer individually for each call we have
+                // to undo here any changes the callee just did to the stack.
+                if (abi != ABI_CDECL)
+                    SUBi(SP, pushsize);
+            } else {
+                // stack re-alignment
+                // only pop our adjustment amount since callee pops args in FASTCALL mode
+                extra = alignUp(pushsize, align) - pushsize;
+                if (call->_abi == ABI_CDECL) {
+                    // with CDECL only, caller pops args
+                    ADDi(SP, extra+pushsize);
+                } else if (extra > 0) {
+                    ADDi(SP, extra);
+                }
             }
         }
 
@@ -227,9 +238,13 @@ namespace nanojit
 
         ArgSize sizes[MAXARGS];
         uint32_t argc = call->get_sizes(sizes);
+        int32_t stkd = 0;
+        
         if (indirect) {
             argc--;
-            asm_arg(ARGSIZE_P, ins->arg(argc), EAX);
+            asm_arg(ARGSIZE_P, ins->arg(argc), EAX, stkd);
+            if (!config.fixed_esp) 
+                stkd = 0;
         }
 
         for(uint32_t i=0; i < argc; i++)
@@ -240,11 +255,17 @@ namespace nanojit
             if (n < max_regs && sz != ARGSIZE_F) {
                 r = argRegs[n++]; // tell asm_arg what reg to use
             }
-            asm_arg(sz, ins->arg(j), r);
+            asm_arg(sz, ins->arg(j), r, stkd);
+            if (!config.fixed_esp) 
+                stkd = 0;
         }
 
-        if (extra > 0)
+        if (config.fixed_esp) {
+            if (pushsize > max_stk_args)
+                max_stk_args = pushsize;
+        } else if (extra > 0) {
             SUBi(SP, extra);
+        }
     }
 
     Register Assembler::nRegisterAllocFromSet(RegisterMask set)
@@ -1286,7 +1307,7 @@ namespace nanojit
         }
     }
 
-    void Assembler::asm_arg(ArgSize sz, LInsp p, Register r)
+    void Assembler::asm_arg(ArgSize sz, LInsp p, Register r, int32_t& stkd)
     {
         if (sz == ARGSIZE_Q)
         {
@@ -1331,13 +1352,16 @@ namespace nanojit
                 }
             }
             else {
-                asm_pusharg(p);
+                if (config.fixed_esp)
+                    asm_stkarg(p, stkd);
+                else
+                    asm_pusharg(p);
             }
         }
         else
         {
             NanoAssert(sz == ARGSIZE_F);
-            asm_farg(p);
+            asm_farg(p, stkd);
         }
     }
 
@@ -1364,14 +1388,34 @@ namespace nanojit
         }
     }
 
-    void Assembler::asm_farg(LInsp p)
+    void Assembler::asm_stkarg(LInsp p, int32_t& stkd)
+    {
+        // arg goes on stack
+        if (!p->isUsed() && p->isconst())
+        {
+            // small const we push directly
+            STi(SP, stkd, p->imm32());
+        }
+        else {
+            Register ra;
+            if (!p->isUsed() || p->getReg() == UnknownReg || p->isop(LIR_alloc))
+                ra = findRegFor(p, GpRegs & (~SavedRegs));
+            else
+                ra = p->getReg();
+            ST(SP, stkd, ra);
+        }
+
+        stkd += sizeof(int32_t);
+    }
+
+    void Assembler::asm_farg(LInsp p, int32_t& stkd)
     {
         NanoAssert(p->isQuad());
         Register r = findRegFor(p, FpRegs);
         if (rmask(r) & XmmRegs) {
-            SSE_STQ(0, SP, r);
+            SSE_STQ(stkd, SP, r);
         } else {
-            FSTPQ(0, SP);
+            FSTPQ(stkd, SP);
 #ifdef TM_MERGE
     //
     // 22Jul09 rickr - Enabling the evict causes a 10% slowdown on primes
@@ -1386,7 +1430,10 @@ namespace nanojit
             evictIfActive(FST0);
 #endif
         }
-        SUBi(ESP,8);
+        if (!config.fixed_esp)
+            SUBi(ESP,8);
+
+        stkd += sizeof(double);
     }
 
     void Assembler::asm_fop(LInsp ins)

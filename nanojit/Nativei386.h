@@ -175,11 +175,13 @@ namespace nanojit
 
     #define DECLARE_PLATFORM_ASSEMBLER()    \
         const static Register argRegs[2], retRegs[2]; \
+        int32_t max_stk_args;\
         void nativePageReset();\
         void nativePageSetup();\
         void underrunProtect(int);\
-        void asm_farg(LInsp);\
-        void asm_arg(ArgSize, LIns*, Register);\
+        void asm_stkarg(LInsp p, int32_t& stkd);\
+        void asm_farg(LInsp, int32_t& stkd);\
+        void asm_arg(ArgSize sz, LInsp p, Register r, int32_t& stkd);\
         void asm_pusharg(LInsp);\
         void asm_fcmp(LIns *cond);\
         void asm_cmp(LIns *cond); \
