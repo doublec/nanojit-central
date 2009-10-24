@@ -1423,6 +1423,7 @@ namespace nanojit
     // evict() triggers a very expensive fstpq/fldq pair around the store.
     // We need to resolve the bug some other way.
     //
+    // see https://bugzilla.mozilla.org/show_bug.cgi?id=491084
             /* It's possible that the same LIns* with r=FST0 will appear in the argument list more
              * than once.  In this case FST0 will not have been evicted and the multiple pop
              * actions will unbalance the FPU stack.  A quick fix is to always evict FST0 manually.

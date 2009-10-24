@@ -1438,7 +1438,7 @@ namespace nanojit
         { }
 
         void add(LInsp i, LInsp use) {
-            if (!live.containsKey(i)) {
+            if (!i->isconst() && !i->isconstq() && !live.containsKey(i)) {
                 NanoAssert(size_t(i->opcode()) < sizeof(lirNames) / sizeof(lirNames[0]));
                 live.put(i,use);
             }

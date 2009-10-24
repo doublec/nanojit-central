@@ -1040,20 +1040,6 @@ Assembler::asm_restore(LInsp i, Reservation *resv, Register r)
                 FLDD(r, IP, 0);
                 asm_add_imm(IP, FP, d);
             }
-#if 0
-    // This code tries to use a small constant load to restore the value of r.
-    // However, there was a comment explaining that using this regresses
-    // crypto-aes by about 50%. I do not see that behaviour; however, enabling
-    // this code does cause a JavaScript failure in the first of the
-    // createMandelSet tests in trace-tests. I can't explain either the
-    // original performance issue or the crash that I'm seeing.
-    } else if (i->isconst()) {
-        // asm_ld_imm will automatically select between LDR and MOV as
-        // appropriate.
-        if (!resv->arIndex)
-            i->resv()->clear();
-        asm_ld_imm(r, i->imm32());
-#endif
         } else {
             LDR(r, FP, d);
         }
@@ -1635,7 +1621,7 @@ Assembler::asm_ld_imm(Register d, int32_t imm, bool chk /* = true */)
         ++_nSlot;
         offset += sizeof(_nSlot);
     }
-    NanoAssert(isS12(offset) && (offset < -8));
+    NanoAssert(isS12(offset) && (offset <= -8));
 
     // Write the literal.
     *(_nSlot++) = imm;

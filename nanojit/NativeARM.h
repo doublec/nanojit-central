@@ -138,11 +138,7 @@ typedef enum {
     LastFloatReg = D6,
 
     FirstReg = R0,
-#if ARM_VFP==1
     LastReg = D6,
-#else
-    LastReg = PC,
-#endif
     UnknownReg = 32,
 
     // special value referring to S14
