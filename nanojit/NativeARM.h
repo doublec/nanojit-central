@@ -56,11 +56,6 @@
 
 namespace nanojit
 {
-// If NJ_ARM_VFP is defined, then VFP is assumed to
-// be present.  If it's not defined, then softfloat
-// is used, and NJ_SOFTFLOAT is defined.
-//#define NJ_ARM_VFP
-
 #if defined VMCFG_DOUBLE_MSW_FIRST || defined _MSC_VER
 #  undef  NJ_ARM_EABI
 #else
@@ -75,14 +70,6 @@ namespace nanojit
 // default to no-thumb2
 #if !defined(ARM_THUMB2)
 #  define ARM_THUMB2  0
-#endif
-
-// set ARM_VFP constant if not already set
-#if defined(NJ_ARM_VFP)
-#   define ARM_VFP      1
-#elif !defined(ARM_VFP)
-#   define NJ_SOFTFLOAT 1
-#   define ARM_VFP      0
 #endif
 
 // only d0-d6 are actually used; we'll use d7 as s14-s15 for i2f/u2f/etc.
