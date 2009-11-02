@@ -1,5 +1,6 @@
 
 #undef AVMPLUS_AMD64
+#undef AVMPLUS_64BIT
 #undef AVMPLUS_ARM
 #undef AVMPLUS_IA32
 #undef AVMPLUS_LINUX
