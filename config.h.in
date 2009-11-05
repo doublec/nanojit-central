@@ -1,4 +1,5 @@
 
+#undef DEBUG
 #undef AVMPLUS_AMD64
 #undef AVMPLUS_64BIT
 #undef AVMPLUS_ARM
