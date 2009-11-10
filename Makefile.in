@@ -47,6 +47,8 @@ LD := @LD@
 NANOJIT_ARCH := @NANOJIT_ARCH@
 DEFS := @DEFS@ -DNANOJIT_CENTRAL
 srcdir := @srcdir@
+CFLAGS := @CFLAGS@
+LDFLAGS := @LDFLAGS@
 CXXFLAGS := @CXXFLAGS@
 EXE_SUFFIX := @EXE_SUFFIX@
 OBJ_SUFFIX := @OBJ_SUFFIX@
@@ -93,7 +95,7 @@ CPPFLAGS += -I. -I$(srcdir) -I$(srcdir)/nanojit
 
 $(LIRASM): $(OBJS)
 	mkdir -p $(dir $(LIRASM))
-	$(LD) -o $@ $(OBJS)
+	$(LD) $(LDFLAGS) -o $@ $(OBJS)
 	chmod 0755 $(LIRASM)
 
 %$(OBJ_SUFFIX): %.cpp $(HDRS) Makefile
