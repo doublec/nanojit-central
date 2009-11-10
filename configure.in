@@ -84,7 +84,6 @@ CPPFLAGS="${CPPFLAGS=}"
 CXXFLAGS="${CXXFLAGS=}"
 LDFLAGS="${LDFLAGS=}"
 
-
 dnl ==============================================================
 dnl Default to MSVC for win32
 dnl ==============================================================
@@ -97,6 +96,28 @@ case "$target" in
     if test -z "$LD"; then LD=link; fi
     ;;
 esac
+
+dnl ========================================================
+dnl --enable-debug
+dnl ========================================================
+
+AC_ARG_ENABLE(debug,
+[  --disable-debug         disable debug build (incl. turns off assertions)],
+[ if test "$enableval" != "no"; then
+    NJ_DEBUG=1
+  else
+    NJ_DEBUG=
+  fi ],
+  [NJ_DEBUG=1])
+
+if test "${NJ_DEBUG}" = "1" ; then
+    AC_DEFINE(DEBUG)
+    if test "$CC" = "cl"; then
+       CXXFLAGS="$CXXFLAGS /Zi"
+    else
+       CXXFLAGS="$CXXFLAGS -g"
+    fi
+fi
 
 dnl ========================================================
 dnl Checks for compilers.
@@ -253,23 +274,6 @@ if test "$GNU_CC"; then
     if test "$ac_has_wno_variadic_macros" = "yes"; then
         _WARNINGS_CXXFLAGS="${_WARNINGS_CXXFLAGS} ${_COMPILER_PREFIX}-Wno-variadic-macros"
     fi
-fi
-
-dnl ========================================================
-dnl --enable-debug
-dnl ========================================================
-
-AC_ARG_ENABLE(debug,
-[  --disable-debug         disable debug build (incl. turns off assertions)],
-[ if test "$enableval" != "no"; then
-    NJ_DEBUG=1
-  else
-    NJ_DEBUG=
-  fi ],
-  [NJ_DEBUG=1])
-
-if test "${NJ_DEBUG}" = "1" ; then                              
-    AC_DEFINE(DEBUG)
 fi
 
 dnl ========================================================
