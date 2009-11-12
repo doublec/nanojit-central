@@ -114,8 +114,10 @@ if test "${NJ_DEBUG}" = "1" ; then
     AC_DEFINE(DEBUG)
     if test "$CC" = "cl"; then
        CXXFLAGS="$CXXFLAGS -DEBUG"
+       CFLAGS="$CFLAGS -DEBUG"
     else
        CXXFLAGS="$CXXFLAGS -g"
+       CFLAGS="$CFLAGS -g"
     fi
 fi
 
@@ -189,6 +191,9 @@ fi
 OBJ_SUFFIX=.o
 EXE_SUFFIX=
 
+WARNINGS_AS_ERRORS=-Werror
+LINK='$(LD) $(LDFLAGS) -o $(1)'
+
 dnl ========================================================
 dnl Special win32 checks
 dnl ========================================================
@@ -205,8 +210,11 @@ case "$target" in
         EXE_SUFFIX=.exe
 
         # Make sure compilers are valid
-        CFLAGS="$CFLAGS -TC -nologo"
-        CXXFLAGS="$CXXFLAGS -TP -nologo"
+        CFLAGS="$CFLAGS -TC -nologo -EHsc -W4"
+        CXXFLAGS="$CXXFLAGS -TP -nologo -EHsc -W4"
+        WARNINGS_AS_ERRORS="-WX"
+        LD=link
+        LINK='$(LD) -OUT:$(1)'
         AC_LANG_SAVE
         AC_LANG_C
         AC_TRY_COMPILE([#include <stdio.h>],
@@ -252,6 +260,9 @@ AC_SUBST(INTEL_CXX)
 
 AC_SUBST(OBJ_SUFFIX)
 AC_SUBST(EXE_SUFFIX)
+
+AC_SUBST(WARNINGS_AS_ERRORS)
+AC_SUBST(LINK)
 
 _WARNINGS_CXXFLAGS=
 

@@ -50,8 +50,12 @@ srcdir := @srcdir@
 CFLAGS := @CFLAGS@
 LDFLAGS := @LDFLAGS@
 CXXFLAGS := @CXXFLAGS@
+WARNINGS_AS_ERRORS := @WARNINGS_AS_ERRORS@
 EXE_SUFFIX := @EXE_SUFFIX@
 OBJ_SUFFIX := @OBJ_SUFFIX@
+
+# NB: delayed substitution on this one.
+LINK = @LINK@
 
 #######################
 # normal GNU make rules
@@ -78,8 +82,8 @@ OTHER_SRCS=Allocator.cpp       \
 
 
 SRCS := $(OTHER_SRCS) $(NATIVE_SRC)
-HDRS := $(wildcard @srcdir@/nanojit/*.h)
-INS := $(wildcard @srcdir@/lirasm/tests/*.in)
+HDRS := $(wildcard $(srcdir)/nanojit/*.h)
+INS := $(wildcard $(srcdir)/lirasm/tests/*.in)
 
 OBJS := $(notdir $(SRCS:.cpp=$(OBJ_SUFFIX)))
 OUTS := $(filter-out random.out, $(notdir $(INS:.in=.out)))
@@ -95,11 +99,11 @@ CPPFLAGS += -I. -I$(srcdir) -I$(srcdir)/nanojit
 
 $(LIRASM): $(OBJS)
 	mkdir -p $(dir $(LIRASM))
-	$(LD) $(LDFLAGS) -o $@ $(OBJS)
+	$(call LINK,$@) $(OBJS)
 	chmod 0755 $(LIRASM)
 
 %$(OBJ_SUFFIX): %.cpp $(HDRS) Makefile
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $<
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(WARNINGS_AS_ERRORS) -c $<
 
 
 ############
