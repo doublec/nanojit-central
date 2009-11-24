@@ -89,6 +89,7 @@ OBJS := $(notdir $(SRCS:.cpp=$(OBJ_SUFFIX)))
 OUTS := $(filter-out random.out, $(notdir $(INS:.in=.out)))
 
 LIRASM := bin/lirasm$(EXE_SUFFIX)
+MAKE_CHECK_LIRASM_FLAGS ?=
 
 CPPFLAGS += $(DEFS)
 CPPFLAGS += -I. -I$(srcdir) -I$(srcdir)/nanojit
@@ -121,10 +122,10 @@ random-check:
 	  fi
 
 %.out: %.in $(LIRASM)
-	@ $(LIRASM) --execute $< | tr -d "\r" >$@ 2>&1 || true
+	@ $(LIRASM) $(MAKE_CHECK_LIRASM_FLAGS) --execute $< | tr -d "\r" >$@ 2>&1 || true
 	@ if cmp -s $@ $(<:.in=.out) ; \
-      then echo "TEST-PASS | lirasm | $(LIRASM) --execute $<" ;              \
-      else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) --execute $<" ;   \
+      then echo "TEST-PASS | lirasm | $(LIRASM) $(MAKE_CHECK_LIRASM_FLAGS) --execute $<" ;              \
+      else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) $(MAKE_CHECK_LIRASM_FLAGS) --execute $<" ;   \
       echo expected output ;       \
       cat $(<:.in=.out) ;          \
       echo actual output ;         \
