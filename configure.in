@@ -349,6 +349,10 @@ darwin*)
     AC_DEFINE(AVMPLUS_UNIX)
     ;;
 solaris*)
+    if test "$GCC" != "yes"; then
+    WARNINGS_AS_ERRORS=""
+    fi
+    AC_DEFINE(SOLARIS)
     AC_DEFINE(AVMPLUS_UNIX)
     ;;
 freebsd*|kfreebsd*)

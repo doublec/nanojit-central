@@ -8,6 +8,7 @@
 #undef AVMPLUS_OS2
 #undef AVMPLUS_PPC
 #undef AVMPLUS_SPARC
+#undef SOLARIS
 #undef AVMPLUS_UNIX
 #undef AVMPLUS_WIN32
 #undef FEATURE_NANOJIT
