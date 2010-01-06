@@ -115,10 +115,12 @@ $(LIRASM): $(OBJS)
 
 check: $(LIRASM) $(OUTS) random-check
 
+RANDOM_SIZE = 1000000
+
 random-check:
-	@ if $(LIRASM) --execute --random 1000 ; \
-	  then echo "TEST-PASS | lirasm | $(LIRASM) --random 1000 --execute" ; \
-	  else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) --random 1000 --execute" ; \
+	@ if $(LIRASM) --execute --random $(RANDOM_SIZE) ; \
+	  then echo "TEST-PASS | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute" ; \
+	  else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute" ; \
 	  fi
 
 %.out: %.in $(LIRASM)
