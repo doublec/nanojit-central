@@ -113,8 +113,9 @@ AC_ARG_ENABLE(debug,
 if test "${NJ_DEBUG}" = "1" ; then
     AC_DEFINE(DEBUG)
     if test "$CC" = "cl"; then
-       CXXFLAGS="$CXXFLAGS -DEBUG"
-       CFLAGS="$CFLAGS -DEBUG"
+       CXXFLAGS="$CXXFLAGS -Zi -Fdlirasm.pdb"
+       CFLAGS="$CFLAGS -Zi -Fdlirasm.pdb"
+       LDFLAGS="$LDFLAGS -DEBUG"
     else
        CXXFLAGS="$CXXFLAGS -g"
        CFLAGS="$CFLAGS -g"
@@ -214,7 +215,7 @@ case "$target" in
         CXXFLAGS="$CXXFLAGS -TP -nologo -EHsc -W4"
         WARNINGS_AS_ERRORS="-WX"
         LD=link
-        LINK='$(LD) -OUT:$(1)'
+        LINK='$(LD) $(LDFLAGS) -OUT:$(1)'
         AC_LANG_SAVE
         AC_LANG_C
         AC_TRY_COMPILE([#include <stdio.h>],
