@@ -86,7 +86,7 @@ HDRS := $(wildcard $(srcdir)/nanojit/*.h)
 INS := $(wildcard $(srcdir)/lirasm/tests/*.in)
 
 OBJS := $(notdir $(SRCS:.cpp=$(OBJ_SUFFIX)))
-OUTS := $(filter-out random.out, $(notdir $(INS:.in=.out)))
+OUTS := $(filter-out random.out random-opt.out, $(notdir $(INS:.in=.out)))
 
 LIRASM := bin/lirasm$(EXE_SUFFIX)
 MAKE_CHECK_LIRASM_FLAGS ?=
@@ -118,9 +118,13 @@ check: $(LIRASM) $(OUTS) random-check
 RANDOM_SIZE = 1000000
 
 random-check:
-	@ if $(LIRASM) --execute --random $(RANDOM_SIZE) ; \
+	@ if $(LIRASM) --execute --random $(RANDOM_SIZE) > /dev/null ; \
 	  then echo "TEST-PASS | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute" ; \
 	  else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute" ; \
+	  fi
+	@ if $(LIRASM) --execute --random $(RANDOM_SIZE) --optimize > /dev/null; \
+	  then echo "TEST-PASS | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute --optimize" ; \
+	  else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute --optimize" ; \
 	  fi
 
 %.out: %.in $(LIRASM)
