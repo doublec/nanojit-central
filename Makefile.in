@@ -111,33 +111,10 @@ $(LIRASM): $(OBJS)
 # Test rules
 ############
 
-.PHONY: check random-check
+.PHONY: check
 
-check: $(LIRASM) $(OUTS) random-check
-
-RANDOM_SIZE = 1000000
-
-random-check:
-	@ if $(LIRASM) --execute --random $(RANDOM_SIZE) > /dev/null ; \
-	  then echo "TEST-PASS | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute" ; \
-	  else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute" ; \
-	  fi
-	@ if $(LIRASM) --execute --random $(RANDOM_SIZE) --optimize > /dev/null; \
-	  then echo "TEST-PASS | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute --optimize" ; \
-	  else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) --random $(RANDOM_SIZE) --execute --optimize" ; \
-	  fi
-
-%.out: %.in $(LIRASM)
-	@ $(LIRASM) $(MAKE_CHECK_LIRASM_FLAGS) --execute $< | tr -d "\r" >$@ 2>&1 || true
-	@ if cmp -s $@ $(<:.in=.out) ; \
-      then echo "TEST-PASS | lirasm | $(LIRASM) $(MAKE_CHECK_LIRASM_FLAGS) --execute $<" ;              \
-      else echo "TEST-UNEXPECTED-FAIL | lirasm | $(LIRASM) $(MAKE_CHECK_LIRASM_FLAGS) --execute $<" ;   \
-      echo expected output ;       \
-      cat $(<:.in=.out) ;          \
-      echo actual output ;         \
-      cat $@ ;                     \
-      fi
-	@ rm -f $@
+check: $(LIRASM) $(OUTS)
+	$(srcdir)/lirasm/testlirc.sh $(LIRASM)
 
 
 ###################
