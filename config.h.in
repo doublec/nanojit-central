@@ -7,6 +7,7 @@
 #undef AVMPLUS_LINUX
 #undef AVMPLUS_OS2
 #undef AVMPLUS_PPC
+#undef AVMPLUS_MIPS
 #undef AVMPLUS_SPARC
 #undef SOLARIS
 #undef AVMPLUS_UNIX
