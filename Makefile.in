@@ -76,6 +76,7 @@ OTHER_SRCS=Allocator.cpp       \
            Fragmento.cpp       \
            LIR.cpp             \
            lirasm.cpp          \
+           njconfig.cpp        \
            RegAlloc.cpp        \
            VMPI.cpp            \
            vprof.cpp
