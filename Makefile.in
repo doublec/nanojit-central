@@ -75,22 +75,24 @@ OTHER_SRCS=Allocator.cpp       \
            Containers.cpp      \
            Fragmento.cpp       \
            LIR.cpp             \
-           lirasm.cpp          \
            njconfig.cpp        \
            RegAlloc.cpp        \
            VMPI.cpp            \
            vprof.cpp
-
+LIRASM_SRC=lirasm.cpp
 
 SRCS := $(OTHER_SRCS) $(NATIVE_SRC)
 HDRS := $(wildcard $(srcdir)/nanojit/*.h)
 INS := $(wildcard $(srcdir)/lirasm/tests/*.in)
 
 OBJS := $(notdir $(SRCS:.cpp=$(OBJ_SUFFIX)))
+LIRASM_OBJS := $(notdir $(LIRASM_SRC:.cpp=$(OBJ_SUFFIX)))
 OUTS := $(filter-out random.out random-opt.out, $(notdir $(INS:.in=.out)))
 
 LIRASM := bin/lirasm$(EXE_SUFFIX)
 MAKE_CHECK_LIRASM_FLAGS ?=
+
+LIBNANOJIT := libnanojit.a
 
 CPPFLAGS += $(DEFS)
 CPPFLAGS += -I. -I$(srcdir) -I$(srcdir)/nanojit
@@ -99,10 +101,13 @@ CPPFLAGS += -I. -I$(srcdir) -I$(srcdir)/nanojit
 # Build rules
 #############
 
-$(LIRASM): $(OBJS)
+$(LIRASM): $(LIRASM_OBJS) $(LIBNANOJIT)
 	mkdir -p $(dir $(LIRASM))
-	$(call LINK,$@) $(OBJS)
+	$(call LINK,$@) $(LIRASM_OBJS) $(LIBNANOJIT)
 	chmod 0755 $(LIRASM)
+
+$(LIBNANOJIT): $(OBJS)
+	ar r $(LIBNANOJIT) $(OBJS)
 
 %$(OBJ_SUFFIX): %.cpp $(HDRS) Makefile
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(WARNINGS_AS_ERRORS) -c $<

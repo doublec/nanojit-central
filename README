@@ -22,6 +22,7 @@ This git repository has two branches:
   master
     nanojit-central plus minor changes by me:
       1. Added this README
+      2. Generate a libnanojit.a
 
 License
 =======
