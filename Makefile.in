@@ -90,7 +90,6 @@ OBJS := $(notdir $(SRCS:.cpp=$(OBJ_SUFFIX)))
 OUTS := $(filter-out random.out random-opt.out, $(notdir $(INS:.in=.out)))
 
 LIRASM := bin/lirasm$(EXE_SUFFIX)
-MAKE_CHECK_LIRASM_FLAGS ?=
 
 CPPFLAGS += $(DEFS)
 CPPFLAGS += -I. -I$(srcdir) -I$(srcdir)/nanojit
