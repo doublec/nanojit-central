@@ -8,6 +8,7 @@
 #undef AVMPLUS_OS2
 #undef AVMPLUS_PPC
 #undef AVMPLUS_MIPS
+#undef VMCFG_SH4
 #undef AVMPLUS_SPARC
 #undef SOLARIS
 #undef AVMPLUS_UNIX

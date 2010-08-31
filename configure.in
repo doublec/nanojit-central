@@ -340,6 +340,10 @@ mips*-*)
     NANOJIT_ARCH=MIPS
     AC_DEFINE(AVMPLUS_MIPS)
     ;;
+sh4*-*)
+    NANOJIT_ARCH=SH4
+    AC_DEFINE(VMCFG_SH4)
+    ;;
 *)
     AC_MSG_ERROR([Unrecognized nanojit target architecture.])
 esac
